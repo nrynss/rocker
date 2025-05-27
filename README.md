@@ -1,20 +1,3 @@
-## 📁 Customizable Content
-
-### External Data Files
-The game automatically creates editable text files in a `data/` directory:
-
-- **Song titles**: `song_adjectives.txt`, `song_nouns.txt`, `song_verbs.txt`, `song_emotions.txt`, `song_places.txt`
-- **Music industry**: `album_titles.txt`, `band_names.txt`, `record_labels.txt`
-- **Characters & places**: `band_member_names.txt`, `venue_names.txt`, `city_names.txt`
-
-### Easy Customization
-- **Edit any file** to add your own content (one entry per line)
-- **Historical accuracy** - Add period-appropriate names for different eras
-- **Infinite variety** - More entries = more unique combinations
-- **Comments supported** - Lines starting with `#` are ignored
-
-Example song generation: "Electric" + "Dreams" = "Electric Dreams"# 🎸 Rocker - Rock Star Management Simulator
-
 A Rust-based clone of the classic 1989 DOS game "Rockstar" by Wizard Games, enhanced with historical accuracy and customizable content. Start your musical journey in 1970, right after the Beatles' breakup, and navigate the changing music industry through the decades!
 
 ## 🎮 About the Game
@@ -210,7 +193,7 @@ This is a learning project, but contributions are welcome! Ideas for improvement
 
 ## 📜 License
 
-MIT License - Feel free to use, modify, and distribute!
+Apache License 2.0
 
 ## 🙏 Acknowledgments
 
@@ -223,3 +206,20 @@ MIT License - Feel free to use, modify, and distribute!
 **Ready to rock? Start your journey from garage band to stadium legends!** 🎸🤘
 
 *"It's better to burn out than to fade away..." - but try to avoid both in this game!*
+
+## 📁 Customizable Content
+
+### External Data Files
+The game automatically creates editable text files in a `data/` directory:
+
+- **Song titles**: `song_adjectives.txt`, `song_nouns.txt`, `song_verbs.txt`, `song_emotions.txt`, `song_places.txt`
+- **Music industry**: `album_titles.txt`, `band_names.txt`, `record_labels.txt`
+- **Characters & places**: `band_member_names.txt`, `venue_names.txt`, `city_names.txt`
+
+### Easy Customization
+- **Edit any file** to add your own content (one entry per line)
+- **Historical accuracy** - Add period-appropriate names for different eras
+- **Infinite variety** - More entries = more unique combinations
+- **Comments supported** - Lines starting with `#` are ignored
+
+Example song generation: "Electric" + "Dreams" = "Electric Dreams"# 🎸 Rocker - Rock Star Management Simulator
