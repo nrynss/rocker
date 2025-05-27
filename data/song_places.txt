@@ -1,0 +1,46 @@
+# Place-based song titles
+Highway 101
+Downtown Blues
+City Lights
+Country Road
+Midnight Train
+Ocean Drive
+Mountain High
+Valley Low
+Desert Wind
+Forest Deep
+River Wide
+Bridge to Nowhere
+Hotel California
+Memphis Blues
+Chicago Nights
+New York Minute
+London Calling
+Paris Streets
+Tokyo Nights
+Amsterdam Café
+Berlin Wall
+Moscow Nights
+Route 66
+Sunset Strip
+Broadway
+Hollywood
+Nashville
+Detroit
+Liverpool
+Manchester
+Birmingham
+Glasgow
+Dublin
+Sydney
+Toronto
+Vancouver
+Seattle Rain
+Portland Storm
+Austin Heat
+Miami Vice
+Vegas Lights
+California Sun
+Texas Moon
+Georgia Peach
+Carolina Blue

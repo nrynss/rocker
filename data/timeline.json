@@ -1,0 +1,354 @@
+{
+  "timeline": {
+    "1970": {
+      "era_name": "Post-Beatles Revolution",
+      "dominant_genres": [
+        "Rock",
+        "Folk Rock",
+        "Blues Rock",
+        "Progressive Rock"
+      ],
+      "market_conditions": {
+        "overall_demand": 75,
+        "saturation": 30,
+        "innovation_openness": 80,
+        "major_label_dominance": 60,
+        "touring_market": 65,
+        "record_sales_growth": 15.0
+      },
+      "major_events": [
+        "The Beatles officially break up",
+        "Woodstock aftermath continues to influence music",
+        "FM radio becomes dominant format",
+        "Multi-track recording becomes standard",
+        "Album-oriented rock emerges"
+      ],
+      "technology_changes": [
+        "8-track recording standard",
+        "Synthesizers enter mainstream",
+        "Better studio monitors available",
+        "Multi-tracking becomes affordable"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.7,
+        "studio_quality_importance": 60,
+        "image_importance": 50,
+        "media_influence": 45,
+        "fan_loyalty_factor": 70
+      },
+      "recording_cost_modifier": 1.0,
+      "gig_pay_modifier": 1.0
+    },
+    "1972": {
+      "era_name": "Glam and Progressive Era",
+      "dominant_genres": [
+        "Glam Rock",
+        "Progressive Rock",
+        "Hard Rock",
+        "Folk Rock"
+      ],
+      "market_conditions": {
+        "overall_demand": 80,
+        "saturation": 35,
+        "innovation_openness": 85,
+        "major_label_dominance": 65,
+        "touring_market": 70,
+        "record_sales_growth": 20.0
+      },
+      "major_events": [
+        "David Bowie's Ziggy Stardust phenomenon",
+        "Pink Floyd's concept albums gain massive popularity",
+        "Arena rock concerts become standard",
+        "Glam fashion influences music industry",
+        "Progressive rock reaches artistic peak"
+      ],
+      "technology_changes": [
+        "Moog synthesizers widespread",
+        "Better PA systems for larger venues",
+        "16-track recording available",
+        "Electronic effects proliferate"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.8,
+        "studio_quality_importance": 70,
+        "image_importance": 75,
+        "media_influence": 55,
+        "fan_loyalty_factor": 75
+      },
+      "recording_cost_modifier": 1.2,
+      "gig_pay_modifier": 1.1
+    },
+    "1975": {
+      "era_name": "Arena Rock Peak",
+      "dominant_genres": ["Arena Rock", "Southern Rock", "Disco", "Hard Rock"],
+      "market_conditions": {
+        "overall_demand": 85,
+        "saturation": 45,
+        "innovation_openness": 70,
+        "major_label_dominance": 75,
+        "touring_market": 80,
+        "record_sales_growth": 25.0
+      },
+      "major_events": [
+        "Stadium tours become massive business",
+        "Disco begins mainstream takeover",
+        "Southern rock gains national attention",
+        "Arena rock perfects the formula",
+        "Record industry profits soar"
+      ],
+      "technology_changes": [
+        "Digital recording experiments begin",
+        "Massive concert sound systems",
+        "24-track recording standard",
+        "Synthesizer orchestration advances"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.9,
+        "studio_quality_importance": 80,
+        "image_importance": 70,
+        "media_influence": 60,
+        "fan_loyalty_factor": 70
+      },
+      "recording_cost_modifier": 1.5,
+      "gig_pay_modifier": 1.3
+    },
+    "1977": {
+      "era_name": "Punk Revolution",
+      "dominant_genres": ["Punk", "Disco", "Arena Rock", "New Wave"],
+      "market_conditions": {
+        "overall_demand": 75,
+        "saturation": 55,
+        "innovation_openness": 90,
+        "major_label_dominance": 70,
+        "touring_market": 70,
+        "record_sales_growth": 10.0
+      },
+      "major_events": [
+        "Punk explodes in UK and spreads to US",
+        "Saturday Night Fever peaks disco mania",
+        "Independent labels surge in importance",
+        "DIY recording culture emerges",
+        "Anti-establishment music gains momentum"
+      ],
+      "technology_changes": [
+        "Cheaper recording equipment available",
+        "4-track home recording possible",
+        "Portable PA systems improve",
+        "Electronic drums introduced"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.6,
+        "studio_quality_importance": 40,
+        "image_importance": 80,
+        "media_influence": 70,
+        "fan_loyalty_factor": 85
+      },
+      "recording_cost_modifier": 0.8,
+      "gig_pay_modifier": 0.9
+    },
+    "1980": {
+      "era_name": "New Wave Emergence",
+      "dominant_genres": ["New Wave", "Post-Punk", "Hard Rock", "Pop"],
+      "market_conditions": {
+        "overall_demand": 70,
+        "saturation": 60,
+        "innovation_openness": 85,
+        "major_label_dominance": 75,
+        "touring_market": 65,
+        "record_sales_growth": 5.0
+      },
+      "major_events": [
+        "Disco backlash complete",
+        "New Wave enters mainstream consciousness",
+        "MTV planning intensifies",
+        "Synthesizer-based music dominates",
+        "Post-punk art rock emerges"
+      ],
+      "technology_changes": [
+        "Digital synthesizers affordable",
+        "Digital recording advances rapidly",
+        "Music video production begins",
+        "Drum machines become popular"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.7,
+        "studio_quality_importance": 75,
+        "image_importance": 85,
+        "media_influence": 80,
+        "fan_loyalty_factor": 60
+      },
+      "recording_cost_modifier": 1.3,
+      "gig_pay_modifier": 1.0
+    },
+    "1983": {
+      "era_name": "MTV Generation",
+      "dominant_genres": ["New Wave", "Pop Rock", "Heavy Metal", "Synth Pop"],
+      "market_conditions": {
+        "overall_demand": 90,
+        "saturation": 50,
+        "innovation_openness": 75,
+        "major_label_dominance": 85,
+        "touring_market": 85,
+        "record_sales_growth": 30.0
+      },
+      "major_events": [
+        "MTV revolution in full swing",
+        "Michael Jackson's Thriller dominates",
+        "Heavy Metal enters mainstream",
+        "Music videos become essential",
+        "Corporate rock reaches peak"
+      ],
+      "technology_changes": [
+        "Music videos standard for promotion",
+        "Digital synthesizers dominate production",
+        "CD format introduced commercially",
+        "MIDI technology emerges"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.8,
+        "studio_quality_importance": 85,
+        "image_importance": 95,
+        "media_influence": 90,
+        "fan_loyalty_factor": 65
+      },
+      "recording_cost_modifier": 1.8,
+      "gig_pay_modifier": 1.5
+    },
+    "1985": {
+      "era_name": "Corporate Rock Era",
+      "dominant_genres": ["Pop Metal", "Pop Rock", "Alternative", "Hip Hop"],
+      "market_conditions": {
+        "overall_demand": 95,
+        "saturation": 70,
+        "innovation_openness": 60,
+        "major_label_dominance": 90,
+        "touring_market": 90,
+        "record_sales_growth": 20.0
+      },
+      "major_events": [
+        "Live Aid concert showcases global reach",
+        "Hair metal reaches commercial peak",
+        "Alternative underground grows stronger",
+        "Hip hop gains mainstream attention",
+        "Corporate sponsorship of tours begins"
+      ],
+      "technology_changes": [
+        "CDs begin replacing vinyl significantly",
+        "Digital recording becomes standard",
+        "Concert production advances dramatically",
+        "Sampling technology develops"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.9,
+        "studio_quality_importance": 90,
+        "image_importance": 85,
+        "media_influence": 85,
+        "fan_loyalty_factor": 60
+      },
+      "recording_cost_modifier": 2.0,
+      "gig_pay_modifier": 1.8
+    },
+    "1988": {
+      "era_name": "Underground Brewing",
+      "dominant_genres": ["Hair Metal", "Hip Hop", "Alternative", "House"],
+      "market_conditions": {
+        "overall_demand": 85,
+        "saturation": 80,
+        "innovation_openness": 70,
+        "major_label_dominance": 85,
+        "touring_market": 85,
+        "record_sales_growth": 10.0
+      },
+      "major_events": [
+        "Hip hop gains serious mainstream attention",
+        "Alternative rock builds underground following",
+        "Hair metal reaches saturation point",
+        "House music emerges from Chicago",
+        "Independent labels gain more power"
+      ],
+      "technology_changes": [
+        "Sampling technology advances rapidly",
+        "Home recording becomes truly viable",
+        "Digital audio workstations emerge",
+        "Pro Tools early versions appear"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.85,
+        "studio_quality_importance": 85,
+        "image_importance": 80,
+        "media_influence": 80,
+        "fan_loyalty_factor": 65
+      },
+      "recording_cost_modifier": 1.7,
+      "gig_pay_modifier": 1.6
+    },
+    "1990": {
+      "era_name": "Alternative Revolution Begins",
+      "dominant_genres": ["Alternative", "Grunge", "Hip Hop", "Industrial"],
+      "market_conditions": {
+        "overall_demand": 80,
+        "saturation": 75,
+        "innovation_openness": 85,
+        "major_label_dominance": 80,
+        "touring_market": 75,
+        "record_sales_growth": 15.0
+      },
+      "major_events": [
+        "Grunge emerges from Seattle underground",
+        "Hair metal begins noticeable decline",
+        "Independent labels gain significant power",
+        "Alternative radio formats expand",
+        "Hip hop diversifies and grows"
+      ],
+      "technology_changes": [
+        "Digital audio workstations become standard",
+        "Compact disc dominance established",
+        "Home studio capabilities expand",
+        "Internet begins to impact music discovery"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.9,
+        "studio_quality_importance": 70,
+        "image_importance": 60,
+        "media_influence": 75,
+        "fan_loyalty_factor": 80
+      },
+      "recording_cost_modifier": 1.4,
+      "gig_pay_modifier": 1.3
+    },
+    "1993": {
+      "era_name": "Grunge Dominance",
+      "dominant_genres": ["Grunge", "Alternative", "Hip Hop", "Brit Pop"],
+      "market_conditions": {
+        "overall_demand": 85,
+        "saturation": 60,
+        "innovation_openness": 90,
+        "major_label_dominance": 75,
+        "touring_market": 80,
+        "record_sales_growth": 25.0
+      },
+      "major_events": [
+        "Grunge completely reshapes rock landscape",
+        "Nirvana's success changes industry focus",
+        "Alternative radio becomes mainstream",
+        "Hair metal virtually disappears",
+        "Brit Pop emerges as UK response"
+      ],
+      "technology_changes": [
+        "Digital recording completely standard",
+        "Internet file sharing begins",
+        "CD production costs drop significantly",
+        "Portable recording equipment improves"
+      ],
+      "industry_trends": {
+        "album_vs_singles": 0.95,
+        "studio_quality_importance": 60,
+        "image_importance": 50,
+        "media_influence": 70,
+        "fan_loyalty_factor": 85
+      },
+      "recording_cost_modifier": 1.2,
+      "gig_pay_modifier": 1.4
+    }
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "major_labels": [
+    {
+      "name": "Atlantic Records",
+      "grade": "A+",
+      "market_reach": 95,
+      "financial_power": 90,
+      "artist_development": 85,
+      "creative_freedom": 70,
+      "royalty_rate": 12,
+      "advance_range": [50000, 500000],
+      "specialty_genres": ["Rock", "R&B", "Pop"],
+      "founded": 1947,
+      "reputation": "Legendary label known for Led Zeppelin, Rolling Stones"
+    },
+    {
+      "name": "Columbia Records",
+      "grade": "A+",
+      "market_reach": 98,
+      "financial_power": 95,
+      "artist_development": 80,
+      "creative_freedom": 65,
+      "royalty_rate": 10,
+      "advance_range": [75000, 750000],
+      "specialty_genres": ["Pop", "Rock", "Folk"],
+      "founded": 1887,
+      "reputation": "Industry giant with massive distribution power"
+    },
+    {
+      "name": "Capitol Records",
+      "grade": "A",
+      "market_reach": 92,
+      "financial_power": 88,
+      "artist_development": 82,
+      "creative_freedom": 72,
+      "royalty_rate": 13,
+      "advance_range": [40000, 400000],
+      "specialty_genres": ["Rock", "Pop", "Alternative"],
+      "founded": 1942,
+      "reputation": "Beatles' US label, strong rock heritage"
+    },
+    {
+      "name": "Warner Bros Records",
+      "grade": "A",
+      "market_reach": 90,
+      "financial_power": 85,
+      "artist_development": 85,
+      "creative_freedom": 75,
+      "royalty_rate": 14,
+      "advance_range": [30000, 350000],
+      "specialty_genres": ["Rock", "Folk", "Alternative"],
+      "founded": 1958,
+      "reputation": "Artist-friendly major with strong A&R"
+    },
+    {
+      "name": "RCA Records",
+      "grade": "A",
+      "market_reach": 88,
+      "financial_power": 82,
+      "artist_development": 78,
+      "creative_freedom": 68,
+      "royalty_rate": 11,
+      "advance_range": [35000, 300000],
+      "specialty_genres": ["Pop", "Rock", "Country"],
+      "founded": 1929,
+      "reputation": "Elvis's label, strong mainstream presence"
+    },
+    {
+      "name": "Elektra Records",
+      "grade": "A-",
+      "market_reach": 85,
+      "financial_power": 80,
+      "artist_development": 88,
+      "creative_freedom": 80,
+      "royalty_rate": 15,
+      "advance_range": [25000, 250000],
+      "specialty_genres": ["Folk", "Rock", "Alternative"],
+      "founded": 1950,
+      "reputation": "Boutique major focusing on artistry"
+    }
+  ],
+  "independent_labels": [
+    {
+      "name": "Sub Pop Records",
+      "grade": "B+",
+      "market_reach": 45,
+      "financial_power": 35,
+      "artist_development": 90,
+      "creative_freedom": 95,
+      "royalty_rate": 25,
+      "advance_range": [2000, 15000],
+      "specialty_genres": ["Grunge", "Alternative", "Punk"],
+      "founded": 1986,
+      "reputation": "Seattle grunge pioneers, incredible A&R"
+    },
+    {
+      "name": "4AD Records",
+      "grade": "B+",
+      "market_reach": 40,
+      "financial_power": 30,
+      "artist_development": 95,
+      "creative_freedom": 98,
+      "royalty_rate": 30,
+      "advance_range": [1000, 10000],
+      "specialty_genres": ["Alternative", "Art Rock", "Post-Punk"],
+      "founded": 1980,
+      "reputation": "Artistic visionary label with cult following"
+    },
+    {
+      "name": "Matador Records",
+      "grade": "B",
+      "market_reach": 35,
+      "financial_power": 25,
+      "artist_development": 85,
+      "creative_freedom": 90,
+      "royalty_rate": 28,
+      "advance_range": [500, 8000],
+      "specialty_genres": ["Indie Rock", "Alternative", "Punk"],
+      "founded": 1989,
+      "reputation": "Tastemaker indie with strong underground cred"
+    },
+    {
+      "name": "Merge Records",
+      "grade": "B",
+      "market_reach": 30,
+      "financial_power": 20,
+      "artist_development": 80,
+      "creative_freedom": 95,
+      "royalty_rate": 35,
+      "advance_range": [500, 5000],
+      "specialty_genres": ["Indie Pop", "Alternative", "Folk"],
+      "founded": 1989,
+      "reputation": "Chapel Hill indie focusing on songcraft"
+    },
+    {
+      "name": "Touch and Go Records",
+      "grade": "B-",
+      "market_reach": 25,
+      "financial_power": 18,
+      "artist_development": 75,
+      "creative_freedom": 98,
+      "royalty_rate": 40,
+      "advance_range": [200, 3000],
+      "specialty_genres": ["Punk", "Hardcore", "Noise Rock"],
+      "founded": 1981,
+      "reputation": "Chicago punk institution, pure DIY ethics"
+    },
+    {
+      "name": "Dischord Records",
+      "grade": "C+",
+      "market_reach": 20,
+      "financial_power": 15,
+      "artist_development": 70,
+      "creative_freedom": 100,
+      "royalty_rate": 50,
+      "advance_range": [0, 1000],
+      "specialty_genres": ["Hardcore", "Punk", "Post-Hardcore"],
+      "founded": 1980,
+      "reputation": "Washington DC hardcore, all profits to artists"
+    },
+    {
+      "name": "SST Records",
+      "grade": "C+",
+      "market_reach": 22,
+      "financial_power": 12,
+      "artist_development": 65,
+      "creative_freedom": 95,
+      "royalty_rate": 45,
+      "advance_range": [0, 800],
+      "specialty_genres": ["Punk", "Hardcore", "Alternative"],
+      "founded": 1978,
+      "reputation": "Legendary punk label, chaotic but influential"
+    }
+  ],
+  "boutique_labels": [
+    {
+      "name": "Factory Records",
+      "grade": "B",
+      "market_reach": 35,
+      "financial_power": 25,
+      "artist_development": 88,
+      "creative_freedom": 92,
+      "royalty_rate": 32,
+      "advance_range": [1000, 12000],
+      "specialty_genres": ["Post-Punk", "New Wave", "Dance"],
+      "founded": 1978,
+      "reputation": "Manchester's finest, Joy Division/New Order home"
+    },
+    {
+      "name": "Creation Records",
+      "grade": "B-",
+      "market_reach": 30,
+      "financial_power": 20,
+      "artist_development": 82,
+      "creative_freedom": 88,
+      "royalty_rate": 30,
+      "advance_range": [800, 8000],
+      "specialty_genres": ["Indie Pop", "Shoegaze", "Brit Pop"],
+      "founded": 1983,
+      "reputation": "UK indie powerhouse with eccentric vision"
+    },
+    {
+      "name": "Rough Trade Records",
+      "grade": "C+",
+      "market_reach": 25,
+      "financial_power": 18,
+      "artist_development": 85,
+      "creative_freedom": 95,
+      "royalty_rate": 35,
+      "advance_range": [500, 5000],
+      "specialty_genres": ["Indie", "Post-Punk", "Alternative"],
+      "founded": 1978,
+      "reputation": "UK indie pioneer, strong political stance"
+    }
+  ],
+  "label_requirements": {
+    "major_label_interest_threshold": {
+      "fame": 40,
+      "albums": 1,
+      "singles": 3,
+      "buzz": 30
+    },
+    "independent_label_interest_threshold": {
+      "fame": 15,
+      "albums": 0,
+      "singles": 1,
+      "buzz": 10
+    },
+    "boutique_label_interest_threshold": {
+      "fame": 25,
+      "albums": 0,
+      "singles": 2,
+      "buzz": 20
+    }
+  }
+}

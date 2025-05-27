@@ -1,0 +1,553 @@
+{
+  "markets": {
+    "united_states": {
+      "regions": {
+        "west_coast": {
+          "name": "West Coast",
+          "major_cities": [
+            "Los Angeles",
+            "San Francisco",
+            "Seattle",
+            "Portland",
+            "San Diego"
+          ],
+          "population": 15000000,
+          "economic_strength": 85,
+          "music_acceptance": {
+            "rock": 90,
+            "alternative": 95,
+            "punk": 85,
+            "metal": 80,
+            "pop": 85,
+            "folk": 75,
+            "grunge": 98,
+            "new_wave": 88
+          },
+          "venue_density": 90,
+          "media_influence": 95,
+          "record_sales_per_capita": 12.5,
+          "touring_infrastructure": 95,
+          "cultural_trends": ["Innovation", "Counter-culture", "Technology"],
+          "economic_factors": {
+            "disposable_income": 88,
+            "unemployment_rate": 6.5,
+            "music_spending_ratio": 3.2
+          }
+        },
+        "east_coast": {
+          "name": "East Coast",
+          "major_cities": [
+            "New York",
+            "Boston",
+            "Philadelphia",
+            "Washington DC",
+            "Atlanta"
+          ],
+          "population": 20000000,
+          "economic_strength": 90,
+          "music_acceptance": {
+            "rock": 85,
+            "alternative": 80,
+            "punk": 90,
+            "metal": 75,
+            "pop": 90,
+            "folk": 85,
+            "grunge": 70,
+            "new_wave": 92
+          },
+          "venue_density": 95,
+          "media_influence": 98,
+          "record_sales_per_capita": 14.2,
+          "touring_infrastructure": 98,
+          "cultural_trends": ["Sophistication", "Art", "Business"],
+          "economic_factors": {
+            "disposable_income": 92,
+            "unemployment_rate": 5.8,
+            "music_spending_ratio": 3.8
+          }
+        },
+        "midwest": {
+          "name": "Midwest",
+          "major_cities": [
+            "Chicago",
+            "Detroit",
+            "Cleveland",
+            "Minneapolis",
+            "Milwaukee"
+          ],
+          "population": 18000000,
+          "economic_strength": 75,
+          "music_acceptance": {
+            "rock": 95,
+            "alternative": 75,
+            "punk": 80,
+            "metal": 90,
+            "pop": 80,
+            "folk": 80,
+            "grunge": 75,
+            "new_wave": 70
+          },
+          "venue_density": 80,
+          "media_influence": 75,
+          "record_sales_per_capita": 10.8,
+          "touring_infrastructure": 85,
+          "cultural_trends": ["Working class", "Industrial", "Authenticity"],
+          "economic_factors": {
+            "disposable_income": 76,
+            "unemployment_rate": 8.2,
+            "music_spending_ratio": 2.8
+          }
+        },
+        "south": {
+          "name": "South",
+          "major_cities": [
+            "Austin",
+            "Nashville",
+            "New Orleans",
+            "Miami",
+            "Dallas"
+          ],
+          "population": 16000000,
+          "economic_strength": 70,
+          "music_acceptance": {
+            "rock": 80,
+            "alternative": 65,
+            "punk": 60,
+            "metal": 85,
+            "pop": 75,
+            "folk": 90,
+            "grunge": 60,
+            "new_wave": 65
+          },
+          "venue_density": 75,
+          "media_influence": 70,
+          "record_sales_per_capita": 9.5,
+          "touring_infrastructure": 80,
+          "cultural_trends": [
+            "Traditional",
+            "Blues heritage",
+            "Country influence"
+          ],
+          "economic_factors": {
+            "disposable_income": 68,
+            "unemployment_rate": 7.5,
+            "music_spending_ratio": 2.5
+          }
+        }
+      }
+    },
+    "united_kingdom": {
+      "regions": {
+        "london": {
+          "name": "London",
+          "major_cities": ["London"],
+          "population": 8000000,
+          "economic_strength": 95,
+          "music_acceptance": {
+            "rock": 90,
+            "alternative": 85,
+            "punk": 95,
+            "metal": 80,
+            "pop": 88,
+            "folk": 75,
+            "grunge": 65,
+            "new_wave": 95
+          },
+          "venue_density": 98,
+          "media_influence": 95,
+          "record_sales_per_capita": 15.8,
+          "touring_infrastructure": 95,
+          "cultural_trends": ["Fashion", "Art", "Innovation"],
+          "economic_factors": {
+            "disposable_income": 85,
+            "unemployment_rate": 9.2,
+            "music_spending_ratio": 4.1
+          }
+        },
+        "manchester": {
+          "name": "Manchester",
+          "major_cities": ["Manchester", "Liverpool"],
+          "population": 3000000,
+          "economic_strength": 70,
+          "music_acceptance": {
+            "rock": 95,
+            "alternative": 90,
+            "punk": 88,
+            "metal": 75,
+            "pop": 80,
+            "folk": 70,
+            "grunge": 70,
+            "new_wave": 92
+          },
+          "venue_density": 85,
+          "media_influence": 80,
+          "record_sales_per_capita": 13.2,
+          "touring_infrastructure": 80,
+          "cultural_trends": [
+            "Working class",
+            "Industrial heritage",
+            "Music innovation"
+          ],
+          "economic_factors": {
+            "disposable_income": 65,
+            "unemployment_rate": 12.5,
+            "music_spending_ratio": 3.5
+          }
+        },
+        "scotland": {
+          "name": "Scotland",
+          "major_cities": ["Glasgow", "Edinburgh"],
+          "population": 2500000,
+          "economic_strength": 65,
+          "music_acceptance": {
+            "rock": 90,
+            "alternative": 85,
+            "punk": 90,
+            "metal": 85,
+            "pop": 75,
+            "folk": 95,
+            "grunge": 75,
+            "new_wave": 80
+          },
+          "venue_density": 70,
+          "media_influence": 65,
+          "record_sales_per_capita": 11.5,
+          "touring_infrastructure": 70,
+          "cultural_trends": ["Folk tradition", "Independence", "Authenticity"],
+          "economic_factors": {
+            "disposable_income": 62,
+            "unemployment_rate": 11.8,
+            "music_spending_ratio": 3.2
+          }
+        }
+      }
+    },
+    "europe": {
+      "regions": {
+        "germany": {
+          "name": "Germany",
+          "major_cities": ["Berlin", "Hamburg", "Munich", "Cologne"],
+          "population": 12000000,
+          "economic_strength": 88,
+          "music_acceptance": {
+            "rock": 85,
+            "alternative": 80,
+            "punk": 85,
+            "metal": 95,
+            "pop": 80,
+            "folk": 70,
+            "grunge": 75,
+            "new_wave": 88
+          },
+          "venue_density": 85,
+          "media_influence": 80,
+          "record_sales_per_capita": 13.8,
+          "touring_infrastructure": 90,
+          "cultural_trends": [
+            "Precision",
+            "Electronic music",
+            "Counter-culture"
+          ],
+          "economic_factors": {
+            "disposable_income": 82,
+            "unemployment_rate": 7.8,
+            "music_spending_ratio": 3.1
+          }
+        },
+        "france": {
+          "name": "France",
+          "major_cities": ["Paris", "Lyon", "Marseille"],
+          "population": 10000000,
+          "economic_strength": 82,
+          "music_acceptance": {
+            "rock": 75,
+            "alternative": 70,
+            "punk": 70,
+            "metal": 70,
+            "pop": 85,
+            "folk": 80,
+            "grunge": 60,
+            "new_wave": 85
+          },
+          "venue_density": 80,
+          "media_influence": 85,
+          "record_sales_per_capita": 12.1,
+          "touring_infrastructure": 85,
+          "cultural_trends": [
+            "Sophistication",
+            "Art",
+            "Resistance to Anglo music"
+          ],
+          "economic_factors": {
+            "disposable_income": 78,
+            "unemployment_rate": 9.5,
+            "music_spending_ratio": 2.9
+          }
+        },
+        "netherlands": {
+          "name": "Netherlands",
+          "major_cities": ["Amsterdam", "Rotterdam", "Utrecht"],
+          "population": 3000000,
+          "economic_strength": 85,
+          "music_acceptance": {
+            "rock": 85,
+            "alternative": 88,
+            "punk": 82,
+            "metal": 80,
+            "pop": 82,
+            "folk": 75,
+            "grunge": 80,
+            "new_wave": 90
+          },
+          "venue_density": 90,
+          "media_influence": 75,
+          "record_sales_per_capita": 14.5,
+          "touring_infrastructure": 88,
+          "cultural_trends": ["Liberal", "Progressive", "Open to innovation"],
+          "economic_factors": {
+            "disposable_income": 84,
+            "unemployment_rate": 6.2,
+            "music_spending_ratio": 3.7
+          }
+        }
+      }
+    },
+    "japan": {
+      "regions": {
+        "tokyo": {
+          "name": "Tokyo",
+          "major_cities": ["Tokyo", "Yokohama"],
+          "population": 12000000,
+          "economic_strength": 92,
+          "music_acceptance": {
+            "rock": 70,
+            "alternative": 65,
+            "punk": 75,
+            "metal": 85,
+            "pop": 95,
+            "folk": 60,
+            "grunge": 70,
+            "new_wave": 88
+          },
+          "venue_density": 85,
+          "media_influence": 90,
+          "record_sales_per_capita": 16.2,
+          "touring_infrastructure": 90,
+          "cultural_trends": ["Technology", "Pop culture", "Western influence"],
+          "economic_factors": {
+            "disposable_income": 88,
+            "unemployment_rate": 4.5,
+            "music_spending_ratio": 4.2
+          }
+        },
+        "osaka": {
+          "name": "Osaka",
+          "major_cities": ["Osaka", "Kobe", "Kyoto"],
+          "population": 8000000,
+          "economic_strength": 85,
+          "music_acceptance": {
+            "rock": 75,
+            "alternative": 70,
+            "punk": 80,
+            "metal": 88,
+            "pop": 90,
+            "folk": 65,
+            "grunge": 75,
+            "new_wave": 82
+          },
+          "venue_density": 80,
+          "media_influence": 75,
+          "record_sales_per_capita": 14.8,
+          "touring_infrastructure": 85,
+          "cultural_trends": [
+            "Traditional meets modern",
+            "Underground culture"
+          ],
+          "economic_factors": {
+            "disposable_income": 82,
+            "unemployment_rate": 5.2,
+            "music_spending_ratio": 3.8
+          }
+        }
+      }
+    },
+    "australia": {
+      "regions": {
+        "sydney": {
+          "name": "Sydney",
+          "major_cities": ["Sydney", "Melbourne"],
+          "population": 6000000,
+          "economic_strength": 80,
+          "music_acceptance": {
+            "rock": 90,
+            "alternative": 85,
+            "punk": 88,
+            "metal": 82,
+            "pop": 80,
+            "folk": 85,
+            "grunge": 88,
+            "new_wave": 85
+          },
+          "venue_density": 75,
+          "media_influence": 70,
+          "record_sales_per_capita": 11.8,
+          "touring_infrastructure": 75,
+          "cultural_trends": ["Laid back", "British influence", "Surf culture"],
+          "economic_factors": {
+            "disposable_income": 76,
+            "unemployment_rate": 8.8,
+            "music_spending_ratio": 3.1
+          }
+        }
+      }
+    }
+  },
+  "market_modifiers": {
+    "breakthrough_thresholds": {
+      "local": {
+        "fame_required": 15,
+        "fan_base": 500,
+        "revenue_multiplier": 1.0
+      },
+      "regional": {
+        "fame_required": 35,
+        "fan_base": 5000,
+        "revenue_multiplier": 2.5
+      },
+      "national": {
+        "fame_required": 60,
+        "fan_base": 50000,
+        "revenue_multiplier": 8.0
+      },
+      "international": {
+        "fame_required": 80,
+        "fan_base": 200000,
+        "revenue_multiplier": 15.0
+      }
+    },
+    "genre_era_modifiers": {
+      "1970": {
+        "rock": 1.2,
+        "folk": 1.1,
+        "progressive": 1.3,
+        "blues": 1.0
+      },
+      "1975": {
+        "rock": 1.4,
+        "disco": 1.6,
+        "progressive": 1.1,
+        "arena_rock": 1.5
+      },
+      "1977": {
+        "punk": 1.8,
+        "disco": 1.3,
+        "rock": 1.0,
+        "new_wave": 1.2
+      },
+      "1980": {
+        "new_wave": 1.5,
+        "post_punk": 1.3,
+        "rock": 0.9,
+        "synth_pop": 1.4
+      },
+      "1983": {
+        "new_wave": 1.6,
+        "pop": 1.5,
+        "metal": 1.3,
+        "synth_pop": 1.7
+      },
+      "1985": {
+        "pop_metal": 1.8,
+        "pop": 1.6,
+        "alternative": 0.8,
+        "hair_metal": 1.9
+      },
+      "1988": {
+        "hair_metal": 1.5,
+        "hip_hop": 1.4,
+        "alternative": 1.1,
+        "house": 1.2
+      },
+      "1990": {
+        "alternative": 1.6,
+        "grunge": 1.8,
+        "hip_hop": 1.5,
+        "hair_metal": 0.6
+      },
+      "1993": {
+        "grunge": 2.0,
+        "alternative": 1.8,
+        "brit_pop": 1.4,
+        "hair_metal": 0.3
+      }
+    },
+    "economic_cycle_effects": {
+      "recession": {
+        "record_sales_modifier": 0.7,
+        "touring_revenue_modifier": 0.6,
+        "label_advance_modifier": 0.5,
+        "merchandise_modifier": 0.5
+      },
+      "stagnant": {
+        "record_sales_modifier": 0.85,
+        "touring_revenue_modifier": 0.8,
+        "label_advance_modifier": 0.75,
+        "merchandise_modifier": 0.8
+      },
+      "growing": {
+        "record_sales_modifier": 1.1,
+        "touring_revenue_modifier": 1.15,
+        "label_advance_modifier": 1.2,
+        "merchandise_modifier": 1.1
+      },
+      "booming": {
+        "record_sales_modifier": 1.4,
+        "touring_revenue_modifier": 1.5,
+        "label_advance_modifier": 1.8,
+        "merchandise_modifier": 1.6
+      }
+    },
+    "cultural_resistance_factors": {
+      "language_barrier": {
+        "none": 1.0,
+        "minimal": 0.9,
+        "moderate": 0.7,
+        "significant": 0.4
+      },
+      "musical_tradition": {
+        "very_open": 1.2,
+        "open": 1.0,
+        "conservative": 0.8,
+        "resistant": 0.5
+      },
+      "political_climate": {
+        "supportive": 1.1,
+        "neutral": 1.0,
+        "suspicious": 0.8,
+        "hostile": 0.3
+      }
+    },
+    "touring_costs": {
+      "local": {
+        "base_cost_per_show": 500,
+        "travel_cost_modifier": 1.0,
+        "equipment_cost_modifier": 1.0
+      },
+      "regional": {
+        "base_cost_per_show": 1500,
+        "travel_cost_modifier": 2.5,
+        "equipment_cost_modifier": 1.5
+      },
+      "national": {
+        "base_cost_per_show": 5000,
+        "travel_cost_modifier": 8.0,
+        "equipment_cost_modifier": 3.0
+      },
+      "international": {
+        "base_cost_per_show": 15000,
+        "travel_cost_modifier": 20.0,
+        "equipment_cost_modifier": 5.0
+      }
+    }
+  }
+}

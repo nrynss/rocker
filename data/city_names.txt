@@ -1,0 +1,59 @@
+# Cities for venues and tours
+New York
+Los Angeles
+Chicago
+Philadelphia
+Detroit
+San Francisco
+Washington
+Boston
+Pittsburgh
+St. Louis
+Baltimore
+Cleveland
+Buffalo
+Milwaukee
+Cincinnati
+Newark
+Minneapolis
+Kansas City
+Seattle
+Atlanta
+Miami
+Denver
+Phoenix
+Las Vegas
+London
+Liverpool
+Manchester
+Birmingham
+Glasgow
+Dublin
+Paris
+Berlin
+Amsterdam
+Rome
+Madrid
+Barcelona
+Tokyo
+Sydney
+Melbourne
+Toronto
+Montreal
+Vancouver
+Hamburg
+Munich
+Cologne
+Lyon
+Marseille
+Brussels
+Copenhagen
+Stockholm
+Oslo
+Helsinki
+Zurich
+Vienna
+Prague
+Budapest
+Warsaw
+Krakow
