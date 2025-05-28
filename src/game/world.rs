@@ -1,7 +1,18 @@
-use crate::data_loader::GameDataFiles;
+use crate::data_loader::{GameDataFiles, RecordLabel};
+use crate::game::band::Band; // Added import for Band
 use crate::game::timeline::MusicTimeline;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PotentialDealOffer {
+    pub label_name: String,
+    pub label_tier: String,
+    pub advance: u32,
+    pub royalty_rate: f32,
+    pub albums_required: u8,
+    pub original_label_data: RecordLabel,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameWorld {
@@ -53,7 +64,8 @@ pub enum MusicTrend {
     Electronic,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// Ensure MusicGenre can be used as a HashMap key
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum MusicGenre {
     Rock,
     Pop,
@@ -76,6 +88,7 @@ impl GameWorld {
             competing_bands: Self::generate_competing_bands(data_files),
             venues: Self::generate_venues(data_files),
             current_trends: MusicTrend::Rock,
+            dynamic_genre_modifiers: std::collections::HashMap::new(),
         }
     }
 
@@ -90,6 +103,17 @@ impl GameWorld {
 
         // Update trends based on timeline
         self.update_trends_with_timeline(timeline);
+
+        // Decay dynamic genre modifiers
+        let mut new_modifiers = std::collections::HashMap::new();
+        for (genre, val) in self.dynamic_genre_modifiers.iter_mut() {
+            let decayed_val = (*val - 1.0) * 0.95 + 1.0;
+            // Only keep it if it's significantly different from 1.0
+            if (decayed_val - 1.0).abs() > 0.01 {
+                 new_modifiers.insert(genre.clone(), decayed_val);
+            }
+        }
+        self.dynamic_genre_modifiers = new_modifiers;
     }
 
     fn update_market_with_timeline(&mut self, rng: &mut impl Rng, timeline: &MusicTimeline) {
@@ -246,6 +270,83 @@ impl GameWorld {
         };
 
         demand_mod * saturation_penalty * economic_mod
+    }
+
+    pub fn generate_deal_offers(
+        &self,
+        band: &Band,
+        game_data: &GameDataFiles,
+        rng: &mut impl Rng,
+    ) -> Vec<PotentialDealOffer> {
+        let mut offers = Vec::new();
+        let labels_data = game_data.get_record_labels_data();
+
+        let label_tiers = [
+            ("Major", &labels_data.major_labels, &labels_data.label_requirements.major_label_interest_threshold),
+            ("Independent", &labels_data.independent_labels, &labels_data.label_requirements.independent_label_interest_threshold),
+            ("Boutique", &labels_data.boutique_labels, &labels_data.label_requirements.boutique_label_interest_threshold),
+        ];
+
+        for (tier_name, labels_in_tier, threshold) in &label_tiers {
+            for label in *labels_in_tier {
+                // Check if band meets threshold
+                // Placeholder for buzz: use band.fame / 10 for now, or a fixed value like 50
+                let buzz_placeholder = band.fame / 5; // Example placeholder
+
+                if band.fame >= threshold.fame &&
+                   band.albums >= threshold.albums &&
+                   band.singles >= threshold.singles &&
+                   buzz_placeholder >= threshold.buzz {
+                    
+                    // Check if already signed with this label
+                    if let Some(current_deal) = band.current_deal() {
+                        if current_deal.label_name == label.name {
+                            continue; // Already signed with this label
+                        }
+                    }
+
+                    // Random chance to make an offer
+                    let offer_chance = match *tier_name {
+                        "Major" => if band.fame > 70 { 0.30 } else if band.fame > 50 { 0.20 } else { 0.10 },
+                        "Independent" => if band.fame > 40 { 0.40 } else if band.fame > 20 { 0.25 } else { 0.15 },
+                        "Boutique" => if band.fame > 10 { 0.50 } else { 0.20 },
+                        _ => 0.10,
+                    };
+
+                    if rng.gen_bool(offer_chance) {
+                        let advance_percentage = match band.fame {
+                            0..=20 => rng.gen_range(0.0..0.4),  // Lower end for low fame
+                            21..=50 => rng.gen_range(0.3..0.7),
+                            51..=100 => rng.gen_range(0.6..1.0), // Higher end for high fame
+                            _ => 0.5,
+                        };
+                        let advance_range_span = label.advance_range[1] - label.advance_range[0];
+                        let calculated_advance = label.advance_range[0] + (advance_range_span as f32 * advance_percentage) as u32;
+                        
+                        let advance = calculated_advance.clamp(label.advance_range[0], label.advance_range[1]);
+
+                        let royalty_rate = label.royalty_rate as f32 / 100.0;
+
+                        let albums_required = match *tier_name {
+                            "Major" => rng.gen_range(2..=4),
+                            "Independent" => rng.gen_range(1..=3),
+                            "Boutique" => rng.gen_range(1..=2),
+                            _ => 2,
+                        };
+
+                        offers.push(PotentialDealOffer {
+                            label_name: label.name.clone(),
+                            label_tier: tier_name.to_string(),
+                            advance,
+                            royalty_rate,
+                            albums_required,
+                            original_label_data: label.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        offers
     }
 }
 

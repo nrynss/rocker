@@ -1,13 +1,14 @@
 use serde::{Deserialize, Serialize};
+use super::music::{Song, Release}; // Import new structs
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Band {
     pub name: String,
     pub fame: u8,  // 0-100
     pub skill: u8, // 0-100
-    pub unreleased_songs: u8,
-    pub singles: u8,
-    pub albums: u8,
+    pub unreleased_songs: Vec<Song>,
+    pub singles_released: Vec<Release>,
+    pub albums_released: Vec<Release>,
     pub members: Vec<BandMember>,
     pub record_deal: Option<RecordDeal>,
     pub reputation: BandReputation,
@@ -33,7 +34,8 @@ pub enum Instrument {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecordDeal {
-    pub label: String,
+    pub label_name: String,
+    pub label_tier: String, // e.g., "Major", "Independent", "Boutique"
     pub advance: u32,
     pub royalty_rate: f32, // Percentage
     pub albums_required: u8,
@@ -54,9 +56,9 @@ impl Default for Band {
             name: String::new(),
             fame: 0,
             skill: 20,
-            unreleased_songs: 0,
-            singles: 0,
-            albums: 0,
+            unreleased_songs: Vec::new(),
+            singles_released: Vec::new(),
+            albums_released: Vec::new(),
             members: vec![
                 BandMember {
                     name: "Dave".to_string(),
@@ -148,15 +150,15 @@ impl Band {
     }
 
     pub fn can_record_album(&self) -> bool {
-        self.unreleased_songs >= 8
+        self.unreleased_songs.len() >= crate::data::constants::MIN_ALBUM_SONGS as usize // Assuming MIN_ALBUM_SONGS is available
     }
 
     pub fn can_record_single(&self) -> bool {
-        self.unreleased_songs >= 1
+        self.unreleased_songs.len() >= 1
     }
 
-    pub fn total_releases(&self) -> u8 {
-        self.singles + self.albums
+    pub fn total_releases(&self) -> usize { // Changed to usize to match Vec::len()
+        self.singles_released.len() + self.albums_released.len()
     }
 
     pub fn dominant_genres_match(&self, target_genres: &[&str]) -> bool {
@@ -165,6 +167,40 @@ impl Band {
         // For now, we'll use a placeholder that returns true for any genre
         // TODO: Add actual genre tracking to Band struct
         target_genres.len() > 0 // Placeholder - always return true if genres provided
+    }
+
+    pub fn current_deal(&self) -> Option<&RecordDeal> {
+        self.record_deal.as_ref()
+    }
+
+    pub fn sign_deal(&mut self, deal: RecordDeal) {
+        self.record_deal = Some(deal);
+    }
+
+    pub fn fulfill_album_obligation(&mut self) -> bool {
+        if let Some(deal) = &mut self.record_deal {
+            deal.albums_delivered += 1;
+            if deal.albums_delivered >= deal.albums_required {
+                // Deal completed
+                // For now, let's clear the deal. Another option could be to mark it as completed.
+                self.record_deal = None; 
+                return true; // Deal completed
+            }
+        }
+        false // Deal not completed or no deal active
+    }
+
+    pub fn remaining_albums_for_deal(&self) -> u8 {
+        if let Some(deal) = &self.record_deal {
+            if deal.albums_delivered < deal.albums_required {
+                return deal.albums_required - deal.albums_delivered;
+            }
+        }
+        0 // No deal or deal completed
+    }
+
+    pub fn drop_deal(&mut self) {
+        self.record_deal = None;
     }
 }
 

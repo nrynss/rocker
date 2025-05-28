@@ -34,6 +34,7 @@ pub struct IndustryTrends {
     pub fan_loyalty_factor: u8,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MusicTimeline {
     pub eras: HashMap<u32, MusicEra>,
     pub current_year: u32,
