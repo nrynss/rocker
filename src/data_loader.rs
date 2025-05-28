@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct TimelineData {
     pub timeline: HashMap<String, EraData>,
 }
@@ -40,7 +40,7 @@ pub struct IndustryTrendsData {
     pub fan_loyalty_factor: u8,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct RecordLabelsData {
     pub major_labels: Vec<RecordLabel>,
     pub independent_labels: Vec<RecordLabel>,
@@ -48,7 +48,7 @@ pub struct RecordLabelsData {
     pub label_requirements: LabelRequirements,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RecordLabel {
     pub name: String,
     pub grade: String,
@@ -63,14 +63,14 @@ pub struct RecordLabel {
     pub reputation: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct LabelRequirements {
     pub major_label_interest_threshold: InterestThreshold,
     pub independent_label_interest_threshold: InterestThreshold,
     pub boutique_label_interest_threshold: InterestThreshold,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct InterestThreshold {
     pub fame: u8,
     pub albums: u8,
@@ -78,7 +78,7 @@ pub struct InterestThreshold {
     pub buzz: u8,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct MarketsData {
     pub markets: HashMap<String, CountryMarket>,
     pub market_modifiers: MarketModifiers,
@@ -111,7 +111,7 @@ pub struct EconomicFactors {
     pub music_spending_ratio: f32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default)]
 pub struct MarketModifiers {
     pub breakthrough_thresholds: HashMap<String, BreakthroughLevel>,
     pub genre_era_modifiers: HashMap<String, HashMap<String, f32>>,
@@ -142,6 +142,7 @@ pub struct TouringCosts {
     pub equipment_cost_modifier: f32,
 }
 
+#[derive(Default)]
 pub struct GameDataFiles {
     pub song_adjectives: Vec<String>,
     pub song_nouns: Vec<String>,

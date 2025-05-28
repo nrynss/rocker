@@ -178,6 +178,23 @@ impl TerminalUI {
             Print(&format!("  Albums Released: {}\n", game.band.albums)),
         )?;
 
+        // Record Deal Info
+        if let Some(deal) = game.band.current_deal() {
+            execute!(
+                self.stdout,
+                Print("\n"),
+                SetForegroundColor(Color::Yellow),
+                Print("✍️ RECORD DEAL\n"),
+                ResetColor,
+                Print(&format!("  Label: {} ({})\n", deal.label_name, deal.label_tier)),
+                Print(&format!(
+                    "  Albums: {} / {}\n",
+                    deal.albums_delivered, deal.albums_required
+                )),
+                Print(&format!("  Royalty: {:.1}%\n", deal.royalty_rate * 100.0)),
+            )?;
+        }
+
         // Band members
         execute!(
             self.stdout,
@@ -286,6 +303,21 @@ impl TerminalUI {
                 format_money(constants::DOCTOR_VISIT_COST),
                 if doctor_available { "✅" } else { "❌" }
             )),
+            Print("S. Save Game\n"),
+            Print("L. Load Game\n"),
+        )?;
+
+        if !game.pending_deal_offers.is_empty() {
+            execute!(
+                self.stdout,
+                SetForegroundColor(Color::Green),
+                Print("V. View Record Deal Offers 🔥\n"),
+                ResetColor
+            )?;
+        }
+
+        execute!(
+            self.stdout,
             Print("Q. Quit game\n"),
             Print("\n"),
             Print("Enter your choice: "),
@@ -293,7 +325,7 @@ impl TerminalUI {
 
         loop {
             if let Event::Key(KeyEvent { code, .. }) = event::read()? {
-                let action = match code {
+                let mut action = match code {
                     KeyCode::Char('1') => Some(GameAction::LazeAround),
                     KeyCode::Char('2') => Some(GameAction::WriteSongs),
                     KeyCode::Char('3') => Some(GameAction::Practice),
@@ -303,9 +335,19 @@ impl TerminalUI {
                     KeyCode::Char('7') => Some(GameAction::GoOnTour),
                     KeyCode::Char('8') => Some(GameAction::TakeBreak),
                     KeyCode::Char('9') => Some(GameAction::VisitDoctor),
+                    KeyCode::Char('s') | KeyCode::Char('S') => Some(GameAction::SaveGame),
+                    KeyCode::Char('l') | KeyCode::Char('L') => Some(GameAction::LoadGame),
                     KeyCode::Char('q') | KeyCode::Char('Q') => Some(GameAction::Quit),
                     _ => None,
                 };
+
+                if action.is_none() {
+                    if !game.pending_deal_offers.is_empty() {
+                        if let KeyCode::Char('v') | KeyCode::Char('V') = code {
+                            action = Some(GameAction::ViewDealOffers);
+                        }
+                    }
+                }
 
                 if let Some(action) = action {
                     execute!(self.stdout, Print("\n\n"))?;
@@ -320,6 +362,21 @@ impl TerminalUI {
             self.stdout,
             SetForegroundColor(Color::Red),
             Print("❌ ERROR: "),
+            Print(message),
+            Print("\n\n"),
+            ResetColor,
+            Print("Press any key to continue..."),
+        )?;
+
+        self.wait_for_key()?;
+        Ok(())
+    }
+
+    pub fn show_message(&mut self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
+        execute!(
+            self.stdout,
+            SetForegroundColor(Color::Green),
+            Print("✅ INFO: "),
             Print(message),
             Print("\n\n"),
             ResetColor,
@@ -370,5 +427,98 @@ impl TerminalUI {
             }
         }
         Ok(())
+    }
+
+    fn display_single_offer_details(&mut self, offer: &crate::game::world::PotentialDealOffer) -> Result<(), Box<dyn std::error::Error>> {
+        execute!(
+            self.stdout,
+            SetForegroundColor(Color::Yellow),
+            Print("--- Offer Details ---\n"),
+            ResetColor,
+            Print(&format!("Label: {} ({})\n", offer.label_name, offer.label_tier)),
+            Print(&format!("Advance: {}\n", format_money(offer.advance))),
+            Print(&format!("Royalty Rate: {:.1}%\n", offer.royalty_rate * 100.0)),
+            Print(&format!("Albums Required: {}\n", offer.albums_required)),
+            Print("\n"),
+            SetForegroundColor(Color::Cyan),
+            Print("Label Info (from original data):\n"),
+            ResetColor,
+            Print(&format!("  Market Reach: {}/100\n", offer.original_label_data.market_reach)),
+            Print(&format!("  Financial Power: {}/100\n", offer.original_label_data.financial_power)),
+            Print(&format!("  Artist Development: {}/100\n", offer.original_label_data.artist_development)),
+            Print(&format!("  Creative Freedom: {}/100\n", offer.original_label_data.creative_freedom)),
+            Print(&format!("  Reputation: {}\n", offer.original_label_data.reputation)),
+            Print("\n"),
+        )?;
+        Ok(())
+    }
+
+    pub fn show_deal_offers_menu(&mut self, game: &Game) -> Result<Option<GameAction>, Box<dyn std::error::Error>> {
+        loop { // Outer loop for returning to offers list
+            self.clear_screen()?;
+            execute!(
+                self.stdout,
+                SetForegroundColor(Color::Green),
+                Print("--- Record Deal Offers ---\n\n"),
+                ResetColor
+            )?;
+
+            if game.pending_deal_offers.is_empty() {
+                execute!(self.stdout, Print("No current offers.\n\nPress any key to return..."))?;
+                self.wait_for_key()?;
+                return Ok(None);
+            }
+
+            for (index, offer) in game.pending_deal_offers.iter().enumerate() {
+                execute!(
+                    self.stdout,
+                    Print(&format!(
+                        "[{}] {} ({}): Advance {}, Royalty {:.1}%, {} Albums\n",
+                        index,
+                        offer.label_name,
+                        offer.label_tier,
+                        format_money(offer.advance),
+                        offer.royalty_rate * 100.0,
+                        offer.albums_required
+                    ))
+                )?;
+            }
+
+            execute!(self.stdout, Print("\nEnter offer number to inspect (or 'b' to go back): "))?;
+
+            let choice = self.get_input("")?; // get_input already handles print \n
+
+            if choice.eq_ignore_ascii_case("b") {
+                return Ok(None);
+            }
+
+            match choice.parse::<usize>() {
+                Ok(selected_index) if selected_index < game.pending_deal_offers.len() => {
+                    let selected_offer = &game.pending_deal_offers[selected_index];
+                    // Inner loop for A/R/B choice
+                    loop {
+                        self.clear_screen()?;
+                        self.display_single_offer_details(selected_offer)?;
+                        
+                        execute!(self.stdout, Print("[A]ccept Deal, [R]eject Deal, or [B]ack to offers list: "))?;
+                        let decision_input = self.get_input("")?.to_lowercase();
+
+                        match decision_input.as_str() {
+                            "a" => return Ok(Some(GameAction::AcceptDeal(selected_index))),
+                            "r" => return Ok(Some(GameAction::RejectDeal(selected_index))),
+                            "b" => break, // Breaks inner loop, will re-display all offers
+                            _ => {
+                                self.show_error("Invalid choice. Please enter A, R, or B.")?;
+                                // self.wait_for_key()?; // show_error includes this
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    self.show_error("Invalid offer number. Please try again.")?;
+                    // self.wait_for_key()?; // show_error includes this
+                }
+            }
+        }
     }
 }

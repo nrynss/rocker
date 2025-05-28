@@ -1,7 +1,8 @@
 use crate::game::Game;
 use rand::{thread_rng, Rng};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RandomEvent {
     DrugOffer,
     EquipmentIssue,
@@ -12,6 +13,7 @@ pub enum RandomEvent {
     IndustryEvent,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct EventManager {
     pub last_event_week: u32,
 }
