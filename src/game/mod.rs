@@ -185,7 +185,7 @@ impl Game {
         
         quality += (self.band.skill / 10) as f32; 
 
-        let mut player_bonus = 0.0;
+        let mut player_bonus: f32 = 0.0;
         if self.player.energy > 70 { player_bonus += 3.0; }
         else if self.player.energy > 40 { player_bonus += 1.0; }
         if self.player.stress < 30 { player_bonus += 3.0; }
