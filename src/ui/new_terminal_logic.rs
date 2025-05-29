@@ -587,8 +587,7 @@ impl TerminalUI {{
 
     pub fn display_release_report(&mut self, release_name: &str, quality: u8, marketing_level: u8, sales_score: u32, income: i32) -> Result<(), Box<dyn std::error::Error>> {{
         self.clear_screen()?;
-        execute!(self.stdout, SetForegroundColor(Color::Cyan), Print("--- Release Report ---
-"), ResetColor)?;
+        execute!(self.stdout, SetForegroundColor(Color::Cyan), Print("--- Release Report ---\n"), ResetColor)?;
         execute!(self.stdout, Print(&format!("Release: '{}'\n", release_name)))?;
         execute!(self.stdout, Print(&format!("  Quality:           {{}}/100\n", quality)))?;
         execute!(self.stdout, Print(&format!("  Marketing Level:   {{}}/100\n", marketing_level)))?;

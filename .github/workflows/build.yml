@@ -19,18 +19,18 @@ jobs:
         include:
           - os_name: Linux
             target: x86_64-unknown-linux-gnu
-            artifact_name: ${{ env.PROJECT_NAME }}-linux-amd64
-            asset_name: ${{ env.PROJECT_NAME }}-linux-amd64
+            artifact_name: rocker-linux-amd64  # Corrected
+            asset_name: rocker-linux-amd64     # Corrected
             use_cross: false
           - os_name: Windows
             target: x86_64-pc-windows-gnu
-            artifact_name: ${{ env.PROJECT_NAME }}-windows-amd64
-            asset_name: ${{ env.PROJECT_NAME }}-windows-amd64.exe
+            artifact_name: rocker-windows-amd64 # Corrected
+            asset_name: rocker-windows-amd64.exe # Corrected
             use_cross: false
           - os_name: macOS-arm64
             target: aarch64-apple-darwin
-            artifact_name: ${{ env.PROJECT_NAME }}-macos-arm64
-            asset_name: ${{ env.PROJECT_NAME }}-macos-arm64
+            artifact_name: rocker-macos-arm64  # Corrected
+            asset_name: rocker-macos-arm64     # Corrected
             use_cross: true
 
     steps:
