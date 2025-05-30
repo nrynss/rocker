@@ -516,18 +516,23 @@ impl Game {
 
         // Part 1: Process self.just_released_music
         let mut still_pending_release = Vec::new();
+        // This part assumes the `drain().collect()` change from the previous step was applied.
+        // If not, the E0502 errors for this part might still exist.
         let releases_to_process: Vec<Release> = self.just_released_music.drain(..).collect();
 
-        for mut release in releases_to_process {
+        for mut release in releases_to_process { // Iterating over the collected Vec
             if current_week >= release.week_released + INITIAL_SALES_WINDOW_WEEKS { 
+                // It is now safe to call &self methods here, as `drain` has completed.
                 let sales_score = self.calculate_release_sales_score(&release);
                 release.initial_sales_score = sales_score;
                 
                 let income = self.calculate_income_from_sales_score(sales_score, &release.release_type);
                 release.total_income_generated += income;
-                self.player.earn_money(income);
-
-                let genre_of_this_release = release.genre.clone(); // Clone genre before moving release
+                
+                self.player.earn_money(income); 
+                
+                // Clone genre before moving release, to avoid E0382
+                let genre_for_market_impact = release.genre.clone();
 
                 if release.release_type == music::ReleaseType::Album {
                     let is_deal = self.band.current_deal().is_some();
@@ -542,7 +547,7 @@ impl Game {
                 }
 
                 if sales_score > PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE {
-                    if let Some(genre_to_boost) = genre_of_this_release { // Use the cloned genre
+                    if let Some(genre_to_boost) = genre_for_market_impact { 
                         *self.world.dynamic_genre_modifiers.entry(genre_to_boost).or_insert(1.0) += PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS;
                     }
                     self.world.music_market.demand = (self.world.music_market.demand + PLAYER_MARKET_IMPACT_DEMAND_BONUS).min(100);
@@ -554,6 +559,7 @@ impl Game {
         self.just_released_music = still_pending_release;
 
         // Part 2: Process already released music (albums and singles)
+        // This part should already be correct from the previous successful step.
         let current_deal_royalty_rate: Option<f32> = self.band.current_deal().map(|d| d.royalty_rate);
 
         for release_list in [&mut self.band.albums_released, &mut self.band.singles_released] {
