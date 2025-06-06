@@ -47,9 +47,9 @@ jobs:
       run: |
         sudo apt-get update -y
         sudo apt-get install -y gcc-mingw-w64-x86-64
-        echo "[target.x86_64-pc-windows-gnu]" >> ${HOME}/.cargo/config.toml
-        echo "linker = "x86_64-w64-mingw32-gcc"" >> ${HOME}/.cargo/config.toml
-        echo "ar = "x86_64-w64-mingw32-ar"" >> ${HOME}/.cargo/config.toml
+        echo '[target.x86_64-pc-windows-gnu]' >> ${HOME}/.cargo/config.toml
+        echo 'linker = "x86_64-w64-mingw32-gcc"' >> ${HOME}/.cargo/config.toml
+        echo 'ar = "x86_64-w64-mingw32-ar"' >> ${HOME}/.cargo/config.toml
 
     - name: Install cross (if applicable)
       if: matrix.use_cross == true
