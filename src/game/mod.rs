@@ -7,7 +7,7 @@ pub mod world;
 
 use crate::data::constants;
 use crate::data_loader::GameDataFiles;
-use crate::game::music::*; 
+use crate::game::music::*;
 use band::Band;
 use events::EventManager;
 use player::Player;
@@ -16,22 +16,22 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use timeline::MusicTimeline;
-use world::{GameWorld, PotentialDealOffer}; 
+use crate::game::world::{GameWorld, PotentialDealOffer, MusicGenre};
 
-// Helper function
-fn calculate_income_from_sales_score_with_deal_info(sales_score: u32, _release_type: &ReleaseType, deal_royalty_rate: Option<f32>) -> u32 {
+// Moved calculate_income_from_sales_score here to be a free function
+fn calculate_income_from_sales_score(sales_score: u32, _release_type: &ReleaseType, deal_royalty_rate: Option<f32>) -> u32 {
     let base_income_per_point = if deal_royalty_rate.is_some() {
-        LABEL_INCOME_PER_SCORE_POINT 
+        LABEL_INCOME_PER_SCORE_POINT
     } else {
         INDEPENDENT_INCOME_PER_SCORE_POINT
     };
-    
+
     let total_label_income = sales_score * base_income_per_point;
 
     if let Some(royalty_rate) = deal_royalty_rate {
-        (total_label_income as f32 * royalty_rate) as u32 
+        (total_label_income as f32 * royalty_rate) as u32
     } else {
-        total_label_income 
+        total_label_income
     }
 }
 
@@ -50,13 +50,13 @@ const QUALITY_RECORDING_RANDOM_VARIATION: u8 = 10;
 
 // New Sales Model Constants
 const INITIAL_SALES_WINDOW_WEEKS: u32 = 4;
-const MARKETING_EFFECTIVENESS_DECAY_RATE: f32 = 0.90; 
-const SALES_SCORE_BASE: u32 = 50; 
+const MARKETING_EFFECTIVENESS_DECAY_RATE: f32 = 0.90;
+const SALES_SCORE_BASE: u32 = 50;
 const SALES_QUALITY_WEIGHT: f32 = 2.5;
 const SALES_MARKETING_WEIGHT: f32 = 1.8;
 const SALES_FAME_WEIGHT: f32 = 1.2;
-const SALES_MARKET_DEMAND_WEIGHT: f32 = 1.0; 
-const SALES_SATURATION_DIVISOR: f32 = 200.0; 
+const SALES_MARKET_DEMAND_WEIGHT: f32 = 1.0;
+const SALES_SATURATION_DIVISOR: f32 = 200.0;
 const INDEPENDENT_INCOME_PER_SCORE_POINT: u32 = 20;
 const LABEL_INCOME_PER_SCORE_POINT: u32 = 30;
 const PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE: u32 = 600;
@@ -80,7 +80,7 @@ pub enum GameAction {
     ViewDealOffers,
     AcceptDeal(usize),
     RejectDeal(usize),
-    StartMarketingCampaign(u32, MarketingCampaignType), 
+    StartMarketingCampaign(u32, MarketingCampaignType),
     ShowMarketingMenu,
     Quit,
 }
@@ -99,7 +99,7 @@ pub struct Game {
     pub game_over: bool,
     pub next_song_id: u32,
     pub next_release_id: u32,
-    pub just_released_music: Vec<Release>, 
+    pub just_released_music: Vec<Release>,
 }
 
 impl Game {
@@ -125,7 +125,7 @@ impl Game {
     pub fn initialize_player(&mut self, player_name: &str, band_name: &str) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
-        self.player.money = 500; 
+        self.player.money = 500;
 
         self.band.members = vec![
             band::BandMember {
@@ -227,22 +227,6 @@ impl Game {
         (base_score * era_sales_modifier * genre_modifier).max(0.0) as u32
     }
 
-    fn calculate_income_from_sales_score(&self, sales_score: u32, _release_type: &ReleaseType) -> u32 {
-        let base_income_per_point = if self.band.current_deal().is_some() {
-            LABEL_INCOME_PER_SCORE_POINT 
-        } else {
-            INDEPENDENT_INCOME_PER_SCORE_POINT
-        };
-        
-        let total_label_income = sales_score * base_income_per_point;
-
-        if let Some(deal) = self.band.current_deal() {
-            (total_label_income as f32 * deal.royalty_rate) as u32 
-        } else {
-            total_label_income 
-        }
-    }
-
     fn action_laze_around(&mut self) -> Result<(), String> {
         self.player.energy = (self.player.energy + 20).min(constants::MAX_ENERGY);
         self.player.stress = (self.player.stress.saturating_sub(10)).max(0);
@@ -308,7 +292,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(crate::game::world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
@@ -345,7 +329,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(crate::game::world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
@@ -526,11 +510,12 @@ impl Game {
                 let sales_score = self.calculate_release_sales_score(&release);
                 release.initial_sales_score = sales_score;
                 
-                let income = self.calculate_income_from_sales_score(sales_score, &release.release_type);
+                let current_deal_royalty_rate_loop1: Option<f32> = self.band.current_deal().map(|d| d.royalty_rate);
+                let income = calculate_income_from_sales_score(sales_score, &release.release_type, current_deal_royalty_rate_loop1);
                 release.total_income_generated += income;
-                
-                self.player.earn_money(income); 
-                
+
+                self.player.earn_money(income);
+
                 // Clone genre before moving release, to avoid E0382
                 let genre_for_market_impact = release.genre.clone();
 
@@ -547,7 +532,7 @@ impl Game {
                 }
 
                 if sales_score > PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE {
-                    if let Some(genre_to_boost) = genre_for_market_impact { 
+                    if let Some(genre_to_boost) = genre_for_market_impact {
                         *self.world.dynamic_genre_modifiers.entry(genre_to_boost).or_insert(1.0) += PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS;
                     }
                     self.world.music_market.demand = (self.world.music_market.demand + PLAYER_MARKET_IMPACT_DEMAND_BONUS).min(100);
@@ -575,7 +560,7 @@ impl Game {
                      let ongoing_sales_score = release.initial_sales_score / ongoing_sales_score_divisor; 
 
                      if ongoing_sales_score > 10 { 
-                        let ongoing_income = calculate_income_from_sales_score_with_deal_info(ongoing_sales_score, &release.release_type, current_deal_royalty_rate) / 5; 
+                        let ongoing_income = calculate_income_from_sales_score(ongoing_sales_score, &release.release_type, current_deal_royalty_rate) / 5;
                         release.total_income_generated += ongoing_income;
                         self.player.earn_money(ongoing_income);
                      }
@@ -624,14 +609,14 @@ impl Game {
             _ => true,
         };
 
-        self.execute_action(action.clone())?; 
+        self.execute_action(action.clone())?;
 
         if is_turn_consuming_action {
-            self.week += 1; 
+            self.week += 1;
             if self.week % constants::WEEKS_PER_YEAR == 0 {
                 self.timeline.advance_year();
             }
-            self.advance_week_events()?; 
+            self.advance_week_events()?;
         }
         
         self.process_music_releases_and_marketing();
@@ -656,7 +641,7 @@ impl Game {
             self.game_over = true;
         }
         if self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
-            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize 
+            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize
         {
             self.game_over = true;
         }
