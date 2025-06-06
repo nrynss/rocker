@@ -50,7 +50,9 @@ jobs:
       run: cargo install cross --git https://github.com/cross-rs/cross --branch main
 
     - name: Build binary and prepare artifact
+      shell: bash
       run: |
+        # … your existing build commands here …
         if [[ "${{ matrix.use_cross }}" == "true" ]]; then
           cross build --release --target ${{ matrix.target }}
         else
