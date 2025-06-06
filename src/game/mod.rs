@@ -7,7 +7,7 @@ pub mod world;
 
 use crate::data::constants;
 use crate::data_loader::GameDataFiles;
-use crate::game::music::*; // For Song, Release, ReleaseType, MarketingCampaignType, ActiveMarketingCampaign
+use crate::game::music::*;
 use band::Band;
 use events::EventManager;
 use player::Player;
@@ -16,7 +16,24 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use timeline::MusicTimeline;
-use world::{GameWorld, PotentialDealOffer, MusicGenre}; // Added MusicGenre
+use crate::game::world::{GameWorld, PotentialDealOffer, MusicGenre};
+
+// Moved calculate_income_from_sales_score here to be a free function
+fn calculate_income_from_sales_score(sales_score: u32, _release_type: &ReleaseType, deal_royalty_rate: Option<f32>) -> u32 {
+    let base_income_per_point = if deal_royalty_rate.is_some() {
+        LABEL_INCOME_PER_SCORE_POINT
+    } else {
+        INDEPENDENT_INCOME_PER_SCORE_POINT
+    };
+
+    let total_label_income = sales_score * base_income_per_point;
+
+    if let Some(royalty_rate) = deal_royalty_rate {
+        (total_label_income as f32 * royalty_rate) as u32
+    } else {
+        total_label_income
+    }
+}
 
 // Existing Royalty Constants (Kept for reference if any old logic uses them, but new model is primary)
 const BASE_ALBUM_ROYALTY_PAYMENT: u32 = 500;
@@ -33,13 +50,13 @@ const QUALITY_RECORDING_RANDOM_VARIATION: u8 = 10;
 
 // New Sales Model Constants
 const INITIAL_SALES_WINDOW_WEEKS: u32 = 4;
-const MARKETING_EFFECTIVENESS_DECAY_RATE: f32 = 0.90; // Not used in this simplified model yet
-const SALES_SCORE_BASE: u32 = 50; // Not directly used in this specific formula, but good for reference
+const MARKETING_EFFECTIVENESS_DECAY_RATE: f32 = 0.90;
+const SALES_SCORE_BASE: u32 = 50;
 const SALES_QUALITY_WEIGHT: f32 = 2.5;
 const SALES_MARKETING_WEIGHT: f32 = 1.8;
 const SALES_FAME_WEIGHT: f32 = 1.2;
-const SALES_MARKET_DEMAND_WEIGHT: f32 = 1.0; // Not directly used in this specific formula
-const SALES_SATURATION_DIVISOR: f32 = 200.0; // Not directly used in this specific formula
+const SALES_MARKET_DEMAND_WEIGHT: f32 = 1.0;
+const SALES_SATURATION_DIVISOR: f32 = 200.0;
 const INDEPENDENT_INCOME_PER_SCORE_POINT: u32 = 20;
 const LABEL_INCOME_PER_SCORE_POINT: u32 = 30;
 const PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE: u32 = 600;
@@ -63,7 +80,8 @@ pub enum GameAction {
     ViewDealOffers,
     AcceptDeal(usize),
     RejectDeal(usize),
-    StartMarketingCampaign(u32, MarketingCampaignType), // release_id, campaign_type
+    StartMarketingCampaign(u32, MarketingCampaignType),
+    ShowMarketingMenu,
     Quit,
 }
 
@@ -81,7 +99,7 @@ pub struct Game {
     pub game_over: bool,
     pub next_song_id: u32,
     pub next_release_id: u32,
-    pub just_released_music: Vec<Release>, // Stores releases for their initial sales window
+    pub just_released_music: Vec<Release>,
 }
 
 impl Game {
@@ -107,7 +125,7 @@ impl Game {
     pub fn initialize_player(&mut self, player_name: &str, band_name: &str) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
-        self.player.money = 500; // Starting cash in 1970
+        self.player.money = 500;
 
         self.band.members = vec![
             band::BandMember {
@@ -134,25 +152,20 @@ impl Game {
         ];
     }
 
-    // --- Song and Release Calculation Helper Methods (Step 4) ---
     fn calculate_songwriting_quality(&self) -> u8 {
         let mut quality = QUALITY_BASE_SONGWRITING as f32;
         let mut player_bonus = 0.0;
 
-        // Player energy bonus
         if self.player.energy > 70 { player_bonus += 5.0; }
         else if self.player.energy > 40 { player_bonus += 2.0; }
 
-        // Player stress bonus (low stress is good)
         if self.player.stress < 30 { player_bonus += 5.0; }
         else if self.player.stress < 60 { player_bonus += 2.0; }
         
-        // Band member skill bonus
         player_bonus += (self.band.average_member_skill() / 15) as f32; 
         
         quality += player_bonus.min(QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS as f32);
 
-        // Random variation
         let mut rng = rand::thread_rng();
         let random_offset = rng.gen_range(0..=QUALITY_SONGWRITING_RANDOM_VARIATION) as i8 - (QUALITY_SONGWRITING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
@@ -214,23 +227,6 @@ impl Game {
         (base_score * era_sales_modifier * genre_modifier).max(0.0) as u32
     }
 
-    fn calculate_income_from_sales_score(&self, sales_score: u32, _release_type: &ReleaseType) -> u32 {
-        let base_income_per_point = if self.band.current_deal().is_some() {
-            LABEL_INCOME_PER_SCORE_POINT 
-        } else {
-            INDEPENDENT_INCOME_PER_SCORE_POINT
-        };
-        
-        let total_label_income = sales_score * base_income_per_point;
-
-        if let Some(deal) = self.band.current_deal() {
-            (total_label_income as f32 * deal.royalty_rate) as u32 
-        } else {
-            total_label_income 
-        }
-    }
-
-    // --- Action Helper Methods (Step 5) ---
     fn action_laze_around(&mut self) -> Result<(), String> {
         self.player.energy = (self.player.energy + 20).min(constants::MAX_ENERGY);
         self.player.stress = (self.player.stress.saturating_sub(10)).max(0);
@@ -296,7 +292,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
@@ -333,7 +329,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
@@ -345,12 +341,10 @@ impl Game {
     }
     
     fn action_start_marketing_campaign(&mut self, release_id: u32, campaign_type: MarketingCampaignType) -> Result<(), String> {
-        // Find in just_released_music first, then in already released music
         let release_to_market = self.just_released_music.iter_mut()
             .find(|r| r.id == release_id)
             .or_else(|| self.band.singles_released.iter_mut().find(|r| r.id == release_id))
             .or_else(|| self.band.albums_released.iter_mut().find(|r| r.id == release_id));
-
 
         if let Some(release) = release_to_market {
             let (cost, duration_weeks, effectiveness_bonus) = match campaign_type {
@@ -476,7 +470,6 @@ impl Game {
         Ok(())
     }
     
-    // --- Main execute_action ---
     fn execute_action(&mut self, action: GameAction) -> Result<(), String> {
         match action {
             GameAction::LazeAround => self.action_laze_around(),
@@ -491,6 +484,7 @@ impl Game {
             GameAction::AcceptDeal(index) => self.action_accept_deal(index),
             GameAction::RejectDeal(index) => self.action_reject_deal(index),
             GameAction::StartMarketingCampaign(release_id, campaign_type) => self.action_start_marketing_campaign(release_id, campaign_type),
+            GameAction::ShowMarketingMenu => Ok(()),
             GameAction::Quit => {
                 self.game_over = true;
                 Ok(())
@@ -501,22 +495,33 @@ impl Game {
         }
     }
     
-    // --- Turn Processing Helper Methods (Step 6) ---
     fn process_music_releases_and_marketing(&mut self) {
         let current_week = self.week; 
 
+        // Part 1: Process self.just_released_music
         let mut still_pending_release = Vec::new();
-        for mut release in self.just_released_music.drain(..) {
+        // This part assumes the `drain().collect()` change from the previous step was applied.
+        // If not, the E0502 errors for this part might still exist.
+        let releases_to_process: Vec<Release> = self.just_released_music.drain(..).collect();
+
+        for mut release in releases_to_process { // Iterating over the collected Vec
             if current_week >= release.week_released + INITIAL_SALES_WINDOW_WEEKS { 
+                // It is now safe to call &self methods here, as `drain` has completed.
                 let sales_score = self.calculate_release_sales_score(&release);
                 release.initial_sales_score = sales_score;
                 
-                let income = self.calculate_income_from_sales_score(sales_score, &release.release_type);
+                let current_deal_royalty_rate_loop1: Option<f32> = self.band.current_deal().map(|d| d.royalty_rate);
+                let income = calculate_income_from_sales_score(sales_score, &release.release_type, current_deal_royalty_rate_loop1);
                 release.total_income_generated += income;
+
                 self.player.earn_money(income);
 
+                // Clone genre before moving release, to avoid E0382
+                let genre_for_market_impact = release.genre.clone();
+
                 if release.release_type == music::ReleaseType::Album {
-                    if self.band.current_deal().is_some() {
+                    let is_deal = self.band.current_deal().is_some();
+                    if is_deal {
                         if self.band.fulfill_album_obligation() {
                             // TODO: Consider a message for deal fulfillment.
                         }
@@ -527,17 +532,20 @@ impl Game {
                 }
 
                 if sales_score > PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE {
-                    if let Some(genre_to_boost) = self.band.albums_released.last().or_else(|| self.band.singles_released.last()).and_then(|r| r.genre.clone()) {
+                    if let Some(genre_to_boost) = genre_for_market_impact {
                         *self.world.dynamic_genre_modifiers.entry(genre_to_boost).or_insert(1.0) += PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS;
                     }
                     self.world.music_market.demand = (self.world.music_market.demand + PLAYER_MARKET_IMPACT_DEMAND_BONUS).min(100);
                 }
-
             } else {
                 still_pending_release.push(release);
             }
         }
         self.just_released_music = still_pending_release;
+
+        // Part 2: Process already released music (albums and singles)
+        // This part should already be correct from the previous successful step.
+        let current_deal_royalty_rate: Option<f32> = self.band.current_deal().map(|d| d.royalty_rate);
 
         for release_list in [&mut self.band.albums_released, &mut self.band.singles_released] {
             for release in release_list.iter_mut() {
@@ -552,7 +560,7 @@ impl Game {
                      let ongoing_sales_score = release.initial_sales_score / ongoing_sales_score_divisor; 
 
                      if ongoing_sales_score > 10 { 
-                        let ongoing_income = self.calculate_income_from_sales_score(ongoing_sales_score, &release.release_type) / 5; 
+                        let ongoing_income = calculate_income_from_sales_score(ongoing_sales_score, &release.release_type, current_deal_royalty_rate) / 5;
                         release.total_income_generated += ongoing_income;
                         self.player.earn_money(ongoing_income);
                      }
@@ -597,30 +605,26 @@ impl Game {
 
         let is_turn_consuming_action = match action {
             GameAction::SaveGame | GameAction::LoadGame | GameAction::ViewDealOffers | 
-            GameAction::AcceptDeal(_) | GameAction::RejectDeal(_) | GameAction::StartMarketingCampaign(_,_) => false,
+            GameAction::AcceptDeal(_) | GameAction::RejectDeal(_) | GameAction::StartMarketingCampaign(_,_) | GameAction::ShowMarketingMenu => false,
             _ => true,
         };
 
-        self.execute_action(action.clone())?; // Execute action first
+        self.execute_action(action.clone())?;
 
         if is_turn_consuming_action {
-            self.week += 1; // Advance week only for turn-consuming actions
+            self.week += 1;
             if self.week % constants::WEEKS_PER_YEAR == 0 {
                 self.timeline.advance_year();
             }
-            self.advance_week_events()?; // Process standard weekly events
+            self.advance_week_events()?;
         }
         
-        // These happen after every action resolution, regardless of turn consumption
         self.process_music_releases_and_marketing();
         self.check_and_generate_deal_offers();
         self.check_game_over();
 
         Ok(!self.game_over)
     }
-
-    // --- Original methods (ensure they are present and correct) ---
-    // calculate_royalties is removed as income is now handled by calculate_income_from_sales_score
 
     fn calculate_gig_earnings(&self) -> u32 {
         let base_pay = 50u32;
@@ -637,7 +641,7 @@ impl Game {
             self.game_over = true;
         }
         if self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
-            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize // Updated to check Vec length
+            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize
         {
             self.game_over = true;
         }
@@ -776,7 +780,6 @@ impl Game {
                         }
                     }
                     2 => {
-                        // Simplified: Royalty for *all* past releases, not just current one.
                         let total_releases_count = self.band.albums_released.len() + self.band.singles_released.len();
                         let royalties = (total_releases_count as i32) * rng.gen_range(10..50);
                         self.player.earn_money(royalties as u32);

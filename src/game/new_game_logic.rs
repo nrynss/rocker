@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use timeline::MusicTimeline;
-use world::{GameWorld, PotentialDealOffer, MusicGenre}; // Added MusicGenre
+use crate::game::world::{GameWorld, PotentialDealOffer, MusicGenre}; // Added MusicGenre
 
 // Existing Royalty Constants (Kept for reference if any old logic uses them, but new model is primary)
 const BASE_ALBUM_ROYALTY_PAYMENT: u32 = 500;
@@ -296,7 +296,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
@@ -333,7 +333,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().and_then(|_s| Some(world::MusicGenre::Rock)), // Placeholder
+            genre: selected_songs.first().and_then(|_s| Some(MusicGenre::Rock)), // Placeholder
         };
         self.just_released_music.push(new_release);
         self.next_release_id += 1;

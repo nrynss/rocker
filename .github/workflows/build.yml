@@ -13,25 +13,28 @@ env:
 jobs:
   build:
     name: Build for ${{ matrix.os_name }} (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os_image }}
     strategy:
       matrix:
         include:
           - os_name: Linux
+            os_image: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: rocker-linux-amd64  # Corrected
-            asset_name: rocker-linux-amd64     # Corrected
+            artifact_name: rocker-linux-amd64
+            asset_name: rocker-linux-amd64
             use_cross: false
           - os_name: Windows
-            target: x86_64-pc-windows-gnu
-            artifact_name: rocker-windows-amd64 # Corrected
-            asset_name: rocker-windows-amd64.exe # Corrected
+            os_image: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: rocker-windows-amd64
+            asset_name: rocker-windows-amd64.exe
             use_cross: false
           - os_name: macOS-arm64
+            os_image: macos-latest
             target: aarch64-apple-darwin
-            artifact_name: rocker-macos-arm64  # Corrected
-            asset_name: rocker-macos-arm64     # Corrected
-            use_cross: true
+            artifact_name: rocker-macos-arm64
+            asset_name: rocker-macos-arm64
+            use_cross: false
 
     steps:
     - name: Checkout code
@@ -42,35 +45,42 @@ jobs:
       with:
         targets: ${{ matrix.target }}
 
-    - name: Install dependencies for Windows cross-compilation (if applicable)
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y gcc-mingw-w64-x86-64
-        echo "[target.x86_64-pc-windows-gnu]" >> ${HOME}/.cargo/config.toml
-        echo "linker = "x86_64-w64-mingw32-gcc"" >> ${HOME}/.cargo/config.toml
-        echo "ar = "x86_64-w64-mingw32-ar"" >> ${HOME}/.cargo/config.toml
-
     - name: Install cross (if applicable)
       if: matrix.use_cross == true
       run: cargo install cross --git https://github.com/cross-rs/cross --branch main
 
-    - name: Build binary
+    - name: Build binary and prepare artifact
+      shell: bash
       run: |
+        # … your existing build commands here …
         if [[ "${{ matrix.use_cross }}" == "true" ]]; then
           cross build --release --target ${{ matrix.target }}
         else
           cargo build --release --target ${{ matrix.target }}
         fi
-        SOURCE_PATH="target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}"
-        if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
-          SOURCE_PATH="${SOURCE_PATH}.exe"
+
+        # Determine source binary name and full path
+        # Note: CARGO uses PROJECT_NAME for the binary, not necessarily matrix.asset_name
+        # matrix.asset_name is the *final* name we want for the binary in the artifact.
+        SOURCE_BINARY_FILENAME="${{ env.PROJECT_NAME }}"
+        if [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" || "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
+          SOURCE_BINARY_FILENAME="${SOURCE_BINARY_FILENAME}.exe"
         fi
-        cp "${SOURCE_PATH}" "${{ matrix.asset_name }}"
+        FULL_SOURCE_PATH="target/${{ matrix.target }}/release/${SOURCE_BINARY_FILENAME}"
+
+        # Define and create staging directory for the artifact
+        ARTIFACT_STAGE_DIR="artifact_stage"
+        mkdir -p "${ARTIFACT_STAGE_DIR}"
+
+        # Copy the binary into the staging directory, using its final asset name
+        cp "${FULL_SOURCE_PATH}" "${ARTIFACT_STAGE_DIR}/${{ matrix.asset_name }}"
+
+        # Copy the 'data' directory into the staging directory
+        cp -r data "${ARTIFACT_STAGE_DIR}/"
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
-        path: ${{ matrix.asset_name }}
+        path: artifact_stage/ # Upload contents of the staging directory
         retention-days: 7

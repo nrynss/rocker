@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
-// MusicGenre will be referenced via super::world::MusicGenre
-// as it's defined in world.rs
+use crate::game::world::MusicGenre;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Song {
@@ -44,5 +43,5 @@ pub struct Release {
     pub marketing_level_achieved: u8, // 0-100, sum of effectiveness_bonus from active campaigns
     pub initial_sales_score: u32, // Calculated after an initial sales window
     pub total_income_generated: u32,
-    pub genre: Option<super::world::MusicGenre>, // Assuming MusicGenre is in world.rs
+    pub genre: Option<MusicGenre>,
 }
