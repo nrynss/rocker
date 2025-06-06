@@ -13,25 +13,28 @@ env:
 jobs:
   build:
     name: Build for ${{ matrix.os_name }} (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os_image }} # Changed
     strategy:
       matrix:
         include:
           - os_name: Linux
+            os_image: ubuntu-latest # Added
             target: x86_64-unknown-linux-gnu
-            artifact_name: rocker-linux-amd64  # Corrected
-            asset_name: rocker-linux-amd64     # Corrected
+            artifact_name: rocker-linux-amd64
+            asset_name: rocker-linux-amd64
             use_cross: false
           - os_name: Windows
-            target: x86_64-pc-windows-gnu
-            artifact_name: rocker-windows-amd64 # Corrected
-            asset_name: rocker-windows-amd64.exe # Corrected
+            os_image: windows-latest # Added
+            target: x86_64-pc-windows-msvc # Changed
+            artifact_name: rocker-windows-amd64
+            asset_name: rocker-windows-amd64.exe
             use_cross: false
           - os_name: macOS-arm64
+            os_image: macos-latest # Added
             target: aarch64-apple-darwin
-            artifact_name: rocker-macos-arm64  # Corrected
-            asset_name: rocker-macos-arm64     # Corrected
-            use_cross: true
+            artifact_name: rocker-macos-arm64
+            asset_name: rocker-macos-arm64
+            use_cross: false # Changed
 
     steps:
     - name: Checkout code
@@ -42,17 +45,10 @@ jobs:
       with:
         targets: ${{ matrix.target }}
 
-    - name: Install dependencies for Windows cross-compilation (if applicable)
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y gcc-mingw-w64-x86-64
-        echo '[target.x86_64-pc-windows-gnu]' >> ${HOME}/.cargo/config.toml
-        echo 'linker = "x86_64-w64-mingw32-gcc"' >> ${HOME}/.cargo/config.toml
-        echo 'ar = "x86_64-w64-mingw32-ar"' >> ${HOME}/.cargo/config.toml
+    # Removed "Install dependencies for Windows cross-compilation (if applicable)" step
 
     - name: Install cross (if applicable)
-      if: matrix.use_cross == true
+      if: matrix.use_cross == true # This step will now be skipped for all matrix entries
       run: cargo install cross --git https://github.com/cross-rs/cross --branch main
 
     - name: Build binary
@@ -63,7 +59,8 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
         fi
         SOURCE_PATH="target/${{ matrix.target }}/release/${{ env.PROJECT_NAME }}"
-        if [[ "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
+        # Adjusted condition to be robust for Windows targets
+        if [[ "${{ matrix.target }}" == "x86_64-pc-windows-msvc" || "${{ matrix.target }}" == "x86_64-pc-windows-gnu" ]]; then
           SOURCE_PATH="${SOURCE_PATH}.exe"
         fi
         cp "${SOURCE_PATH}" "${{ matrix.asset_name }}"
