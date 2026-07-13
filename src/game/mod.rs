@@ -2,6 +2,7 @@ pub mod band;
 pub mod events;
 pub mod music;
 pub mod player;
+#[cfg(test)] mod sim; // Track D balance lab: bot-driven career sims, tests only.
 pub mod timeline;
 pub mod world;
 
@@ -62,7 +63,7 @@ const INDIE_REACH_FLOOR: f32 = 0.15;
 // Support tours: bigger acts occasionally want you as their opener.
 const SUPPORT_OFFER_MIN_FAME: u8 = 5;
 const SUPPORT_OFFER_FAME_GAP: u8 = 10;
-const SUPPORT_OFFER_CHANCE: f64 = 0.12;
+const SUPPORT_OFFER_CHANCE: f64 = 0.06;
 const SUPPORT_OFFER_LIFETIME_WEEKS: u32 = 3;
 const PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE: u32 = 600;
 const PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS: f32 = 0.05;
@@ -73,8 +74,8 @@ const PLAYER_MARKET_IMPACT_DEMAND_BONUS: u8 = 1;
 // the smaller of the venue's ceiling and the catalog cap.
 const VENUE_FAME_HEADROOM: u8 = 15;
 const LIVE_FAME_BASE_CAP: u8 = 35;
-const LIVE_FAME_PER_SINGLE: u8 = 8;
-const LIVE_FAME_PER_ALBUM: u8 = 15;
+const LIVE_FAME_PER_SINGLE: u8 = 6;
+const LIVE_FAME_PER_ALBUM: u8 = 12;
 
 // Fame fades when the band disappears from view: no shows, no tour, and
 // nothing new on the shelves. One quiet week is forgiven.
