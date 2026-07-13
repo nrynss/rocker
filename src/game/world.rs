@@ -12,6 +12,12 @@ pub struct PotentialDealOffer {
     pub royalty_rate: f32,
     pub albums_required: u8,
     pub original_label_data: RecordLabel,
+    /// The week the label withdraws the offer if it's ignored. `None`
+    /// means it never expires — deliberately, because offers saved before
+    /// expiry existed deserialize to `None`, and a bare numeric default
+    /// (0) would kill every live offer the moment an old save loaded.
+    #[serde(default)]
+    pub expires_week: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -726,6 +732,9 @@ impl GameWorld {
                             royalty_rate,
                             albums_required,
                             original_label_data: label.clone(),
+                            // The world has no clock; the game stamps the
+                            // deadline when the offer lands on the table.
+                            expires_week: None,
                         });
                     }
                 }

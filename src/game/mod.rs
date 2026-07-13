@@ -65,6 +65,12 @@ const SUPPORT_OFFER_MIN_FAME: u8 = 5;
 const SUPPORT_OFFER_FAME_GAP: u8 = 10;
 const SUPPORT_OFFER_CHANCE: f64 = 0.06;
 const SUPPORT_OFFER_LIFETIME_WEEKS: u32 = 3;
+
+// Record deals stay on the table about a month — one scouting cycle — so
+// a slate the player sits on clears just as labels next come looking, and
+// ignoring an offer can never silence the deal stream for good.
+const DEAL_OFFER_LIFETIME_WEEKS: u32 = 4;
+
 const PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE: u32 = 600;
 const PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS: f32 = 0.05;
 const PLAYER_MARKET_IMPACT_DEMAND_BONUS: u8 = 1;
@@ -1247,10 +1253,35 @@ impl Game {
         Ok(())
     }
 
+    /// Quietly withdraw deal offers the player sat past their deadline.
+    /// Losing interest is not a rejection: nobody poaches the vacated deal
+    /// (that stays a consequence of `action_reject_deal` alone), and the
+    /// cleared slate lets labels come knocking again. Offers from saves
+    /// that predate expiry (`expires_week: None`) stay on the table
+    /// forever, exactly as they always did.
+    fn expire_stale_deal_offers(&mut self) {
+        let week = self.week;
+        let offers = std::mem::take(&mut self.pending_deal_offers);
+        let (expired, live): (Vec<_>, Vec<_>) = offers
+            .into_iter()
+            .partition(|offer| offer.expires_week.is_some_and(|deadline| week >= deadline));
+        self.pending_deal_offers = live;
+        for offer in expired {
+            self.log(format!(
+                "📪 {}'s interest has cooled — their offer is off the table.",
+                offer.label_name
+            ));
+        }
+    }
+
     fn check_and_generate_deal_offers(&mut self) {
+        self.expire_stale_deal_offers();
         if self.pending_deal_offers.is_empty() && self.week.is_multiple_of(4) && self.band.record_deal.is_none() {
             let mut rng = rand::thread_rng();
-            let new_offers = self.world.generate_deal_offers(&self.band, &self.data_files, &mut rng);
+            let mut new_offers = self.world.generate_deal_offers(&self.band, &self.data_files, &mut rng);
+            for offer in &mut new_offers {
+                offer.expires_week = Some(self.week + DEAL_OFFER_LIFETIME_WEEKS);
+            }
             if !new_offers.is_empty() {
                 let n = new_offers.len();
                 self.pending_deal_offers = new_offers;
@@ -2078,5 +2109,82 @@ mod tests {
             game.turn_log.iter().any(|m| m.contains("went to another band")),
             "expiry should be reported"
         );
+    }
+
+    /// A pending offer as `check_and_generate_deal_offers` would leave it.
+    fn test_deal_offer(game: &Game, expires_week: Option<u32>) -> PotentialDealOffer {
+        let label = game.data_files.get_record_labels_data().independent_labels[0].clone();
+        PotentialDealOffer {
+            label_name: label.name.clone(),
+            label_tier: "Independent".to_string(),
+            advance: 1_000,
+            royalty_rate: 0.12,
+            albums_required: 1,
+            original_label_data: label,
+            expires_week,
+        }
+    }
+
+    #[test]
+    fn ignored_deal_offers_expire_and_the_stream_resumes() {
+        let mut game = test_game();
+        game.pending_deal_offers = vec![test_deal_offer(&game, Some(8))];
+        let unsigned_before = game.world.bands.iter().filter(|b| b.label.is_none()).count();
+
+        // Before the deadline the offer stays on the table.
+        game.week = 7;
+        game.check_and_generate_deal_offers();
+        assert_eq!(game.pending_deal_offers.len(), 1, "a live offer survives to its deadline");
+
+        // At the deadline it quietly leaves — with a line in the log...
+        game.week = 8;
+        game.check_and_generate_deal_offers();
+        assert!(game.pending_deal_offers.is_empty(), "an ignored offer should expire");
+        let log = game.take_turn_log().join("\n");
+        assert!(log.contains("interest has cooled"), "expiry is told in-fiction, got: {log}");
+        // ...and, unlike a rejection, nobody poaches the vacated deal.
+        let unsigned_after = game.world.bands.iter().filter(|b| b.label.is_none()).count();
+        assert_eq!(
+            unsigned_before, unsigned_after,
+            "expiry must not hand the deal to a scene act"
+        );
+
+        // With the slate clear and a catalog worth scouting, the stream
+        // resumes on the next 4-week beat instead of staying silent forever.
+        game.band.fame = 30;
+        game.band.singles_released.push(test_release(1, ReleaseType::Single));
+        let mut resumed = false;
+        for _ in 0..80 {
+            game.check_and_generate_deal_offers();
+            if !game.pending_deal_offers.is_empty() {
+                resumed = true;
+                break;
+            }
+        }
+        assert!(resumed, "new offers should arrive once the slate is clear");
+        assert!(
+            game.pending_deal_offers
+                .iter()
+                .all(|offer| offer.expires_week == Some(game.week + DEAL_OFFER_LIFETIME_WEEKS)),
+            "fresh offers should carry a deadline"
+        );
+    }
+
+    #[test]
+    fn deal_offers_from_old_saves_never_expire() {
+        // Offers already pending when an old save was written carry no
+        // deadline; they stay on the table however late it gets.
+        let mut game = test_game();
+        game.pending_deal_offers = vec![test_deal_offer(&game, None)];
+        game.week = 501;
+        game.check_and_generate_deal_offers();
+        assert_eq!(game.pending_deal_offers.len(), 1, "legacy offers must never expire");
+
+        // And the on-disk shape old builds wrote — no expires_week key at
+        // all — must deserialize to exactly that.
+        let mut on_disk = serde_json::to_value(test_deal_offer(&game, Some(9))).unwrap();
+        on_disk.as_object_mut().unwrap().remove("expires_week");
+        let loaded: PotentialDealOffer = serde_json::from_value(on_disk).unwrap();
+        assert_eq!(loaded.expires_week, None);
     }
 }
