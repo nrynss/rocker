@@ -204,7 +204,7 @@ This is a learning project, but contributions are welcome! Ideas for improvement
 
 ## 📜 License
 
-Apache License 2.0
+GNU Affero General Public License v3.0 (AGPL-3.0-or-later) — see [LICENSE](LICENSE).
 
 ## 🙏 Acknowledgments
 
