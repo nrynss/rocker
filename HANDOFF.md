@@ -127,12 +127,12 @@ run **in parallel on the same branch** — never via extra branches.
 | **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | ⬜ open | | struct/t4-genre | |
 | **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/game.rs`; thin `mod.rs` | S | T2 | `src/game/game.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ⬜ open | | struct/t4-genre | |
 | **T4** | Extract `MusicGenre` → `src/game/genre.rs` | S | — | `src/game/genre.rs` *(new)*, `src/game/world.rs` *(remove genre)*, all `use` sites of `MusicGenre` | ✅ done | grok-struct-t4 | struct/t4-genre | 860fb6f |
-| **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ⬜ open | | struct/t4-genre | |
+| **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ✅ done | grok-struct-t5 | struct/t4-genre | |
 | **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ⬜ open | | struct/t4-genre | |
 | **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ⬜ open | | struct/t4-genre | |
 | **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/game.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | |
-| **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ⬜ open | | struct/t4-genre | |
+| **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | 🔒 claimed | antigravity | struct/t4-genre | |
 | **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | struct/t4-genre | |
 
 ### Parallelism map (waves)
@@ -501,3 +501,4 @@ _Example:_
 - 2026-07-13 T4 done by grok-struct-t4 on `struct/t4-genre`: canonical path `crate::game::genre::MusicGenre`; no world re-export; `random`/`random_trending` are `pub(crate)`.
 - 2026-07-13 T9 done by antigravity on `struct/t4-genre`.
 - 2026-07-13 **Policy:** single shared branch `struct/t4-genre` for the whole structure cycle — no per-task branches. Abandoned names like `struct/t1-tests-out` must not be used; rebase any stray work onto `struct/t4-genre`.
+- 2026-07-13 T5 done by grok-struct-t5 on `struct/t4-genre`: `actions.rs` → `actions/{mod,studio,live,business,rest}.rs`; action methods use `pub(in crate::game)` so nested modules stay visible to game tests/turn.
