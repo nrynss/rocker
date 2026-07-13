@@ -42,6 +42,7 @@ pub enum Screen {
     Main,
     Deals { selected: usize, detail: bool },
     SupportOffer,
+    Charts,
     MarketingRelease { selected: usize },
     MarketingCampaign { release_id: u32, release_name: String, selected: usize },
     File { mode: FileMode, input: String },
@@ -57,6 +58,7 @@ pub enum MenuKind {
     Action(GameAction),
     Deals,
     SupportTour,
+    Charts,
     Marketing,
     Save,
     Load,
@@ -255,6 +257,16 @@ impl App {
                 kind: MenuKind::Deals,
             },
             MenuEntry {
+                hotkey: 'c',
+                label: "Charts…",
+                detail: match game.world.charts.iter().position(|e| e.is_player) {
+                    Some(spot) => format!("you're at #{}!", spot + 1),
+                    None => "this week's top 10".into(),
+                },
+                enabled: true,
+                kind: MenuKind::Charts,
+            },
+            MenuEntry {
                 hotkey: 's',
                 label: "Save Game",
                 detail: String::new(),
@@ -351,6 +363,7 @@ impl App {
             Screen::Main => self.handle_main_key(key),
             Screen::Deals { .. } => self.handle_deals_key(key),
             Screen::SupportOffer => self.handle_support_offer_key(key),
+            Screen::Charts => self.handle_charts_key(key),
             Screen::MarketingRelease { .. } => self.handle_marketing_release_key(key),
             Screen::MarketingCampaign { .. } => self.handle_marketing_campaign_key(key),
             Screen::File { .. } => self.handle_file_key(key),
@@ -445,6 +458,7 @@ impl App {
                     self.push_log(LogKind::Ui, "No support slots on offer — get noticed by the bigger acts first.");
                 }
             }
+            MenuKind::Charts => self.screen = Screen::Charts,
             MenuKind::Marketing => {
                 if self.game.band.current_deal().is_some() {
                     self.push_log(LogKind::Ui, "Promotion is your label's job — their people are already on it.");
@@ -539,6 +553,12 @@ impl App {
                 self.dispatch(GameAction::DeclineSupportTour);
             }
             _ => {}
+        }
+    }
+
+    fn handle_charts_key(&mut self, key: KeyEvent) {
+        if key.code == KeyCode::Esc {
+            self.screen = Screen::Main;
         }
     }
 
