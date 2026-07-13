@@ -544,6 +544,119 @@ highlighted. Shows genre tag.
 
 ---
 
+## §9 — The Rockstar Life: Addiction, Happiness, Vacations, the Manager
+
+These four are the heart of the original 1989 game — where the band was
+flavor text, *these* were the mechanics — restored here on top of systems
+the original never had (the timeline, the scene, real band members).
+Independent of §1–§6 except where marked: safe to build before, after, or
+alongside the Musician work. Everything follows existing patterns: picker
+modals, offer streams, seeded action-stream RNG, `#[serde(default)]` on
+every new field so old saves keep loading.
+
+### §9.1 — Addiction with teeth
+
+`drug_addiction` / `alcohol_addiction` already exist on `Player` and
+drain health weekly — and nothing else. In the original, drugs were a
+*choice*, and they could kill you. Restore both:
+
+- **Offers become choices.** `DrugOffer` currently rolls
+  `rng.gen_bool(0.3)` and decides *for* the player (`events_apply.rs`).
+  Make it a modal: Accept (+20 energy now, +addiction, −health) /
+  Refuse. This is the first of the README's planned "player choices in
+  events" — build the event-choice modal once, reuse it for later events.
+- **Cravings.** While `drug_addiction > 40`, refusing costs stress +10
+  and energy −10. Saying no gets mechanically harder.
+- **Overdose.** Weekly roll on the action stream while
+  `drug_addiction > 70`: ~3% collapse — health halved, hospital bill,
+  2 weeks lost, news line. Above 90 the collapse can kill: game over,
+  like 1989. Telegraph it: the doctor warns at 50+, the log darkens at 70+.
+- **No-shows.** Above 60, each gig/tour week risks a missed show — fee
+  lost, fame −2, `reputation.live_performance` −5.
+- **Rehab** (new action, lives in `actions/rest.rs`): $2,000, 6 weeks,
+  addictions → 10, stress → 0, happiness +20. Idle fame decay applies
+  throughout. The press reacts through the timeline — a shrug in 1972,
+  a tabloid feeding-frenzy in 1988. An era hook the original couldn't have.
+
+### §9.2 — Happiness
+
+Stress is the week's pressure; happiness is the career's mood. Stored
+`happiness: u8` on `Player` (serde default 60), 0–100.
+
+- **Drains:** the same action 3+ weeks running (−3/week — the grind), a
+  flop −10, broke −5/week, each idle-decay week −2.
+- **Gains:** charting (+12 at #1 down to +3 at #10), one-shot firsts
+  (first single / album / tour, +10 each), vacations (§9.3).
+- **Effects:** songwriting/recording quality multiplier
+  `0.8 + happiness/500` (range 0.8–1.0) — wire in during the §2 quality
+  rewrite alongside `chemistry_mult`. **Low happiness feeds addiction:**
+  below 30, craving costs double and DrugOffer's accept option reads as
+  self-medication. Together the two systems form the original's death
+  spiral: unhappy → using → no-shows → flops → unhappier.
+- **Floor:** 4 consecutive weeks at 0 → a forced, unpaid month off
+  (auto-vacation). Not a game over — the game over is the overdose.
+
+### §9.3 — Vacations
+
+Replace the flat Take a Break with a picker (venue-picker pattern) —
+the original's escalating menu, cheap weekend to world cruise:
+
+| Tier | Cost | Weeks | Effect |
+|------|------|-------|--------|
+| Seaside weekend | $50 | 1 | energy full, stress −20, happiness +5 |
+| Country retreat | $400 | 2 | health +30, energy full, stress −50, happiness +12 |
+| Mediterranean holiday | $2,000 | 4 | health/energy full, stress → 0, happiness +25 |
+| World cruise | $12,000 | 10 | everything reset, happiness → 100, addictions −20 |
+
+Idle fame decay already applies to every quiet week, so the trade-off
+costs no new code: the cruise is the superstar's move (fame to burn,
+$12k is nothing), while a struggling act can only afford the weekend it
+also can't afford fame-wise. `GameAction::TakeBreak` becomes
+`Vacation(usize)` — actions aren't persisted in saves, so the enum is
+free to change. Destination table in code first; graduate to
+`data/vacations.txt` if customization is wanted.
+
+### §9.4 — The Manager
+
+The deal-offer stream pattern, applied to a person:
+
+```rust
+pub struct Manager {
+    pub name: String,
+    pub cut: f32,   // 0.10–0.25 of ALL income
+    pub skill: u8,  // 0-100: how much they actually do for you
+    honesty: u8,    // hidden. Low = the Allen Klein experience.
+}
+```
+
+- Managers scout you the way labels do (fame + catalog buzz); offers
+  expire on the same beat.
+- Benefits scale with `skill`: venues open one prestige tier early, deal
+  offers arrive with +2–5pp royalty, marketing at 25% off, tour travel
+  costs reduced.
+- `honesty` is **hidden**, rolled at generation. Low-honesty managers
+  skim: a slice of income vanishes silently; each week a small chance
+  the skim is discovered — back-pay gone, firing scene, tabloid news,
+  big happiness hit. Period-perfect, and mechanically a gamble on an
+  offer you can't fully vet.
+- Firing: settlement ≈ 8 weeks of their average take; 12-week cooldown
+  before new offers arrive.
+- v1 is player-only (§4's "external relationships" deferral stands);
+  scene bands don't need visible managers.
+
+### §9.5 — Build order & testing
+
+Addiction, vacations, and the manager touch no quality formulas — safe
+to build **now**, before §1–§6. Happiness *effects* land with the §2
+quality rewrite (the stat itself can ship earlier, inert). Add two bots
+to the balance lab (`sim.rs`): a `junkie-spiral` bot that accepts every
+offer and never rests — must reliably die; and a `wellness` bot that
+vacations optimally — must survive but chart worse than the grinders.
+All new rolls draw from the existing action stream; all new fields take
+`#[serde(default)]`, with the save-compat test extended to cover them.
+
+---
+
 ## Relationship to HANDOFF tasks
 
 | HANDOFF Task | Status |
