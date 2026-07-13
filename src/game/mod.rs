@@ -1818,7 +1818,7 @@ mod tests {
     #[test]
     fn a_hit_release_enters_the_charts_and_a_flop_misses() {
         let mut game = test_game();
-        game.initialize_player("Test", "The Tests");
+        game.initialize_player("Test", "The Tests", world::MusicGenre::Rock);
         // A crowded chart: ten scene records the player has to outsell.
         for i in 0..world::CHART_SIZE {
             game.world
