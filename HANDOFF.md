@@ -18,25 +18,44 @@ clippy clean, `thread_rng` gone, `src/game/mod.rs` ~1 060 lines of which
 This handoff is the **single coordination surface**. Do not start a task
 that is already claimed or whose prerequisites are not ✅.
 
+### One branch for the whole cycle
+
+**All structure work lands on `struct/t4-genre`.** Do not open
+`struct/t1-…`, `struct/t5-…`, or any other task branch. Multi-branch
+parallelism caused rebase pain and split history; coordination is the
+**board + exclusive Owns**, not git branches.
+
+```text
+git fetch origin
+git checkout struct/t4-genre
+git pull --rebase origin struct/t4-genre   # always before claim / before push
+# … do one claimed task …
+git push origin struct/t4-genre
+```
+
+If `pull --rebase` conflicts in files you do **not** own, stop and
+unclaim — do not “fix” another agent’s WIP.
+
 ### Claim protocol (mandatory)
 
-1. **Read this whole file**, then the task section for the ID you want.
-2. **Prerequisites:** every ID in `Prereqs` must be `✅ done` (or `—`).
-3. **Claim atomically** — edit the Task board row in the **same commit**
+1. **On `struct/t4-genre`**, up to date with `origin` (see above).
+2. **Read this whole file**, then the task section for the ID you want.
+3. **Prerequisites:** every ID in `Prereqs` must be `✅ done` (or `—`).
+4. **Claim atomically** — edit the Task board row in the **same commit**
    that starts the work (or a tiny commit immediately before code):
    - `Status`: `⬜ open` → `🔒 claimed`
    - `Claimed by`: short agent/session id (e.g. `claude-a3f2`, `grok-struct-1`)
-   - `Branch`: `struct/<task-id>-<slug>` (example: `struct/t1-tests-out`)
-4. **While working**, you own every path listed under **Owns**. Do not
-   edit another open task’s owned files. If you must touch shared wiring
-   (`src/game/mod.rs` module list, `src/ui/mod.rs`), keep the diff to the
-   minimum `mod` / `pub use` lines and note it in the PR.
-5. **Done means green**, then update the board:
+   - `Branch` column: always `struct/t4-genre` (shared; do not invent a name)
+5. **While working**, you own every path listed under **Owns**. Do not
+   edit another open/`🔒 claimed` task’s owned files. If you must touch
+   shared wiring (`src/game/mod.rs` module list, `src/ui/mod.rs`), keep
+   the diff to the minimum `mod` / `pub use` lines.
+6. **Done means green**, then update the board and **push the same branch**:
    - `Status`: `🔒 claimed` → `✅ done`
-   - Fill `Done` with the merge commit short SHA or PR number
+   - Fill `Done` with the commit short SHA that completed the task
    - Leave `Claimed by` as historical record
-6. **Unclaim** if you abort: set `Status` back to `⬜ open`, clear
-   `Claimed by` / `Branch`, and say why in one line under Notes.
+7. **Unclaim** if you abort: set `Status` back to `⬜ open`, clear
+   `Claimed by`, and say why in one line under Notes.
 
 ### Status legend
 
@@ -71,10 +90,12 @@ that is already claimed or whose prerequisites are not ✅.
 - **Visibility:** prefer `pub(super)` / `pub(crate)` over `pub`. Integration
   tests are **not** the goal this cycle; keep unit-test access via
   `#[cfg(test)]` modules under `src/game/`.
-- **One task per branch.** PR title: `struct(T#): <short description>`.
-- **Update this file** when claiming and when completing. Coordinator
-  merges board updates with the code PR (not a separate mystery commit
-  days later).
+- **One shared branch:** `struct/t4-genre` only. Commit message prefix:
+  `struct(T#): <short description>`. One open PR from this branch to
+  `main` when the cycle closes (or whenever the human merges); agents
+  push commits, they do not open parallel task PRs.
+- **Update this file** when claiming and when completing, on the same
+  branch as the code.
 
 ### Do-not-undo (still in force from v0.5)
 
@@ -98,21 +119,21 @@ Those wait for a **Musician cycle handoff** after this board is all ✅.
 
 **How to read prereqs:** `—` = none (start when ready). Multiple IDs =
 all must be ✅. Tasks with **disjoint Owns** and satisfied prereqs may
-run in parallel.
+run **in parallel on the same branch** — never via extra branches.
 
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Branch | Done |
 |----|------|------|---------|------------------|--------|------------|--------|------|
-| **T1** | Extract `game` unit tests out of `mod.rs` into `src/game/tests/` | M | — | `src/game/mod.rs` *(tests module only + `mod tests` wiring)*, **new** `src/game/tests/**` | 🔒 claimed | claude-t1 | struct/t1-tests-out | |
-| **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | ⬜ open | | | |
-| **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/game.rs`; thin `mod.rs` | S | T2 | `src/game/game.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ⬜ open | | | |
+| **T1** | Extract `game` unit tests out of `mod.rs` into `src/game/tests/` | M | — | `src/game/mod.rs` *(tests module only + `mod tests` wiring)*, **new** `src/game/tests/**` | 🔒 claimed | claude-t1 | struct/t4-genre | |
+| **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | ⬜ open | | struct/t4-genre | |
+| **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/game.rs`; thin `mod.rs` | S | T2 | `src/game/game.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ⬜ open | | struct/t4-genre | |
 | **T4** | Extract `MusicGenre` → `src/game/genre.rs` | S | — | `src/game/genre.rs` *(new)*, `src/game/world.rs` *(remove genre)*, all `use` sites of `MusicGenre` | ✅ done | grok-struct-t4 | struct/t4-genre | 860fb6f |
-| **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ⬜ open | | | |
-| **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ⬜ open | | | |
-| **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ⬜ open | | | |
-| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/game.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | | |
-| **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | 🔒 claimed | antigravity | struct/t9-ui-input | |
-| **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ⬜ open | | | |
-| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | | |
+| **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ⬜ open | | struct/t4-genre | |
+| **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ⬜ open | | struct/t4-genre | |
+| **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ⬜ open | | struct/t4-genre | |
+| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/game.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
+| **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | 🔒 claimed | antigravity | struct/t4-genre | |
+| **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ⬜ open | | struct/t4-genre | |
+| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | struct/t4-genre | |
 
 ### Parallelism map (waves)
 
@@ -133,14 +154,15 @@ Wave 3:
   T11 (close)         ← after required tasks
 ```
 
-**Conflict warnings:**
+**Conflict warnings (same branch — Owns are the mutex):**
 
 | Pair | Issue |
 |------|--------|
 | T1 ∥ T2 ∥ T3 | All touch `mod.rs` — **serialized** by prereqs (T1→T2→T3) |
 | T4 ∥ T7 | T7 must wait for T4 so genre is not moved twice |
-| T9 ∥ T10 | Prefer **not** same-day merge without rebase; both may touch `ui/mod.rs` — only add `mod` lines, never reformat the other’s files |
-| T6 | May add one `mod events_apply;` line in `game/mod.rs` while T1–T3 run — **rebase**; keep that line-only |
+| T9 ∥ T10 | Both may touch `ui/mod.rs` — only add `mod` lines; never reformat the other’s files. Prefer one claimed at a time if unsure |
+| T6 | May add one `mod events_apply;` line in `game/mod.rs` while T1–T3 run — pull --rebase; keep that line-only |
+| Any ∥ any | **Pull --rebase before push.** Do not force-push unless the human says so |
 
 ---
 
@@ -474,7 +496,8 @@ cargo test independent_labels_scout
 ## Notes (agents append one-liners here)
 
 _Example:_  
-`2026-07-13 T1 claimed by grok-struct-1 on branch struct/t1-tests-out`
+`2026-07-13 T5 claimed by grok-struct-1 on struct/t4-genre`
 
 - 2026-07-13 T4 done by grok-struct-t4 on `struct/t4-genre`: canonical path `crate::game::genre::MusicGenre`; no world re-export; `random`/`random_trending` are `pub(crate)`.
-- 2026-07-13 T9 claimed by antigravity on branch `struct/t9-ui-input`.
+- 2026-07-13 T9 claimed by antigravity on `struct/t4-genre`.
+- 2026-07-13 **Policy:** single shared branch `struct/t4-genre` for the whole structure cycle — no per-task branches. Abandoned names like `struct/t1-tests-out` must not be used; rebase any stray work onto `struct/t4-genre`.
