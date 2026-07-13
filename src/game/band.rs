@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use super::music::{Song, Release}; // Import new structs
+use super::music::{Release, Song}; // Import new structs
 use super::world::MusicGenre;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Band {
@@ -113,7 +113,10 @@ impl Default for BandReputation {
 
 impl Band {
     pub fn new(name: String) -> Self {
-        Self { name, ..Self::default() }
+        Self {
+            name,
+            ..Self::default()
+        }
     }
 
     pub fn get_fame_level(&self) -> &str {
@@ -167,7 +170,8 @@ impl Band {
         !self.unreleased_songs.is_empty()
     }
 
-    pub fn total_releases(&self) -> usize { // Changed to usize to match Vec::len()
+    pub fn total_releases(&self) -> usize {
+        // Changed to usize to match Vec::len()
         self.singles_released.len() + self.albums_released.len()
     }
 
@@ -193,7 +197,7 @@ impl Band {
             if deal.albums_delivered >= deal.albums_required {
                 // Deal completed
                 // For now, let's clear the deal. Another option could be to mark it as completed.
-                self.record_deal = None; 
+                self.record_deal = None;
                 return true; // Deal completed
             }
         }

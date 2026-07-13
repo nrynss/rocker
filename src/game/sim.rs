@@ -469,7 +469,10 @@ fn print_report(careers: &[Career]) {
                 .collect(),
         );
         let died = runs.iter().filter(|c| c.ending == Ending::Died).count();
-        let broke = runs.iter().filter(|c| c.ending == Ending::WentBroke).count();
+        let broke = runs
+            .iter()
+            .filter(|c| c.ending == Ending::WentBroke)
+            .count();
         let going = runs
             .iter()
             .filter(|c| c.ending == Ending::StillGoing)
@@ -537,7 +540,9 @@ fn print_report(careers: &[Career]) {
             bot.name(),
             signed_runs,
             runs.len(),
-            show(median(runs.iter().filter_map(|c| c.first_deal_week).collect())),
+            show(median(
+                runs.iter().filter_map(|c| c.first_deal_week).collect()
+            )),
             runs.iter().map(|c| c.deals_signed).sum::<u32>() as f32 / runs.len() as f32,
             show(median(runs.iter().map(|c| c.albums).collect())),
             show(median(runs.iter().map(|c| c.singles).collect())),

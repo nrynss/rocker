@@ -256,18 +256,23 @@ impl GameWorld {
             };
             if new_state != self.music_market.economic_state {
                 news.push(match new_state {
-                    EconomicState::Booming => "📈 Record sales are BOOMING — everyone's buying.".to_string(),
-                    EconomicState::Growing => "📈 The record industry is growing again.".to_string(),
+                    EconomicState::Booming => {
+                        "📈 Record sales are BOOMING — everyone's buying.".to_string()
+                    }
+                    EconomicState::Growing => {
+                        "📈 The record industry is growing again.".to_string()
+                    }
                     EconomicState::Stagnant => "📊 Industry sales have flattened out.".to_string(),
-                    EconomicState::Recession => "📉 The industry has slid into a slump — money is tight.".to_string(),
+                    EconomicState::Recession => {
+                        "📉 The industry has slid into a slump — money is tight.".to_string()
+                    }
                 });
                 self.music_market.economic_state = new_state;
             }
         }
 
         // Saturation tracks how crowded the scene is; innovation opens space.
-        let target_saturation =
-            ((25 + self.bands.len() / 4) as u8).min(90);
+        let target_saturation = ((25 + self.bands.len() / 4) as u8).min(90);
         if self.music_market.saturation < target_saturation {
             self.music_market.saturation += 1;
         } else if self.music_market.saturation > target_saturation {
@@ -312,10 +317,8 @@ impl GameWorld {
 
             // Fame drift: momentum plus the era's pull.
             if rng.gen_range(0..4) == 0 {
-                let delta = band.momentum as i16
-                    + if on_trend { 1 } else { 0 }
-                    + rng.gen_range(-1..=1)
-                    - 1; // slight gravity: staying famous takes work
+                let delta =
+                    band.momentum as i16 + if on_trend { 1 } else { 0 } + rng.gen_range(-1..=1) - 1; // slight gravity: staying famous takes work
                 band.fame = (band.fame as i16 + delta).clamp(0, 100) as u8;
             }
             // Momentum cools toward zero.
@@ -422,9 +425,16 @@ impl GameWorld {
                 MusicGenre::random(rng)
             };
             let hyped = rng.gen_bool(0.03);
-            let fame = if hyped { rng.gen_range(25..40) } else { rng.gen_range(3..=22) };
+            let fame = if hyped {
+                rng.gen_range(25..40)
+            } else {
+                rng.gen_range(3..=22)
+            };
             if hyped {
-                news.push(format!("🌱 {} arrive on the scene with serious buzz.", name));
+                news.push(format!(
+                    "🌱 {} arrive on the scene with serious buzz.",
+                    name
+                ));
             }
             self.bands.push(SceneBand {
                 name,
@@ -488,11 +498,7 @@ impl GameWorld {
     }
 
     /// The biggest unsigned act may grab a deal the player turned down.
-    pub fn poach_rejected_deal(
-        &mut self,
-        label_name: &str,
-        rng: &mut impl Rng,
-    ) -> Option<String> {
+    pub fn poach_rejected_deal(&mut self, label_name: &str, rng: &mut impl Rng) -> Option<String> {
         if !rng.gen_bool(0.6) {
             return None;
         }
@@ -563,8 +569,7 @@ impl GameWorld {
             };
 
             // Stars are usually signed already; mid-tier acts sometimes are.
-            let signed =
-                (fame >= 45 && rng.gen_bool(0.7)) || (fame >= 25 && rng.gen_bool(0.3));
+            let signed = (fame >= 45 && rng.gen_bool(0.7)) || (fame >= 25 && rng.gen_bool(0.3));
             let label = if signed {
                 Some(Self::random_label_for_fame(data_files, fame, rng))
             } else {
@@ -600,7 +605,8 @@ impl GameWorld {
         let mut venues = Vec::new();
         for i in 0..5 {
             venues.push(Venue {
-                name: data_files.venue_names[rng.gen_range(0..data_files.venue_names.len())].clone(),
+                name: data_files.venue_names[rng.gen_range(0..data_files.venue_names.len())]
+                    .clone(),
                 capacity: capacities[i],
                 prestige: prestiges[i],
                 base_payment: payments[i],
@@ -673,9 +679,27 @@ impl GameWorld {
         let buzz = self.band_buzz(band);
 
         let label_tiers = [
-            ("Major", &labels_data.major_labels, &labels_data.label_requirements.major_label_interest_threshold),
-            ("Independent", &labels_data.independent_labels, &labels_data.label_requirements.independent_label_interest_threshold),
-            ("Boutique", &labels_data.boutique_labels, &labels_data.label_requirements.boutique_label_interest_threshold),
+            (
+                "Major",
+                &labels_data.major_labels,
+                &labels_data
+                    .label_requirements
+                    .major_label_interest_threshold,
+            ),
+            (
+                "Independent",
+                &labels_data.independent_labels,
+                &labels_data
+                    .label_requirements
+                    .independent_label_interest_threshold,
+            ),
+            (
+                "Boutique",
+                &labels_data.boutique_labels,
+                &labels_data
+                    .label_requirements
+                    .boutique_label_interest_threshold,
+            ),
         ];
 
         for (tier_name, labels_in_tier, threshold) in &label_tiers {
@@ -684,11 +708,11 @@ impl GameWorld {
                 // an album on the shelf opens doors at least as well as a
                 // 45, so an act that went straight to albums isn't
                 // invisible to every A&R desk in town.
-                if band.fame >= threshold.fame &&
-                   band.albums_released.len() >= threshold.albums as usize &&
-                   band.total_releases() >= threshold.singles as usize &&
-                   buzz >= threshold.buzz {
-
+                if band.fame >= threshold.fame
+                    && band.albums_released.len() >= threshold.albums as usize
+                    && band.total_releases() >= threshold.singles as usize
+                    && buzz >= threshold.buzz
+                {
                     // Check if already signed with this label
                     if let Some(current_deal) = band.current_deal()
                         && current_deal.label_name == label.name
@@ -698,23 +722,47 @@ impl GameWorld {
 
                     // Random chance to make an offer
                     let offer_chance = match *tier_name {
-                        "Major" => if band.fame > 70 { 0.30 } else if band.fame > 50 { 0.20 } else { 0.10 },
-                        "Independent" => if band.fame > 40 { 0.40 } else if band.fame > 20 { 0.25 } else { 0.15 },
-                        "Boutique" => if band.fame > 10 { 0.50 } else { 0.20 },
+                        "Major" => {
+                            if band.fame > 70 {
+                                0.30
+                            } else if band.fame > 50 {
+                                0.20
+                            } else {
+                                0.10
+                            }
+                        }
+                        "Independent" => {
+                            if band.fame > 40 {
+                                0.40
+                            } else if band.fame > 20 {
+                                0.25
+                            } else {
+                                0.15
+                            }
+                        }
+                        "Boutique" => {
+                            if band.fame > 10 {
+                                0.50
+                            } else {
+                                0.20
+                            }
+                        }
                         _ => 0.10,
                     };
 
                     if rng.gen_bool(offer_chance) {
                         let advance_percentage = match band.fame {
-                            0..=20 => rng.gen_range(0.0..0.4),  // Lower end for low fame
+                            0..=20 => rng.gen_range(0.0..0.4), // Lower end for low fame
                             21..=50 => rng.gen_range(0.3..0.7),
                             51..=100 => rng.gen_range(0.6..1.0), // Higher end for high fame
                             _ => 0.5,
                         };
                         let advance_range_span = label.advance_range[1] - label.advance_range[0];
-                        let calculated_advance = label.advance_range[0] + (advance_range_span as f32 * advance_percentage) as u32;
+                        let calculated_advance = label.advance_range[0]
+                            + (advance_range_span as f32 * advance_percentage) as u32;
 
-                        let advance = calculated_advance.clamp(label.advance_range[0], label.advance_range[1]);
+                        let advance = calculated_advance
+                            .clamp(label.advance_range[0], label.advance_range[1]);
 
                         let royalty_rate = label.royalty_rate as f32 / 100.0;
 
@@ -790,7 +838,11 @@ mod tests {
 
         let names = |w: &GameWorld| w.bands.iter().map(|b| b.name.clone()).collect::<Vec<_>>();
         assert_eq!(names(&world_a), names(&world_b), "same seed, same scene");
-        assert_ne!(names(&world_a), names(&world_c), "different seed, different scene");
+        assert_ne!(
+            names(&world_a),
+            names(&world_c),
+            "different seed, different scene"
+        );
         assert_eq!(world_a.bands.len(), SCENE_START_BANDS);
     }
 
@@ -799,7 +851,10 @@ mod tests {
         let data = GameDataFiles::load().expect("data files present");
         let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(7));
 
-        assert!(world.bands.len() >= 150, "the scene should start in the hundreds");
+        assert!(
+            world.bands.len() >= 150,
+            "the scene should start in the hundreds"
+        );
         let distinct: std::collections::HashSet<_> =
             world.bands.iter().map(|b| b.name.as_str()).collect();
         assert!(
@@ -828,7 +883,10 @@ mod tests {
             assert!(world.charts.len() <= CHART_SIZE);
         }
 
-        assert!(!world.charts.is_empty(), "a living scene keeps the charts full");
+        assert!(
+            !world.charts.is_empty(),
+            "a living scene keeps the charts full"
+        );
         assert!(news_seen > 0, "300 weeks should produce scene news");
     }
 
@@ -838,7 +896,12 @@ mod tests {
         let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(5));
 
         for i in 0..CHART_SIZE {
-            world.submit_chart_entry(format!("Filler {i}"), "Someone".into(), false, 100 + i as u32);
+            world.submit_chart_entry(
+                format!("Filler {i}"),
+                "Someone".into(),
+                false,
+                100 + i as u32,
+            );
         }
         let pos = world.submit_chart_entry("Big Hit".into(), "You".into(), true, 5000);
         assert_eq!(pos, Some(1), "a huge score should enter at #1");
@@ -936,12 +999,21 @@ mod tests {
             tiers.contains("Independent"),
             "a fame-25 act with a single out should draw indie interest, got {tiers:?}"
         );
-        assert!(!tiers.contains("Boutique"), "boutiques should wait for the mid-career");
-        assert!(!tiers.contains("Major"), "majors do not scout the small clubs");
+        assert!(
+            !tiers.contains("Boutique"),
+            "boutiques should wait for the mid-career"
+        );
+        assert!(
+            !tiers.contains("Major"),
+            "majors do not scout the small clubs"
+        );
 
         // The same noise with nothing on the shelves draws nobody at all.
         let all_talk = tiers_scouting(&world, &data, &act(30, 0, 0));
-        assert!(all_talk.is_empty(), "no catalog, no offers, got {all_talk:?}");
+        assert!(
+            all_talk.is_empty(),
+            "no catalog, no offers, got {all_talk:?}"
+        );
 
         // An act that went straight to an album is a record out all the
         // same — not invisible for lacking a 45.
@@ -962,7 +1034,10 @@ mod tests {
             tiers.contains("Boutique"),
             "a fame-50 act with a small catalog should draw boutique interest, got {tiers:?}"
         );
-        assert!(!tiers.contains("Major"), "majors should still be out of reach at fame 50");
+        assert!(
+            !tiers.contains("Major"),
+            "majors should still be out of reach at fame 50"
+        );
     }
 
     #[test]
@@ -976,7 +1051,10 @@ mod tests {
             !almost.contains("Major"),
             "fame 60 should not yet be enough for the majors, got {almost:?}"
         );
-        assert!(almost.contains("Boutique"), "the mid tiers should be all over them though");
+        assert!(
+            almost.contains("Boutique"),
+            "the mid tiers should be all over them though"
+        );
 
         // Ten more points of fame and the phone rings. (Under the old
         // placeholder — buzz = fame/5 against a threshold of 30 — no major

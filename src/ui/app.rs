@@ -40,18 +40,39 @@ pub enum FileMode {
 }
 
 pub enum Screen {
-    Setup { field: SetupField },
+    Setup {
+        field: SetupField,
+    },
     Main,
-    Deals { selected: usize, detail: bool },
+    Deals {
+        selected: usize,
+        detail: bool,
+    },
     SupportOffer,
     Charts,
-    MarketingRelease { selected: usize },
-    MarketingCampaign { release_id: u32, release_name: String, selected: usize },
-    File { mode: FileMode, input: String },
+    MarketingRelease {
+        selected: usize,
+    },
+    MarketingCampaign {
+        release_id: u32,
+        release_name: String,
+        selected: usize,
+    },
+    File {
+        mode: FileMode,
+        input: String,
+    },
     GameOver,
-    VenuePicker { selected: usize },
-    RegionPicker { selected: usize },
-    PressingPicker { release_type: ReleaseType, selected: usize },
+    VenuePicker {
+        selected: usize,
+    },
+    RegionPicker {
+        selected: usize,
+    },
+    PressingPicker {
+        release_type: ReleaseType,
+        selected: usize,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -102,7 +123,9 @@ impl App {
     pub fn new(game: Game) -> Self {
         Self {
             game,
-            screen: Screen::Setup { field: SetupField::Name },
+            screen: Screen::Setup {
+                field: SetupField::Name,
+            },
             log: Vec::new(),
             menu_selected: 0,
             name_input: String::new(),
@@ -155,14 +178,22 @@ impl App {
             MenuEntry {
                 hotkey: '2',
                 label: "Write Songs",
-                detail: if game.player.energy < 20 { "too tired".into() } else { "1-3 new songs".into() },
+                detail: if game.player.energy < 20 {
+                    "too tired".into()
+                } else {
+                    "1-3 new songs".into()
+                },
                 enabled: game.player.energy >= 20,
                 kind: MenuKind::Action(GameAction::WriteSongs),
             },
             MenuEntry {
                 hotkey: '3',
                 label: "Practice",
-                detail: if game.player.energy < 15 { "too tired".into() } else { "+2 band skill".into() },
+                detail: if game.player.energy < 15 {
+                    "too tired".into()
+                } else {
+                    "+2 band skill".into()
+                },
                 enabled: game.player.energy >= 15,
                 kind: MenuKind::Action(GameAction::Practice),
             },
@@ -195,7 +226,11 @@ impl App {
             MenuEntry {
                 hotkey: '6',
                 label: "Play a Gig",
-                detail: if game.player.energy < 30 { "too tired".into() } else { "venue picker".into() },
+                detail: if game.player.energy < 30 {
+                    "too tired".into()
+                } else {
+                    "venue picker".into()
+                },
                 enabled: game.player.energy >= 30,
                 kind: MenuKind::Gig,
             },
@@ -244,7 +279,11 @@ impl App {
                 } else if releases == 0 {
                     "nothing to promote".into()
                 } else {
-                    format!("{} release{}", releases, if releases == 1 { "" } else { "s" })
+                    format!(
+                        "{} release{}",
+                        releases,
+                        if releases == 1 { "" } else { "s" }
+                    )
                 },
                 enabled: !signed && releases > 0,
                 kind: MenuKind::Marketing,
@@ -330,7 +369,10 @@ impl App {
     // --- Logging ---
 
     fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
-        self.log.push(LogEntry { kind, text: text.into() });
+        self.log.push(LogEntry {
+            kind,
+            text: text.into(),
+        });
         if self.log.len() > LOG_CAPACITY {
             let excess = self.log.len() - LOG_CAPACITY;
             self.log.drain(..excess);
@@ -379,7 +421,9 @@ impl App {
     }
 
     fn handle_setup_key(&mut self, key: KeyEvent) {
-        let Screen::Setup { field } = self.screen else { return };
+        let Screen::Setup { field } = self.screen else {
+            return;
+        };
 
         if key.code == KeyCode::Esc {
             self.should_exit = true;
@@ -412,7 +456,8 @@ impl App {
                 let count = MusicGenre::ALL.len();
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
-                        self.genre_selected = self.genre_selected.checked_sub(1).unwrap_or(count - 1);
+                        self.genre_selected =
+                            self.genre_selected.checked_sub(1).unwrap_or(count - 1);
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
                         self.genre_selected = (self.genre_selected + 1) % count;
@@ -435,7 +480,10 @@ impl App {
             LogKind::Ui,
             format!(
                 "Welcome to {}, {}. Make '{}' the biggest name in {}.",
-                constants::STARTING_YEAR, name, band, genre_name
+                constants::STARTING_YEAR,
+                name,
+                band,
+                genre_name
             ),
         );
         self.push_log(
@@ -449,7 +497,10 @@ impl App {
         let entries = self.menu_entries();
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
-                self.menu_selected = self.menu_selected.checked_sub(1).unwrap_or(entries.len() - 1);
+                self.menu_selected = self
+                    .menu_selected
+                    .checked_sub(1)
+                    .unwrap_or(entries.len() - 1);
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.menu_selected = (self.menu_selected + 1) % entries.len();
@@ -478,22 +529,34 @@ impl App {
                 if self.game.pending_deal_offers.is_empty() {
                     self.push_log(LogKind::Ui, "No deal offers on the table right now.");
                 } else {
-                    self.screen = Screen::Deals { selected: 0, detail: false };
+                    self.screen = Screen::Deals {
+                        selected: 0,
+                        detail: false,
+                    };
                 }
             }
             MenuKind::SupportTour => {
                 if self.game.pending_support_offer.is_some() {
                     self.screen = Screen::SupportOffer;
                 } else {
-                    self.push_log(LogKind::Ui, "No support slots on offer — get noticed by the bigger acts first.");
+                    self.push_log(
+                        LogKind::Ui,
+                        "No support slots on offer — get noticed by the bigger acts first.",
+                    );
                 }
             }
             MenuKind::Charts => self.screen = Screen::Charts,
             MenuKind::Marketing => {
                 if self.game.band.current_deal().is_some() {
-                    self.push_log(LogKind::Ui, "Promotion is your label's job — their people are already on it.");
+                    self.push_log(
+                        LogKind::Ui,
+                        "Promotion is your label's job — their people are already on it.",
+                    );
                 } else if self.marketing_targets().is_empty() {
-                    self.push_log(LogKind::Ui, "Record something first — there's nothing to promote.");
+                    self.push_log(
+                        LogKind::Ui,
+                        "Record something first — there's nothing to promote.",
+                    );
                 } else {
                     self.screen = Screen::MarketingRelease { selected: 0 };
                 }
@@ -509,23 +572,34 @@ impl App {
                 if self.game.player.energy < 40 {
                     self.push_log(LogKind::Ui, "You're too tired to go on tour!");
                 } else if self.game.band.fame < 25 {
-                    self.push_log(LogKind::Ui, "You need more fame before promoters will book a tour!");
+                    self.push_log(
+                        LogKind::Ui,
+                        "You need more fame before promoters will book a tour!",
+                    );
                 } else {
                     self.screen = Screen::RegionPicker { selected: 0 };
                 }
             }
             MenuKind::Save => {
-                self.screen = Screen::File { mode: FileMode::Save, input: String::new() };
+                self.screen = Screen::File {
+                    mode: FileMode::Save,
+                    input: String::new(),
+                };
             }
             MenuKind::Load => {
-                self.screen = Screen::File { mode: FileMode::Load, input: String::new() };
+                self.screen = Screen::File {
+                    mode: FileMode::Load,
+                    input: String::new(),
+                };
             }
             MenuKind::Quit => self.dispatch(GameAction::Quit),
         }
     }
 
     fn handle_deals_key(&mut self, key: KeyEvent) {
-        let Screen::Deals { selected, detail } = self.screen else { return };
+        let Screen::Deals { selected, detail } = self.screen else {
+            return;
+        };
         let count = self.game.pending_deal_offers.len();
         if count == 0 {
             self.screen = Screen::Main;
@@ -535,7 +609,10 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.screen = if detail {
-                    Screen::Deals { selected, detail: false }
+                    Screen::Deals {
+                        selected,
+                        detail: false,
+                    }
                 } else {
                     Screen::Main
                 };
@@ -545,10 +622,16 @@ impl App {
                 self.screen = Screen::Deals { selected, detail };
             }
             KeyCode::Down | KeyCode::Char('j') if !detail => {
-                self.screen = Screen::Deals { selected: (selected + 1) % count, detail };
+                self.screen = Screen::Deals {
+                    selected: (selected + 1) % count,
+                    detail,
+                };
             }
             KeyCode::Enter if !detail => {
-                self.screen = Screen::Deals { selected, detail: true };
+                self.screen = Screen::Deals {
+                    selected,
+                    detail: true,
+                };
             }
             KeyCode::Char('a') | KeyCode::Char('A') => {
                 self.screen = Screen::Main;
@@ -560,7 +643,10 @@ impl App {
                 self.screen = if remaining == 0 {
                     Screen::Main
                 } else {
-                    Screen::Deals { selected: selected.min(remaining - 1), detail: false }
+                    Screen::Deals {
+                        selected: selected.min(remaining - 1),
+                        detail: false,
+                    }
                 };
             }
             _ => {}
@@ -593,7 +679,9 @@ impl App {
     }
 
     fn handle_marketing_release_key(&mut self, key: KeyEvent) {
-        let Screen::MarketingRelease { selected } = self.screen else { return };
+        let Screen::MarketingRelease { selected } = self.screen else {
+            return;
+        };
         let targets = self.marketing_targets();
         if targets.is_empty() {
             self.screen = Screen::Main;
@@ -607,7 +695,9 @@ impl App {
                 self.screen = Screen::MarketingRelease { selected };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.screen = Screen::MarketingRelease { selected: (selected + 1) % targets.len() };
+                self.screen = Screen::MarketingRelease {
+                    selected: (selected + 1) % targets.len(),
+                };
             }
             KeyCode::Enter => {
                 let target = &targets[selected.min(targets.len() - 1)];
@@ -622,7 +712,14 @@ impl App {
     }
 
     fn handle_marketing_campaign_key(&mut self, key: KeyEvent) {
-        let Screen::MarketingCampaign { release_id, selected, .. } = self.screen else { return };
+        let Screen::MarketingCampaign {
+            release_id,
+            selected,
+            ..
+        } = self.screen
+        else {
+            return;
+        };
         let count = MarketingCampaignType::ALL.len();
 
         match key.code {
@@ -647,7 +744,9 @@ impl App {
     }
 
     fn handle_file_key(&mut self, key: KeyEvent) {
-        let Screen::File { mode, input } = &mut self.screen else { return };
+        let Screen::File { mode, input } = &mut self.screen else {
+            return;
+        };
 
         match key.code {
             KeyCode::Char(c) if input.len() < 40 => input.push(c),
@@ -693,27 +792,46 @@ impl App {
             };
             self.dispatch(action);
         } else {
-            self.screen = Screen::PressingPicker { release_type, selected: 0 };
+            self.screen = Screen::PressingPicker {
+                release_type,
+                selected: 0,
+            };
         }
     }
 
     fn handle_pressing_picker_key(&mut self, key: KeyEvent) {
-        let Screen::PressingPicker { release_type, selected } = self.screen else { return };
+        let Screen::PressingPicker {
+            release_type,
+            selected,
+        } = self.screen
+        else {
+            return;
+        };
         let count = PRESSING_TIERS.len();
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
                 let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::PressingPicker { release_type, selected };
+                self.screen = Screen::PressingPicker {
+                    release_type,
+                    selected,
+                };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.screen = Screen::PressingPicker { release_type, selected: (selected + 1) % count };
+                self.screen = Screen::PressingPicker {
+                    release_type,
+                    selected: (selected + 1) % count,
+                };
             }
             KeyCode::Enter => {
                 self.screen = Screen::Main;
                 let action = match release_type {
-                    ReleaseType::Single => GameAction::RecordSingle { pressing: Some(selected) },
-                    ReleaseType::Album => GameAction::RecordAlbum { pressing: Some(selected) },
+                    ReleaseType::Single => GameAction::RecordSingle {
+                        pressing: Some(selected),
+                    },
+                    ReleaseType::Album => GameAction::RecordAlbum {
+                        pressing: Some(selected),
+                    },
                 };
                 self.dispatch(action);
             }
@@ -722,7 +840,9 @@ impl App {
     }
 
     fn handle_venue_picker_key(&mut self, key: KeyEvent) {
-        let Screen::VenuePicker { selected } = self.screen else { return };
+        let Screen::VenuePicker { selected } = self.screen else {
+            return;
+        };
         let count = self.game.world.venues.len();
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
@@ -731,12 +851,20 @@ impl App {
                 self.screen = Screen::VenuePicker { selected };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.screen = Screen::VenuePicker { selected: (selected + 1) % count };
+                self.screen = Screen::VenuePicker {
+                    selected: (selected + 1) % count,
+                };
             }
             KeyCode::Enter => {
                 let venue = &self.game.world.venues[selected];
                 if venue.prestige > self.game.band.fame.saturating_add(20) {
-                    self.push_log(LogKind::Error, format!("❌ '{}' is out of your league! Get more famous first.", venue.name));
+                    self.push_log(
+                        LogKind::Error,
+                        format!(
+                            "❌ '{}' is out of your league! Get more famous first.",
+                            venue.name
+                        ),
+                    );
                 } else {
                     self.screen = Screen::Main;
                     self.dispatch(GameAction::Gig(selected));
@@ -747,7 +875,9 @@ impl App {
     }
 
     fn handle_region_picker_key(&mut self, key: KeyEvent) {
-        let Screen::RegionPicker { selected } = self.screen else { return };
+        let Screen::RegionPicker { selected } = self.screen else {
+            return;
+        };
         let sorted_regions = self.game.get_sorted_regions();
         let count = sorted_regions.len();
         match key.code {
@@ -757,12 +887,20 @@ impl App {
                 self.screen = Screen::RegionPicker { selected };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                self.screen = Screen::RegionPicker { selected: (selected + 1) % count };
+                self.screen = Screen::RegionPicker {
+                    selected: (selected + 1) % count,
+                };
             }
             KeyCode::Enter => {
                 let (country_key, _, region_name, _, _, fame_req) = &sorted_regions[selected];
                 if self.game.band.fame < *fame_req {
-                    self.push_log(LogKind::Error, format!("❌ Your band needs at least {} fame to tour '{}'.", fame_req, region_name));
+                    self.push_log(
+                        LogKind::Error,
+                        format!(
+                            "❌ Your band needs at least {} fame to tour '{}'.",
+                            fame_req, region_name
+                        ),
+                    );
                 } else {
                     // Check if player can afford the tour cost to give clear feedback
                     let tier_name = if self.game.band.fame < 35 {
@@ -782,10 +920,21 @@ impl App {
                         "australia" => 1.4,
                         _ => 1.0,
                     };
-                    if let Some(touring_costs) = self.game.data_files.markets_data.market_modifiers.touring_costs.get(tier_name) {
-                        let cost = (touring_costs.base_cost_per_show as f32 * country_travel_mult) as i32;
+                    if let Some(touring_costs) = self
+                        .game
+                        .data_files
+                        .markets_data
+                        .market_modifiers
+                        .touring_costs
+                        .get(tier_name)
+                    {
+                        let cost =
+                            (touring_costs.base_cost_per_show as f32 * country_travel_mult) as i32;
                         if !self.game.player.can_afford(cost) {
-                            self.push_log(LogKind::Error, format!("❌ You need ${} to finance this tour!", cost));
+                            self.push_log(
+                                LogKind::Error,
+                                format!("❌ You need ${} to finance this tour!", cost),
+                            );
                             return;
                         }
                     }
@@ -826,7 +975,10 @@ mod tests {
             }
             press(&mut app, KeyCode::Enter);
 
-            assert!(matches!(app.screen, Screen::Main), "setup should end on the main screen");
+            assert!(
+                matches!(app.screen, Screen::Main),
+                "setup should end on the main screen"
+            );
             assert_eq!(app.game.band.genre, *genre);
             assert_eq!(app.game.band.name, "The Rayguns");
         }

@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -228,7 +228,10 @@ impl GameDataFiles {
 
     /// Load a pattern file, writing the default one first if it's missing.
     /// Patterns use `//` comments because `#` is tracery's tag marker.
-    fn load_pattern_file(path: &str, default: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    fn load_pattern_file(
+        path: &str,
+        default: &str,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         if !Path::new(path).exists() {
             fs::write(path, default)?;
         }
@@ -463,7 +466,11 @@ mod tests {
         assert_eq!(names_a, names_b, "same seed must give the same names");
 
         let distinct: std::collections::HashSet<_> = names_a.iter().collect();
-        assert!(distinct.len() >= 20, "30 draws should be mostly distinct: {:?}", names_a);
+        assert!(
+            distinct.len() >= 20,
+            "30 draws should be mostly distinct: {:?}",
+            names_a
+        );
 
         let mut rng = StdRng::seed_from_u64(7);
         for _ in 0..5 {

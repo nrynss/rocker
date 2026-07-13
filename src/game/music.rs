@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::game::world::MusicGenre;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Song {
@@ -16,9 +16,9 @@ pub enum ReleaseType {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum MarketingCampaignType {
-    BasicPress,      // Low cost, low impact
-    RadioPromotion,  // Medium cost, medium impact
-    MusicVideo,      // High cost, high impact
+    BasicPress,       // Low cost, low impact
+    RadioPromotion,   // Medium cost, medium impact
+    MusicVideo,       // High cost, high impact
     SocialMediaBlitz, // Modern era, variable cost/impact
     MagazineSpread,   // Older eras, medium cost/impact
 }
@@ -89,11 +89,11 @@ pub struct Release {
     pub name: String,
     pub release_type: ReleaseType,
     pub release_quality: u8, // 0-100, overall quality of the recording/production
-    pub week_released: u32, // Game week when it becomes available for sales calculation
+    pub week_released: u32,  // Game week when it becomes available for sales calculation
     pub songs_involved_quality_avg: u8, // Average songwriting_quality of songs in it
     pub active_marketing: Vec<ActiveMarketingCampaign>,
     pub marketing_level_achieved: u8, // 0-100, sum of effectiveness_bonus from active campaigns
-    pub initial_sales_score: u32, // Calculated after an initial sales window
+    pub initial_sales_score: u32,     // Calculated after an initial sales window
     pub total_income_generated: u32,
     pub genre: Option<MusicGenre>,
     /// How many copies exist. Sales can never exceed this; 0 means uncapped

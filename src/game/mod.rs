@@ -2,7 +2,8 @@ pub mod band;
 pub mod events;
 pub mod music;
 pub mod player;
-#[cfg(test)] mod sim; // Track D balance lab: bot-driven career sims, tests only.
+#[cfg(test)]
+mod sim; // Track D balance lab: bot-driven career sims, tests only.
 pub mod timeline;
 pub mod world;
 
@@ -12,8 +13,8 @@ use crate::game::music::*; // For Song, Release, ReleaseType, MarketingCampaignT
 use band::Band;
 use events::EventManager;
 use player::Player;
-use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -105,7 +106,6 @@ const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3; // π's fraction bits: ar
 // Setup rolls (bandmate names) draw from a reserved pre-game week, so they
 // can never replay week 1's action stream.
 const SETUP_STREAM_WEEK: u64 = 0;
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
@@ -247,7 +247,12 @@ impl Game {
         self.action_rng_for_week(self.week as u64)
     }
 
-    pub fn initialize_player(&mut self, player_name: &str, band_name: &str, genre: world::MusicGenre) {
+    pub fn initialize_player(
+        &mut self,
+        player_name: &str,
+        band_name: &str,
+        genre: world::MusicGenre,
+    ) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
         self.band.genre = genre;
@@ -286,77 +291,118 @@ impl Game {
         let mut player_bonus = 0.0;
 
         // Player energy bonus
-        if self.player.energy > 70 { player_bonus += 5.0; }
-        else if self.player.energy > 40 { player_bonus += 2.0; }
+        if self.player.energy > 70 {
+            player_bonus += 5.0;
+        } else if self.player.energy > 40 {
+            player_bonus += 2.0;
+        }
 
         // Player stress bonus (low stress is good)
-        if self.player.stress < 30 { player_bonus += 5.0; }
-        else if self.player.stress < 60 { player_bonus += 2.0; }
-        
+        if self.player.stress < 30 {
+            player_bonus += 5.0;
+        } else if self.player.stress < 60 {
+            player_bonus += 2.0;
+        }
+
         // Band member skill bonus
-        player_bonus += (self.band.average_member_skill() / 15) as f32; 
-        
+        player_bonus += (self.band.average_member_skill() / 15) as f32;
+
         quality += player_bonus.min(QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS as f32);
 
         // Random variation
-        let random_offset = rng.gen_range(0..=QUALITY_SONGWRITING_RANDOM_VARIATION) as i8 - (QUALITY_SONGWRITING_RANDOM_VARIATION / 2) as i8;
+        let random_offset = rng.gen_range(0..=QUALITY_SONGWRITING_RANDOM_VARIATION) as i8
+            - (QUALITY_SONGWRITING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
-        
+
         quality.clamp(1.0, 100.0) as u8
     }
 
-    fn get_selected_songs_for_release(&mut self, count: usize) -> Result<(Vec<music::Song>, u8), String> {
+    fn get_selected_songs_for_release(
+        &mut self,
+        count: usize,
+    ) -> Result<(Vec<music::Song>, u8), String> {
         if self.band.unreleased_songs.len() < count {
-            return Err(format!("Not enough unreleased songs. Need {}, have {}.", count, self.band.unreleased_songs.len()));
+            return Err(format!(
+                "Not enough unreleased songs. Need {}, have {}.",
+                count,
+                self.band.unreleased_songs.len()
+            ));
         }
-        
-        let selected_songs: Vec<music::Song> = self.band.unreleased_songs.drain((self.band.unreleased_songs.len() - count)..).collect();
-        
+
+        let selected_songs: Vec<music::Song> = self
+            .band
+            .unreleased_songs
+            .drain((self.band.unreleased_songs.len() - count)..)
+            .collect();
+
         if selected_songs.is_empty() && count > 0 {
             return Err("No songs were selected, though count was > 0.".to_string());
         }
-        if count == 0 { 
-             return Ok((Vec::new(), 0));
+        if count == 0 {
+            return Ok((Vec::new(), 0));
         }
 
-        let total_quality: u32 = selected_songs.iter().map(|s| s.songwriting_quality as u32).sum();
+        let total_quality: u32 = selected_songs
+            .iter()
+            .map(|s| s.songwriting_quality as u32)
+            .sum();
         let avg_quality = (total_quality / selected_songs.len() as u32) as u8;
-        
+
         Ok((selected_songs, avg_quality))
     }
 
     fn calculate_release_quality(&self, avg_song_quality: u8, rng: &mut impl Rng) -> u8 {
-        let mut quality = (QUALITY_BASE_RECORDING as f32 + avg_song_quality as f32) / 2.0; 
-        
+        let mut quality = (QUALITY_BASE_RECORDING as f32 + avg_song_quality as f32) / 2.0;
+
         quality += (self.band.skill / 10) as f32;
 
         let mut player_bonus: f32 = 0.0;
-        if self.player.energy > 70 { player_bonus += 3.0; }
-        else if self.player.energy > 40 { player_bonus += 1.0; }
-        if self.player.stress < 30 { player_bonus += 3.0; }
-        else if self.player.stress < 60 { player_bonus += 1.0; }
+        if self.player.energy > 70 {
+            player_bonus += 3.0;
+        } else if self.player.energy > 40 {
+            player_bonus += 1.0;
+        }
+        if self.player.stress < 30 {
+            player_bonus += 3.0;
+        } else if self.player.stress < 60 {
+            player_bonus += 1.0;
+        }
         quality += player_bonus.min(QUALITY_RECORDING_MAX_BONUS_PLAYER_STATS as f32);
 
-        let random_offset = rng.gen_range(0..=QUALITY_RECORDING_RANDOM_VARIATION) as i8 - (QUALITY_RECORDING_RANDOM_VARIATION / 2) as i8;
+        let random_offset = rng.gen_range(0..=QUALITY_RECORDING_RANDOM_VARIATION) as i8
+            - (QUALITY_RECORDING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
-        
-        quality.clamp( (avg_song_quality as f32 / 2.0).max(1.0) , 100.0) as u8
+
+        quality.clamp((avg_song_quality as f32 / 2.0).max(1.0), 100.0) as u8
     }
-    
+
     fn calculate_release_sales_score(&self, release: &Release) -> u32 {
         let quality_score = release.release_quality as f32 * SALES_QUALITY_WEIGHT;
         let marketing_score = release.marketing_level_achieved as f32 * SALES_MARKETING_WEIGHT;
         let fame_score = self.band.fame as f32 * SALES_FAME_WEIGHT;
 
-        let era_sales_modifier = self.timeline.get_current_era().market_conditions.record_sales_growth / 100.0 + 1.0;
-        
-        let genre_modifier = release.genre.as_ref()
+        let era_sales_modifier = self
+            .timeline
+            .get_current_era()
+            .market_conditions
+            .record_sales_growth
+            / 100.0
+            + 1.0;
+
+        let genre_modifier = release
+            .genre
+            .as_ref()
             .and_then(|g| self.world.dynamic_genre_modifiers.get(g).copied())
             .unwrap_or(1.0);
 
         // The era's tastes: the same modifier scene-band releases live by.
-        let era_genre_modifier = release.genre.as_ref()
-            .map(|g| self.data_files.era_genre_modifier(self.timeline.get_current_year(), g.aliases()))
+        let era_genre_modifier = release
+            .genre
+            .as_ref()
+            .map(|g| {
+                self.data_files
+                    .era_genre_modifier(self.timeline.get_current_year(), g.aliases())
+            })
             .unwrap_or(1.0);
 
         let base_score = quality_score + marketing_score + fame_score;
@@ -418,7 +464,9 @@ impl Game {
 
     /// A label puts its promo machine behind every release it ships.
     fn apply_label_promo(&mut self) {
-        let Some(deal) = self.band.current_deal() else { return };
+        let Some(deal) = self.band.current_deal() else {
+            return;
+        };
         let push = (deal.market_reach / 2).clamp(10, 45);
         let label_name = deal.label_name.clone();
         if let Some(release) = self.just_released_music.last_mut() {
@@ -437,7 +485,11 @@ impl Game {
         let demand =
             (sales_score as f32 * self.distribution_multiplier() * UNITS_PER_SCORE_POINT) as u32;
         let sold_out = release.copies_pressed > 0 && demand > release.copies_pressed;
-        let units_sold = if sold_out { release.copies_pressed } else { demand };
+        let units_sold = if sold_out {
+            release.copies_pressed
+        } else {
+            demand
+        };
         let income = if let Some(deal) = self.band.current_deal() {
             ((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32
         } else {
@@ -489,7 +541,10 @@ impl Game {
         self.player.energy -= 15;
         self.band.skill = (self.band.skill + 2).min(constants::MAX_SKILL);
         let skill = self.band.skill;
-        self.log(format!("🥁 A week in the rehearsal room — band skill is now {}%.", skill));
+        self.log(format!(
+            "🥁 A week in the rehearsal room — band skill is now {}%.",
+            skill
+        ));
         Ok(())
     }
 
@@ -499,7 +554,7 @@ impl Game {
         rng: &mut impl Rng,
     ) -> Result<(), String> {
         if !self.band.can_record_single() {
-             return Err("You need to write at least one song first!".to_string());
+            return Err("You need to write at least one song first!".to_string());
         }
 
         let recording_cost = self.recording_cost(&music::ReleaseType::Single);
@@ -563,7 +618,10 @@ impl Game {
         rng: &mut impl Rng,
     ) -> Result<(), String> {
         if !self.band.can_record_album() {
-            return Err(format!("You need at least {} unreleased songs to record an album!", constants::MIN_ALBUM_SONGS));
+            return Err(format!(
+                "You need at least {} unreleased songs to record an album!",
+                constants::MIN_ALBUM_SONGS
+            ));
         }
 
         let recording_cost = self.recording_cost(&music::ReleaseType::Album);
@@ -579,9 +637,10 @@ impl Game {
             return Err(format!("You need at least ${} to record an album!", cost));
         }
 
-        let (selected_songs, avg_song_quality) = self.get_selected_songs_for_release(constants::MIN_ALBUM_SONGS as usize)?;
+        let (selected_songs, avg_song_quality) =
+            self.get_selected_songs_for_release(constants::MIN_ALBUM_SONGS as usize)?;
         if selected_songs.len() < constants::MIN_ALBUM_SONGS as usize {
-             return Err("Not enough songs selected for an album.".to_string());
+            return Err("Not enough songs selected for an album.".to_string());
         }
         self.player.spend_money(cost);
 
@@ -621,12 +680,18 @@ impl Game {
 
         if self.timeline.is_album_era() {
             self.band.fame = (self.band.fame + 3).min(constants::MAX_FAME);
-            self.log("📈 It's an album-oriented era — the announcement alone earns you buzz (+3 fame).");
+            self.log(
+                "📈 It's an album-oriented era — the announcement alone earns you buzz (+3 fame).",
+            );
         }
         Ok(())
     }
-    
-    fn action_start_marketing_campaign(&mut self, release_id: u32, campaign_type: MarketingCampaignType) -> Result<(), String> {
+
+    fn action_start_marketing_campaign(
+        &mut self,
+        release_id: u32,
+        campaign_type: MarketingCampaignType,
+    ) -> Result<(), String> {
         if let Some(deal) = self.band.current_deal() {
             return Err(format!(
                 "Promotion is {}'s job — their people are already on it.",
@@ -635,16 +700,36 @@ impl Game {
         }
         let spec = campaign_type.spec();
         if !self.player.can_afford(spec.cost) {
-            return Err(format!("Not enough money for a {} campaign. Need ${}.", spec.name, spec.cost));
+            return Err(format!(
+                "Not enough money for a {} campaign. Need ${}.",
+                spec.name, spec.cost
+            ));
         }
 
         let current_week = self.week;
         // Find in just_released_music first, then in already released music
-        let release = self.just_released_music.iter_mut()
+        let release = self
+            .just_released_music
+            .iter_mut()
             .find(|r| r.id == release_id)
-            .or_else(|| self.band.singles_released.iter_mut().find(|r| r.id == release_id))
-            .or_else(|| self.band.albums_released.iter_mut().find(|r| r.id == release_id))
-            .ok_or_else(|| format!("Release with ID {} not found to start marketing campaign.", release_id))?;
+            .or_else(|| {
+                self.band
+                    .singles_released
+                    .iter_mut()
+                    .find(|r| r.id == release_id)
+            })
+            .or_else(|| {
+                self.band
+                    .albums_released
+                    .iter_mut()
+                    .find(|r| r.id == release_id)
+            })
+            .ok_or_else(|| {
+                format!(
+                    "Release with ID {} not found to start marketing campaign.",
+                    release_id
+                )
+            })?;
 
         release.active_marketing.push(ActiveMarketingCampaign {
             campaign_type,
@@ -653,7 +738,9 @@ impl Game {
             effectiveness_bonus: spec.effectiveness_bonus,
         });
 
-        release.marketing_level_achieved = release.active_marketing.iter()
+        release.marketing_level_achieved = release
+            .active_marketing
+            .iter()
             .map(|c| c.effectiveness_bonus as u32)
             .sum::<u32>()
             .min(100) as u8;
@@ -670,10 +757,10 @@ impl Game {
     pub fn get_sorted_regions(&self) -> Vec<(String, String, String, u32, u8, u8)> {
         let mut result = Vec::new();
         let markets_data = &self.data_files.markets_data;
-        
+
         let mut countries: Vec<String> = markets_data.markets.keys().cloned().collect();
         countries.sort();
-        
+
         for country in countries {
             if let Some(c_market) = markets_data.markets.get(&country) {
                 let mut regions: Vec<String> = c_market.regions.keys().cloned().collect();
@@ -732,7 +819,10 @@ impl Game {
         }
         let venue = &self.world.venues[venue_index];
         if venue.prestige > self.band.fame.saturating_add(20) {
-            return Err(format!("'{}' is out of your league! Get more famous first.", venue.name));
+            return Err(format!(
+                "'{}' is out of your league! Get more famous first.",
+                venue.name
+            ));
         }
 
         self.player.energy -= 30;
@@ -740,10 +830,12 @@ impl Game {
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();
 
-        let attendance_ratio = ((self.band.fame as f32 + 10.0) / (venue.prestige as f32 + 10.0)).min(1.0);
+        let attendance_ratio =
+            ((self.band.fame as f32 + 10.0) / (venue.prestige as f32 + 10.0)).min(1.0);
         let attendance = (venue.capacity as f32 * attendance_ratio) as u32;
 
-        let earnings = (venue.base_payment as f32 * attendance_ratio * market_modifier * era_modifier) as u32;
+        let earnings =
+            (venue.base_payment as f32 * attendance_ratio * market_modifier * era_modifier) as u32;
 
         let base_fame_gain = if venue.capacity <= 200 {
             1
@@ -788,16 +880,20 @@ impl Game {
         if self.player.energy < 40 {
             return Err("You're too tired to go on tour!".to_string());
         }
-        
+
         let sorted_regions = self.get_sorted_regions();
         if region_index >= sorted_regions.len() {
             return Err("Invalid region selected.".to_string());
         }
-        
-        let (country_key, region_key, region_name, population, economic_strength, fame_req) = &sorted_regions[region_index];
-        
+
+        let (country_key, region_key, region_name, population, economic_strength, fame_req) =
+            &sorted_regions[region_index];
+
         if self.band.fame < *fame_req {
-            return Err(format!("Your band needs at least {} fame to tour '{}'.", fame_req, region_name));
+            return Err(format!(
+                "Your band needs at least {} fame to tour '{}'.",
+                fame_req, region_name
+            ));
         }
 
         let tier_name = if self.band.fame < 35 {
@@ -810,7 +906,12 @@ impl Game {
             "international"
         };
 
-        let touring_costs = self.data_files.markets_data.market_modifiers.touring_costs.get(tier_name)
+        let touring_costs = self
+            .data_files
+            .markets_data
+            .market_modifiers
+            .touring_costs
+            .get(tier_name)
             .ok_or_else(|| "Touring cost tier not found.".to_string())?;
 
         let country_travel_mult = match country_key.as_str() {
@@ -825,7 +926,10 @@ impl Game {
         let tour_cost = (touring_costs.base_cost_per_show as f32 * country_travel_mult) as i32;
 
         if !self.player.can_afford(tour_cost) {
-            return Err(format!("You need at least ${} to finance this tour!", tour_cost));
+            return Err(format!(
+                "You need at least ${} to finance this tour!",
+                tour_cost
+            ));
         }
 
         let (tour_weeks, fame_gain) = if self.band.fame >= 80 {
@@ -842,7 +946,8 @@ impl Game {
         let regional_fame = *self.regional_fame.get(&regional_fame_key).unwrap_or(&0);
 
         let audience = (self.band.fame as f32 / 3.0) + (regional_fame as f32);
-        let base_gross = (*population as f32).sqrt() * (*economic_strength as f32 / 100.0) * audience * 0.06;
+        let base_gross =
+            (*population as f32).sqrt() * (*economic_strength as f32 / 100.0) * audience * 0.06;
 
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();
@@ -858,7 +963,8 @@ impl Game {
 
         let regional_fame_gain = 10 + rng.gen_range(0..=5);
         let new_regional_fame = (regional_fame as u16 + regional_fame_gain as u16).min(100) as u8;
-        self.regional_fame.insert(regional_fame_key.clone(), new_regional_fame);
+        self.regional_fame
+            .insert(regional_fame_key.clone(), new_regional_fame);
 
         self.week += tour_weeks;
         self.log(format!(
@@ -921,11 +1027,17 @@ impl Game {
 
     fn action_visit_doctor(&mut self) -> Result<(), String> {
         if !self.player.can_afford(constants::DOCTOR_VISIT_COST) {
-            return Err(format!("You need ${} to visit the doctor!", constants::DOCTOR_VISIT_COST));
+            return Err(format!(
+                "You need ${} to visit the doctor!",
+                constants::DOCTOR_VISIT_COST
+            ));
         }
         self.player.spend_money(constants::DOCTOR_VISIT_COST);
         self.player.health = (self.player.health + 20).min(constants::MAX_HEALTH);
-        self.log(format!("🩺 The doctor patched you up (+20 health, -${}).", constants::DOCTOR_VISIT_COST));
+        self.log(format!(
+            "🩺 The doctor patched you up (+20 health, -${}).",
+            constants::DOCTOR_VISIT_COST
+        ));
         Ok(())
     }
 
@@ -967,7 +1079,10 @@ impl Game {
         self.log(format!("🚫 Turned down {}'s offer.", offer.label_name));
 
         if let Some(poaching_band) = self.world.poach_rejected_deal(&offer.label_name, rng) {
-            self.log(format!("📰 NEWS: {} signed with {} after you turned them down!", poaching_band, offer.label_name));
+            self.log(format!(
+                "📰 NEWS: {} signed with {} after you turned them down!",
+                poaching_band, offer.label_name
+            ));
         }
         Ok(())
     }
@@ -1059,7 +1174,7 @@ impl Game {
             host_band, self.band.name, weeks, pay
         ));
     }
-    
+
     // --- Main execute_action ---
     fn execute_action(&mut self, action: GameAction, rng: &mut impl Rng) -> Result<(), String> {
         match action {
@@ -1076,17 +1191,19 @@ impl Game {
             GameAction::RejectDeal(index) => self.action_reject_deal(index, rng),
             GameAction::AcceptSupportTour => self.action_accept_support_tour(rng),
             GameAction::DeclineSupportTour => self.action_decline_support_tour(),
-            GameAction::StartMarketingCampaign(release_id, campaign_type) => self.action_start_marketing_campaign(release_id, campaign_type),
+            GameAction::StartMarketingCampaign(release_id, campaign_type) => {
+                self.action_start_marketing_campaign(release_id, campaign_type)
+            }
             GameAction::Quit => {
                 self.game_over = true;
                 Ok(())
             }
         }
     }
-    
+
     // --- Turn Processing Helper Methods (Step 6) ---
     fn process_music_releases_and_marketing(&mut self) {
-        let current_week = self.week; 
+        let current_week = self.week;
 
         let mut still_pending_release = Vec::new();
         for mut release in std::mem::take(&mut self.just_released_music) {
@@ -1103,7 +1220,8 @@ impl Game {
                     sales_score,
                 );
 
-                let (income, units_sold, sold_out) = self.calculate_release_outcome(sales_score, &release);
+                let (income, units_sold, sold_out) =
+                    self.calculate_release_outcome(sales_score, &release);
                 release.total_income_generated += income;
                 release.copies_sold = units_sold;
                 self.player.earn_money(income);
@@ -1149,7 +1267,9 @@ impl Game {
                 let release_genre = release.genre.clone();
                 if release.release_type == music::ReleaseType::Album {
                     if self.band.current_deal().is_some() && self.band.fulfill_album_obligation() {
-                        self.log("🤝 That album completes your record deal — you're a free agent again!");
+                        self.log(
+                            "🤝 That album completes your record deal — you're a free agent again!",
+                        );
                     }
                     self.band.albums_released.push(release);
                 } else {
@@ -1158,11 +1278,16 @@ impl Game {
 
                 if sales_score > PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE {
                     if let Some(genre_to_boost) = release_genre {
-                        *self.world.dynamic_genre_modifiers.entry(genre_to_boost).or_insert(1.0) += PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS;
+                        *self
+                            .world
+                            .dynamic_genre_modifiers
+                            .entry(genre_to_boost)
+                            .or_insert(1.0) += PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS;
                     }
-                    self.world.music_market.demand = (self.world.music_market.demand + PLAYER_MARKET_IMPACT_DEMAND_BONUS).min(100);
+                    self.world.music_market.demand = (self.world.music_market.demand
+                        + PLAYER_MARKET_IMPACT_DEMAND_BONUS)
+                        .min(100);
                 }
-
             } else {
                 still_pending_release.push(release);
             }
@@ -1180,27 +1305,40 @@ impl Game {
         let distribution = self.distribution_multiplier();
         let mut catalog_income_this_week: u32 = 0;
 
-        for release_list in [&mut self.band.albums_released, &mut self.band.singles_released] {
+        for release_list in [
+            &mut self.band.albums_released,
+            &mut self.band.singles_released,
+        ] {
             for release in release_list.iter_mut() {
-                release.active_marketing.retain(|campaign| current_week < campaign.end_week);
-                release.marketing_level_achieved = release.active_marketing.iter()
+                release
+                    .active_marketing
+                    .retain(|campaign| current_week < campaign.end_week);
+                release.marketing_level_achieved = release
+                    .active_marketing
+                    .iter()
                     .map(|c| c.effectiveness_bonus as u32)
                     .sum::<u32>()
                     .min(100) as u8;
 
-                if release.initial_sales_score > 0 && current_week > release.week_released + INITIAL_SALES_WINDOW_WEEKS {
-                     let weeks_since_initial_window_end = current_week - (release.week_released + INITIAL_SALES_WINDOW_WEEKS -1);
-                     let ongoing_sales_score_divisor = 1 + weeks_since_initial_window_end;
-                     let ongoing_sales_score = release.initial_sales_score / ongoing_sales_score_divisor;
+                if release.initial_sales_score > 0
+                    && current_week > release.week_released + INITIAL_SALES_WINDOW_WEEKS
+                {
+                    let weeks_since_initial_window_end =
+                        current_week - (release.week_released + INITIAL_SALES_WINDOW_WEEKS - 1);
+                    let ongoing_sales_score_divisor = 1 + weeks_since_initial_window_end;
+                    let ongoing_sales_score =
+                        release.initial_sales_score / ongoing_sales_score_divisor;
 
-                     if ongoing_sales_score > 10 {
+                    if ongoing_sales_score > 10 {
                         // The long tail moves a trickle of copies — and only
                         // copies that still exist in the pressing.
-                        let mut units = (ongoing_sales_score as f32 * distribution
+                        let mut units = (ongoing_sales_score as f32
+                            * distribution
                             * UNITS_PER_SCORE_POINT) as u32
                             / 5;
                         if release.copies_pressed > 0 {
-                            units = units.min(release.copies_pressed.saturating_sub(release.copies_sold));
+                            units = units
+                                .min(release.copies_pressed.saturating_sub(release.copies_sold));
                         }
                         if units == 0 {
                             continue;
@@ -1214,13 +1352,16 @@ impl Game {
                         release.total_income_generated += ongoing_income;
                         self.player.earn_money(ongoing_income);
                         catalog_income_this_week += ongoing_income;
-                     }
+                    }
                 }
             }
         }
 
         if catalog_income_this_week > 0 {
-            self.log(format!("💵 Catalog royalties trickle in: ${}.", catalog_income_this_week));
+            self.log(format!(
+                "💵 Catalog royalties trickle in: ${}.",
+                catalog_income_this_week
+            ));
         }
     }
 
@@ -1275,7 +1416,10 @@ impl Game {
         self.player.weekly_health_decay();
 
         // Derive a weekly StdRng using splitmix64 key derivation from world_seed + week
-        let mut key = self.world_seed.wrapping_add(self.week as u64).wrapping_mul(0x9E3779B97F4A7C15);
+        let mut key = self
+            .world_seed
+            .wrapping_add(self.week as u64)
+            .wrapping_mul(0x9E3779B97F4A7C15);
         key = (key ^ (key >> 30)).wrapping_mul(0xBF58476D1CE4E5B8);
         key = (key ^ (key >> 27)).wrapping_mul(0x94D049BB133111EB);
         key ^= key >> 31;
@@ -1290,7 +1434,9 @@ impl Game {
             self.log(format!("📰 MUSIC NEWS: {}", historical_event));
         }
 
-        let scene_news = self.world.update_week(&self.timeline, &self.data_files, &mut wk_rng);
+        let scene_news = self
+            .world
+            .update_week(&self.timeline, &self.data_files, &mut wk_rng);
         for item in scene_news {
             self.log(item);
         }
@@ -1322,8 +1468,13 @@ impl Game {
 
     fn check_and_generate_deal_offers(&mut self, rng: &mut impl Rng) {
         self.expire_stale_deal_offers();
-        if self.pending_deal_offers.is_empty() && self.week.is_multiple_of(4) && self.band.record_deal.is_none() {
-            let mut new_offers = self.world.generate_deal_offers(&self.band, &self.data_files, rng);
+        if self.pending_deal_offers.is_empty()
+            && self.week.is_multiple_of(4)
+            && self.band.record_deal.is_none()
+        {
+            let mut new_offers = self
+                .world
+                .generate_deal_offers(&self.band, &self.data_files, rng);
             for offer in &mut new_offers {
                 offer.expires_week = Some(self.week + DEAL_OFFER_LIFETIME_WEEKS);
             }
@@ -1338,7 +1489,7 @@ impl Game {
             }
         }
     }
-    
+
     pub fn process_turn(&mut self, action: GameAction) -> Result<bool, String> {
         if self.game_over {
             return Ok(false);
@@ -1377,7 +1528,6 @@ impl Game {
     // --- Original methods (ensure they are present and correct) ---
     // calculate_royalties is removed as income is now handled by calculate_income_from_sales_score
 
-
     fn check_game_over(&mut self) {
         if self.player.health == 0 {
             self.game_over = true;
@@ -1386,7 +1536,8 @@ impl Game {
             self.game_over = true;
         }
         if self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
-            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize // Updated to check Vec length
+            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize
+        // Updated to check Vec length
         {
             self.game_over = true;
         }
@@ -1426,43 +1577,49 @@ impl Game {
                     self.player.drug_addiction =
                         (self.player.drug_addiction + 10).min(constants::MAX_STRESS);
                     self.player.health = self.player.health.saturating_sub(5);
-                    self.log("🍾 You partied with the wrong crowd — you're wired, but at what cost…");
+                    self.log(
+                        "🍾 You partied with the wrong crowd — you're wired, but at what cost…",
+                    );
                 } else {
                     self.log("🚫 Someone offered you 'a little help' backstage. You passed.");
                 }
             }
-            RandomEvent::EquipmentIssue => {
-                match rng.gen_range(0..3) {
-                    0 => {
-                        let repair_cost = rng.gen_range(
-                            constants::EQUIPMENT_REPAIR_COST_RANGE.0
-                                ..=constants::EQUIPMENT_REPAIR_COST_RANGE.1,
-                        );
-                        if self.player.can_afford(repair_cost) {
-                            self.player.spend_money(repair_cost);
-                            self.log(format!("🔧 Your amp blew mid-set — ${} in repairs.", repair_cost));
-                        } else {
-                            self.band.skill = self.band.skill.saturating_sub(5);
-                            self.log("🔧 Your amp blew and you can't afford repairs — the band sounds rougher.");
-                        }
-                    }
-                    1 => {
-                        self.band.skill = (self.band.skill + 5).min(constants::MAX_SKILL);
-                        self.log("🎸 A pawn-shop find! New gear tightens up your sound (+5 skill).");
-                    }
-                    _ => {
-                        let loss = rng.gen_range(100..500);
-                        if self.player.can_afford(loss) {
-                            self.player.spend_money(loss);
-                            self.log(format!("🚨 Gear stolen from the van — ${} to replace it.", loss));
-                        } else {
-                            self.player.money = 0;
-                            self.log("🚨 Gear stolen from the van — it cleaned you out.");
-                        }
-                        self.band.skill = self.band.skill.saturating_sub(3);
+            RandomEvent::EquipmentIssue => match rng.gen_range(0..3) {
+                0 => {
+                    let repair_cost = rng.gen_range(
+                        constants::EQUIPMENT_REPAIR_COST_RANGE.0
+                            ..=constants::EQUIPMENT_REPAIR_COST_RANGE.1,
+                    );
+                    if self.player.can_afford(repair_cost) {
+                        self.player.spend_money(repair_cost);
+                        self.log(format!(
+                            "🔧 Your amp blew mid-set — ${} in repairs.",
+                            repair_cost
+                        ));
+                    } else {
+                        self.band.skill = self.band.skill.saturating_sub(5);
+                        self.log("🔧 Your amp blew and you can't afford repairs — the band sounds rougher.");
                     }
                 }
-            }
+                1 => {
+                    self.band.skill = (self.band.skill + 5).min(constants::MAX_SKILL);
+                    self.log("🎸 A pawn-shop find! New gear tightens up your sound (+5 skill).");
+                }
+                _ => {
+                    let loss = rng.gen_range(100..500);
+                    if self.player.can_afford(loss) {
+                        self.player.spend_money(loss);
+                        self.log(format!(
+                            "🚨 Gear stolen from the van — ${} to replace it.",
+                            loss
+                        ));
+                    } else {
+                        self.player.money = 0;
+                        self.log("🚨 Gear stolen from the van — it cleaned you out.");
+                    }
+                    self.band.skill = self.band.skill.saturating_sub(3);
+                }
+            },
             RandomEvent::BandMemberIssue => {
                 if !self.band.members.is_empty() {
                     let member_idx = rng.gen_range(0..self.band.members.len());
@@ -1476,7 +1633,10 @@ impl Game {
                         0 => {
                             member.skill = (member.skill + 5).min(100);
                             member.loyalty = (member.loyalty + 10).min(100);
-                            self.log(format!("🌟 {} has been woodshedding — sharper than ever.", name));
+                            self.log(format!(
+                                "🌟 {} has been woodshedding — sharper than ever.",
+                                name
+                            ));
                         }
                         1 => {
                             member.loyalty = member.loyalty.saturating_sub(15);
@@ -1487,7 +1647,10 @@ impl Game {
                                     name
                                 ));
                             } else {
-                                self.log(format!("😠 {} is unhappy with the band's direction.", name));
+                                self.log(format!(
+                                    "😠 {} is unhappy with the band's direction.",
+                                    name
+                                ));
                             }
                         }
                         2 => {
@@ -1498,7 +1661,10 @@ impl Game {
                         }
                         _ => {
                             self.player.money -= demand;
-                            self.log(format!("💸 {} demands a bigger cut — ${} to keep the peace.", name, demand));
+                            self.log(format!(
+                                "💸 {} demands a bigger cut — ${} to keep the peace.",
+                                name, demand
+                            ));
                         }
                     }
                 }
@@ -1555,11 +1721,15 @@ impl Game {
                         } else {
                             self.player.money = 0;
                         }
-                        self.log(format!("💸 A surprise bill lands on the doormat: ${}.", amount));
+                        self.log(format!(
+                            "💸 A surprise bill lands on the doormat: ${}.",
+                            amount
+                        ));
                     }
                     2 => {
                         // Simplified: Royalty for *all* past releases, not just current one.
-                        let total_releases_count = self.band.albums_released.len() + self.band.singles_released.len();
+                        let total_releases_count =
+                            self.band.albums_released.len() + self.band.singles_released.len();
                         let royalties = (total_releases_count as i32) * rng.gen_range(10..50);
                         self.player.earn_money(royalties as u32);
                         if royalties > 0 {
@@ -1574,7 +1744,10 @@ impl Game {
                             self.player.money = 0;
                         }
                         self.band.fame = self.band.fame.saturating_sub(5);
-                        self.log(format!("⚖️ Legal trouble costs you ${} and some reputation.", cost));
+                        self.log(format!(
+                            "⚖️ Legal trouble costs you ${} and some reputation.",
+                            cost
+                        ));
                     }
                 }
             }
@@ -1587,7 +1760,10 @@ impl Game {
                     let payment = rng.gen_range(500..2000);
                     self.player.earn_money(payment as u32);
                     self.band.fame = (self.band.fame + 3).min(constants::MAX_FAME);
-                    self.log(format!("🎪 A festival slot opens up — ${} and more fans.", payment));
+                    self.log(format!(
+                        "🎪 A festival slot opens up — ${} and more fans.",
+                        payment
+                    ));
                 }
                 _ => {}
             },
@@ -1627,16 +1803,14 @@ impl Game {
                     self.band.fame = self.band.fame.saturating_sub(8);
                 }
             }
-            _ => {
-                match rng.gen_range(0..3) {
-                    0 => self.band.fame = (self.band.fame + 1).min(constants::MAX_FAME),
-                    1 => self.player.money += rng.gen_range(50..200),
-                    _ => {
-                        self.band.reputation.critical_acclaim =
-                            (self.band.reputation.critical_acclaim + 1).min(100)
-                    }
+            _ => match rng.gen_range(0..3) {
+                0 => self.band.fame = (self.band.fame + 1).min(constants::MAX_FAME),
+                1 => self.player.money += rng.gen_range(50..200),
+                _ => {
+                    self.band.reputation.critical_acclaim =
+                        (self.band.reputation.critical_acclaim + 1).min(100)
                 }
-            }
+            },
         }
 
         Ok(())
@@ -1655,7 +1829,7 @@ impl Game {
         file.read_to_string(&mut json_string)?;
 
         let mut loaded_game: Game = serde_json::from_str(&json_string)?;
-        
+
         loaded_game.data_files = GameDataFiles::load()?;
 
         Ok(loaded_game)
@@ -1726,8 +1900,12 @@ mod tests {
             "at the cap, another gig adds nothing"
         );
 
-        game.band.albums_released.push(test_release(1, ReleaseType::Album));
-        game.band.singles_released.push(test_release(2, ReleaseType::Single));
+        game.band
+            .albums_released
+            .push(test_release(1, ReleaseType::Album));
+        game.band
+            .singles_released
+            .push(test_release(2, ReleaseType::Single));
         game.player.energy = 100;
         game.action_play_gig(venue).expect("gig should succeed");
         assert!(
@@ -1740,7 +1918,9 @@ mod tests {
     fn an_outgrown_venue_adds_no_fame() {
         let mut game = test_game();
         for id in 0..6 {
-            game.band.albums_released.push(test_release(id, ReleaseType::Album));
+            game.band
+                .albums_released
+                .push(test_release(id, ReleaseType::Album));
         }
         game.band.fame = 30; // past the pub's ceiling of prestige 10 + headroom 15
         game.player.energy = 100;
@@ -1859,7 +2039,8 @@ mod tests {
     #[test]
     fn signed_bands_do_not_run_their_own_marketing() {
         let mut game = test_game();
-        game.just_released_music.push(test_release(7, ReleaseType::Single));
+        game.just_released_music
+            .push(test_release(7, ReleaseType::Single));
         game.band.record_deal = Some(test_deal(60, 0.12));
 
         let err = game
@@ -1878,7 +2059,10 @@ mod tests {
 
         game.update_public_visibility(&GameAction::LazeAround, 1);
         game.update_public_visibility(&GameAction::LazeAround, 1);
-        assert_eq!(game.band.fame, 28, "every idle week past the grace costs fame");
+        assert_eq!(
+            game.band.fame, 28,
+            "every idle week past the grace costs fame"
+        );
 
         game.update_public_visibility(&GameAction::Gig(0), 1);
         assert_eq!(game.idle_streak, 0, "a show resets the idle streak");
@@ -1888,11 +2072,15 @@ mod tests {
     fn a_release_on_the_shelves_keeps_the_band_visible() {
         let mut game = test_game();
         game.band.fame = 30;
-        game.just_released_music.push(test_release(1, ReleaseType::Single));
+        game.just_released_music
+            .push(test_release(1, ReleaseType::Single));
 
         game.update_public_visibility(&GameAction::LazeAround, 5);
 
-        assert_eq!(game.band.fame, 30, "a record in its sales window counts as visibility");
+        assert_eq!(
+            game.band.fame, 30,
+            "a record in its sales window counts as visibility"
+        );
         assert_eq!(game.idle_streak, 0);
     }
 
@@ -1902,8 +2090,12 @@ mod tests {
         game.initialize_player("Test", "The Tests", world::MusicGenre::Rock);
         // A crowded chart: ten scene records the player has to outsell.
         for i in 0..world::CHART_SIZE {
-            game.world
-                .submit_chart_entry(format!("Scene Filler {i}"), "Scene Band".into(), false, 200);
+            game.world.submit_chart_entry(
+                format!("Scene Filler {i}"),
+                "Scene Band".into(),
+                false,
+                200,
+            );
         }
 
         // A famous band drops a great record...
@@ -1916,11 +2108,16 @@ mod tests {
         game.process_music_releases_and_marketing();
 
         assert!(
-            game.world.charts.iter().any(|e| e.is_player && e.title == "Big Hit"),
+            game.world
+                .charts
+                .iter()
+                .any(|e| e.is_player && e.title == "Big Hit"),
             "a high-scoring release should land on the chart"
         );
         assert!(
-            game.turn_log.iter().any(|m| m.contains("enters the charts at #1")),
+            game.turn_log
+                .iter()
+                .any(|m| m.contains("enters the charts at #1")),
             "charting should be reported to the player"
         );
 
@@ -2037,9 +2234,13 @@ mod tests {
             expires_week: 10,
         });
 
-        game.action_decline_support_tour().expect("decline should succeed");
+        game.action_decline_support_tour()
+            .expect("decline should succeed");
         assert!(game.pending_support_offer.is_none());
-        assert!(game.action_decline_support_tour().is_err(), "no offer left to decline");
+        assert!(
+            game.action_decline_support_tour().is_err(),
+            "no offer left to decline"
+        );
     }
 
     #[test]
@@ -2059,7 +2260,10 @@ mod tests {
                 break;
             }
         }
-        assert!(offered, "200 weeks alongside a big act should produce at least one offer");
+        assert!(
+            offered,
+            "200 weeks alongside a big act should produce at least one offer"
+        );
 
         let offer = game.pending_support_offer.as_ref().unwrap();
         assert!(offer.host_fame >= game.band.fame + SUPPORT_OFFER_FAME_GAP);
@@ -2085,7 +2289,10 @@ mod tests {
             .min_by(|a, b| era_fit(a).total_cmp(&era_fit(b)))
             .expect("genres exist")
             .clone();
-        assert!(era_fit(&hot) > era_fit(&cold), "the era should actually have tastes");
+        assert!(
+            era_fit(&hot) > era_fit(&cold),
+            "the era should actually have tastes"
+        );
 
         let mut on_trend = test_release(1, ReleaseType::Single);
         on_trend.genre = Some(hot);
@@ -2119,8 +2326,10 @@ mod tests {
         // Rock is the sound of 1970 in the era data — clearly hot.
         game.band.genre = world::MusicGenre::Rock;
 
-        game.process_turn(GameAction::LazeAround).expect("lazing always works");
-        game.process_turn(GameAction::LazeAround).expect("lazing always works");
+        game.process_turn(GameAction::LazeAround)
+            .expect("lazing always works");
+        game.process_turn(GameAction::LazeAround)
+            .expect("lazing always works");
 
         let mentions = game
             .turn_log
@@ -2136,10 +2345,13 @@ mod tests {
         // Punk is years ahead of 1970's tastes — out of fashion on day one.
         game.band.genre = world::MusicGenre::Punk;
 
-        game.process_turn(GameAction::LazeAround).expect("lazing always works");
+        game.process_turn(GameAction::LazeAround)
+            .expect("lazing always works");
 
         assert!(
-            game.turn_log.iter().any(|line| line.contains("chasing a different sound")),
+            game.turn_log
+                .iter()
+                .any(|line| line.contains("chasing a different sound")),
             "an off-trend band should hear about it"
         );
     }
@@ -2160,7 +2372,9 @@ mod tests {
         game.update_support_tour_offer(&mut StdRng::seed_from_u64(0));
         assert!(game.pending_support_offer.is_none(), "offers should expire");
         assert!(
-            game.turn_log.iter().any(|m| m.contains("went to another band")),
+            game.turn_log
+                .iter()
+                .any(|m| m.contains("went to another band")),
             "expiry should be reported"
         );
     }
@@ -2183,21 +2397,41 @@ mod tests {
     fn ignored_deal_offers_expire_and_the_stream_resumes() {
         let mut game = test_game();
         game.pending_deal_offers = vec![test_deal_offer(&game, Some(8))];
-        let unsigned_before = game.world.bands.iter().filter(|b| b.label.is_none()).count();
+        let unsigned_before = game
+            .world
+            .bands
+            .iter()
+            .filter(|b| b.label.is_none())
+            .count();
 
         // Before the deadline the offer stays on the table.
         game.week = 7;
         game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
-        assert_eq!(game.pending_deal_offers.len(), 1, "a live offer survives to its deadline");
+        assert_eq!(
+            game.pending_deal_offers.len(),
+            1,
+            "a live offer survives to its deadline"
+        );
 
         // At the deadline it quietly leaves — with a line in the log...
         game.week = 8;
         game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
-        assert!(game.pending_deal_offers.is_empty(), "an ignored offer should expire");
+        assert!(
+            game.pending_deal_offers.is_empty(),
+            "an ignored offer should expire"
+        );
         let log = game.take_turn_log().join("\n");
-        assert!(log.contains("interest has cooled"), "expiry is told in-fiction, got: {log}");
+        assert!(
+            log.contains("interest has cooled"),
+            "expiry is told in-fiction, got: {log}"
+        );
         // ...and, unlike a rejection, nobody poaches the vacated deal.
-        let unsigned_after = game.world.bands.iter().filter(|b| b.label.is_none()).count();
+        let unsigned_after = game
+            .world
+            .bands
+            .iter()
+            .filter(|b| b.label.is_none())
+            .count();
         assert_eq!(
             unsigned_before, unsigned_after,
             "expiry must not hand the deal to a scene act"
@@ -2206,7 +2440,9 @@ mod tests {
         // With the slate clear and a catalog worth scouting, the stream
         // resumes on the next 4-week beat instead of staying silent forever.
         game.band.fame = 30;
-        game.band.singles_released.push(test_release(1, ReleaseType::Single));
+        game.band
+            .singles_released
+            .push(test_release(1, ReleaseType::Single));
         let mut resumed = false;
         for attempt in 0..80 {
             game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(attempt));
@@ -2232,7 +2468,11 @@ mod tests {
         game.pending_deal_offers = vec![test_deal_offer(&game, None)];
         game.week = 501;
         game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
-        assert_eq!(game.pending_deal_offers.len(), 1, "legacy offers must never expire");
+        assert_eq!(
+            game.pending_deal_offers.len(),
+            1,
+            "legacy offers must never expire"
+        );
 
         // And the on-disk shape old builds wrote — no expires_week key at
         // all — must deserialize to exactly that.
@@ -2296,10 +2536,19 @@ mod tests {
 
         // The script must have exercised the seeded rolls for the proof to
         // mean anything: songs written and a single actually recorded.
-        assert!(story_a.contains("🎼 Wrote"), "the script should write songs:\n{story_a}");
-        assert!(story_a.contains("🎙️ Recorded"), "the script should record a single:\n{story_a}");
+        assert!(
+            story_a.contains("🎼 Wrote"),
+            "the script should write songs:\n{story_a}"
+        );
+        assert!(
+            story_a.contains("🎙️ Recorded"),
+            "the script should record a single:\n{story_a}"
+        );
 
         let (_, _, _, story_c) = scripted_run(2026);
-        assert_ne!(story_a, story_c, "a different seed must tell a different story");
+        assert_ne!(
+            story_a, story_c,
+            "a different seed must tell a different story"
+        );
     }
 }
