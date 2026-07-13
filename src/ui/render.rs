@@ -23,6 +23,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             match &app.screen {
                 Screen::Deals { .. } => draw_deals_modal(frame, app),
                 Screen::SupportOffer => draw_support_modal(frame, app),
+                Screen::Charts => draw_charts_modal(frame, app),
                 Screen::MarketingRelease { .. } | Screen::MarketingCampaign { .. } => {
                     draw_marketing_modal(frame, app)
                 }
@@ -85,8 +86,9 @@ fn draw_setup(frame: &mut Frame, app: &App) {
 // --- Main screen ---
 
 fn draw_main(frame: &mut Frame, app: &mut App) {
+    // The stats band fits the scene panel's eight lines (chart line included).
     let [header_area, stats_area, bottom_area] =
-        Layout::vertical([Constraint::Length(4), Constraint::Length(10), Constraint::Min(8)])
+        Layout::vertical([Constraint::Length(4), Constraint::Length(11), Constraint::Min(8)])
             .areas(frame.area());
 
     draw_header(frame, &app.game, header_area);
@@ -286,18 +288,28 @@ fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
         .map(|b| format!("{} ({}%)", b.name, b.fame))
         .unwrap_or_else(|| "nobody".to_string());
 
-    let lines = vec![
+    let mut lines = vec![
         Line::from(format!("Trend      {}", game.world.current_trends)),
         Line::from(format!("Demand     {}%", game.world.music_market.demand)),
         Line::from(format!("Economy    {}", game.world.music_market.economic_state)),
         Line::from(format!("Innovation {}%", era.market_conditions.innovation_openness)),
         Line::from(format!("Bands      {} in the scene", game.world.bands.len())),
         Line::from(format!("Top Act    {}", top_band)),
-        Line::from(Span::styled(
-            format!("Hot: {}", era.dominant_genres.join(", ")),
-            Style::new().fg(Color::Cyan),
-        )),
     ];
+    // The reigning #1 record — in your colours when it's yours, and absent
+    // entirely while the charts are still empty.
+    if let Some(hit) = game.world.charts.first() {
+        let text = format!("No. 1      '{}' — {}", hit.title, hit.band_name);
+        lines.push(if hit.is_player {
+            Line::styled(text, Style::new().fg(ACCENT).bold())
+        } else {
+            Line::from(text)
+        });
+    }
+    lines.push(Line::from(Span::styled(
+        format!("Hot: {}", era.dominant_genres.join(", ")),
+        Style::new().fg(Color::Cyan),
+    )));
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
 }
 
@@ -420,6 +432,55 @@ fn draw_deals_modal(frame: &mut Frame, app: &App) {
         let mut state = ListState::default().with_selected(Some(*selected));
         frame.render_stateful_widget(list, area, &mut state);
     }
+}
+
+fn draw_charts_modal(frame: &mut Frame, app: &App) {
+    let area = centered_rect(72, 60, frame.area());
+    frame.render_widget(Clear, area);
+    let block = Block::bordered()
+        .title(" 📈 This Week's Top 10 ")
+        .title_style(Style::new().fg(Color::Yellow).bold())
+        .title_bottom(" Esc close ");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let charts = &app.game.world.charts;
+    if charts.is_empty() {
+        let lines = vec![
+            Line::from(""),
+            Line::from("The charts are quiet — nobody's record is moving this week.").centered(),
+            Line::from("Put something out and claim a spot.").centered(),
+        ];
+        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
+        return;
+    }
+
+    let mut lines = vec![Line::from("")];
+    for (idx, entry) in charts.iter().enumerate() {
+        // Your own records burn in the accent colour with a star.
+        let (style, marker) = if entry.is_player {
+            (Style::new().fg(ACCENT).bold(), "★")
+        } else {
+            (Style::new().fg(Color::White), " ")
+        };
+        let weeks = if entry.weeks_on_chart == 0 {
+            "NEW".to_string()
+        } else {
+            format!(
+                "{} wk{}",
+                entry.weeks_on_chart,
+                if entry.weeks_on_chart == 1 { "" } else { "s" }
+            )
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("  #{:<3}", idx + 1), style),
+            Span::styled(format!("{} ", marker), style),
+            Span::styled(format!("{:<28}", format!("'{}'", entry.title)), style),
+            Span::styled(format!("{:<24}", entry.band_name), style),
+            Span::styled(weeks, style),
+        ]));
+    }
+    frame.render_widget(Paragraph::new(lines), inner);
 }
 
 fn draw_support_modal(frame: &mut Frame, app: &App) {

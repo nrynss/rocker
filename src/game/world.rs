@@ -390,16 +390,16 @@ impl GameWorld {
         }
 
         // New blood: refill hard when thin, trickle otherwise.
-        let mut arrivals = if self.bands.len() < SCENE_MIN_BANDS {
+        let mut newcomers = if self.bands.len() < SCENE_MIN_BANDS {
             SCENE_MIN_BANDS - self.bands.len()
         } else if self.bands.len() < SCENE_MAX_BANDS {
             rng.gen_range(0..=3)
         } else {
             0
         };
-        arrivals = arrivals.min(SCENE_MAX_BANDS - self.bands.len());
+        newcomers = newcomers.min(SCENE_MAX_BANDS - self.bands.len());
 
-        for _ in 0..arrivals {
+        for _ in 0..newcomers {
             let name = self.unique_band_name(data_files, rng);
             // Newcomers mostly chase whatever is currently hot.
             let genre = if rng.gen_bool(0.4) {

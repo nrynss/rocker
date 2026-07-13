@@ -939,8 +939,8 @@ impl Game {
         Ok(())
     }
 
-    /// Expire a stale support offer, or roll for a new one from a rival act
-    /// famous enough to headline over you.
+    /// Expire a stale support offer, or roll for a new one from a bigger
+    /// scene act famous enough to headline over you.
     fn update_support_tour_offer(&mut self) {
         if let Some(offer) = &self.pending_support_offer {
             if self.week >= offer.expires_week {
@@ -1028,6 +1028,15 @@ impl Game {
                 let sales_score = self.calculate_release_sales_score(&release);
                 release.initial_sales_score = sales_score;
 
+                // The charts are a shared scoreboard: your record competes
+                // against the scene's releases on the same sales scale.
+                let chart_position = self.world.submit_chart_entry(
+                    release.name.clone(),
+                    self.band.name.clone(),
+                    true,
+                    sales_score,
+                );
+
                 let (income, units_sold, sold_out) = self.calculate_release_outcome(sales_score, &release);
                 release.total_income_generated += income;
                 release.copies_sold = units_sold;
@@ -1062,6 +1071,12 @@ impl Game {
                     self.log(format!(
                         "📦 '{}' sold out — all {} copies gone; demand was there for more.",
                         release.name, release.copies_pressed
+                    ));
+                }
+                if let Some(position) = chart_position {
+                    self.log(format!(
+                        "📈 '{}' enters the charts at #{}.",
+                        release.name, position
                     ));
                 }
 
@@ -1748,6 +1763,50 @@ mod tests {
 
         assert_eq!(game.band.fame, 30, "a record in its sales window counts as visibility");
         assert_eq!(game.idle_streak, 0);
+    }
+
+    #[test]
+    fn a_hit_release_enters_the_charts_and_a_flop_misses() {
+        let mut game = test_game();
+        game.initialize_player("Test", "The Tests");
+        // A crowded chart: ten scene records the player has to outsell.
+        for i in 0..world::CHART_SIZE {
+            game.world
+                .submit_chart_entry(format!("Scene Filler {i}"), "Scene Band".into(), false, 200);
+        }
+
+        // A famous band drops a great record...
+        game.band.fame = 80;
+        let mut hit = test_release(1, ReleaseType::Single);
+        hit.name = "Big Hit".to_string();
+        hit.release_quality = 90;
+        game.just_released_music.push(hit);
+        game.week = INITIAL_SALES_WINDOW_WEEKS; // the sales window has closed
+        game.process_music_releases_and_marketing();
+
+        assert!(
+            game.world.charts.iter().any(|e| e.is_player && e.title == "Big Hit"),
+            "a high-scoring release should land on the chart"
+        );
+        assert!(
+            game.turn_log.iter().any(|m| m.contains("enters the charts at #1")),
+            "charting should be reported to the player"
+        );
+
+        // ...while a nobody's dud sinks without a trace.
+        game.band.fame = 0;
+        let mut flop = test_release(2, ReleaseType::Single);
+        flop.name = "Total Flop".to_string();
+        flop.release_quality = 1;
+        flop.week_released = game.week;
+        game.just_released_music.push(flop);
+        game.week += INITIAL_SALES_WINDOW_WEEKS;
+        game.process_music_releases_and_marketing();
+
+        assert!(
+            !game.world.charts.iter().any(|e| e.title == "Total Flop"),
+            "a flop should not crack a crowded top 10"
+        );
     }
 
     #[test]
