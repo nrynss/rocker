@@ -1,6 +1,8 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use super::super::constants::{self, *};
 use super::super::*;
+
 impl Game {
     fn calculate_songwriting_quality(&self, rng: &mut impl Rng) -> u8 {
         let mut quality = QUALITY_BASE_SONGWRITING as f32;

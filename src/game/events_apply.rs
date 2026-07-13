@@ -1,6 +1,7 @@
 //! Event outcomes: applies random and historical events to the game state.
 //! Trigger selection lives in `events.rs`; week orchestration stays in `turn.rs`.
 
+use super::constants;
 use super::*;
 
 impl Game {

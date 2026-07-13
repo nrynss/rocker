@@ -15,6 +15,7 @@
 //! policy replays the same career exactly — exact-value assertions are
 //! fair game. `seeded_worlds_are_reproducible_in_the_harness` pins this.
 
+use super::constants::{self, *};
 use super::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 

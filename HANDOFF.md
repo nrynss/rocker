@@ -124,7 +124,7 @@ run **in parallel on the same branch** — never via extra branches.
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Branch | Done |
 |----|------|------|---------|------------------|--------|------------|--------|------|
 | **T1** | Extract `game` unit tests out of `mod.rs` into `src/game/tests/` | M | — | `src/game/mod.rs` *(tests module only + `mod tests` wiring)*, **new** `src/game/tests/**` | ✅ done | claude-t1 | struct/t4-genre | 78f93a5 |
-| **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | 🔒 claimed | pier-t2 | struct/t4-genre | |
+| **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | ✅ done | pier-t2 / grok-t2-polish | struct/t4-genre | |
 | **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/game.rs`; thin `mod.rs` | S | T2 | `src/game/game.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ⬜ open | | struct/t4-genre | |
 | **T4** | Extract `MusicGenre` → `src/game/genre.rs` | S | — | `src/game/genre.rs` *(new)*, `src/game/world.rs` *(remove genre)*, all `use` sites of `MusicGenre` | ✅ done | grok-struct-t4 | struct/t4-genre | 860fb6f |
 | **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ✅ done | grok-struct-t5 | struct/t4-genre | b601eab |
@@ -547,3 +547,4 @@ _Example:_
 - 2026-07-13 T10 done by antigravity on `struct/t4-genre`: `render.rs` → `render/{mod,setup,layout,panels,modals,game_over}.rs`; shared helpers (centered_rect, gauge, scale_color, format_population) in `render/mod.rs`; `pub(crate)` for ACCENT const.
 - 2026-07-13 T12 claimed+done by grok-struct-t12 on `struct/t4-genre`: `render/modals.rs` → `modals/{mod,deals,charts,marketing,file,pickers}.rs` with re-exports; parallel-safe with T7.
 - 2026-07-13 T7 done by grok-struct-t7 on `struct/t4-genre`: `world.rs` → `world/{mod,scene,charts,deals,venues}.rs`; public API re-exported from `world/mod.rs`; tests stay under `world::tests`. No impact on T2 (disjoint owns).
+- 2026-07-13 T2 done by pier-t2 (extract) + grok-t2-polish (land): 40 game tuning consts → `src/game/constants.rs`; data constants re-exported; `pub use constants::{PRESSING_TIERS, BREAK_WEEKS}`; uniform `use …constants::{self, *}` (or `use …constants` where only path form); clippy clean; committed to `struct/t4-genre`.

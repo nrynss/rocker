@@ -1,6 +1,8 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use super::super::constants::{self, *};
 use super::super::*;
+
 impl Game {
     pub fn get_sorted_regions(&self) -> Vec<(String, String, String, u32, u8, u8)> {
         let mut result = Vec::new();

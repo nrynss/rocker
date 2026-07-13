@@ -1,6 +1,7 @@
 //! The money pipeline: recording and pressing costs, sales scoring,
 //! and the weekly release/catalog payout.
 
+use super::constants::{self, *};
 use super::*;
 
 impl Game {

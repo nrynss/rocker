@@ -1,6 +1,8 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use super::super::constants;
 use super::super::*;
+
 impl Game {
     pub(in crate::game) fn action_start_marketing_campaign(
         &mut self,

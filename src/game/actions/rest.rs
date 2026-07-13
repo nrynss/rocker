@@ -1,6 +1,8 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use super::super::constants::{self, *};
 use super::super::*;
+
 impl Game {
     pub(in crate::game) fn action_laze_around(&mut self) -> Result<(), String> {
         self.player.energy = (self.player.energy + 20).min(constants::MAX_ENERGY);
