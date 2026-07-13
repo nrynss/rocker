@@ -113,12 +113,8 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
     // A crowded chart: ten scene records the player has to outsell.
     for i in 0..world::CHART_SIZE {
-        game.world.submit_chart_entry(
-            format!("Scene Filler {i}"),
-            "Scene Band".into(),
-            false,
-            200,
-        );
+        game.world
+            .submit_chart_entry(format!("Scene Filler {i}"), "Scene Band".into(), false, 200);
     }
 
     // A famous band drops a great record...
