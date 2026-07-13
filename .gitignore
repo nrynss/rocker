@@ -1,3 +1,5 @@
 /target
 *.sav
+# The committed save-compat fixture is the one exception:
+!tests/fixtures/pre-0.5.sav
 /.claude/

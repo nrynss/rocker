@@ -1,0 +1,2276 @@
+{
+  "world_seed": 48013652586582413,
+  "player": {
+    "name": "Fixture Fred",
+    "money": 1029,
+    "health": 100,
+    "energy": 30,
+    "stress": 0,
+    "drug_addiction": 0,
+    "alcohol_addiction": 0
+  },
+  "band": {
+    "name": "The Regression Tones",
+    "fame": 3,
+    "skill": 20,
+    "unreleased_songs": [
+      {
+        "id": 0,
+        "name": "Burning Time",
+        "songwriting_quality": 42
+      },
+      {
+        "id": 2,
+        "name": "Manchester",
+        "songwriting_quality": 40
+      },
+      {
+        "id": 3,
+        "name": "Make Me Feel",
+        "songwriting_quality": 36
+      },
+      {
+        "id": 4,
+        "name": "Carolina Blue",
+        "songwriting_quality": 34
+      },
+      {
+        "id": 5,
+        "name": "Returning War",
+        "songwriting_quality": 38
+      }
+    ],
+    "singles_released": [
+      {
+        "id": 0,
+        "name": "Single: Crown of Queens",
+        "release_type": "Single",
+        "release_quality": 47,
+        "week_released": 3,
+        "songs_involved_quality_avg": 39,
+        "active_marketing": [],
+        "marketing_level_achieved": 0,
+        "initial_sales_score": 137,
+        "total_income_generated": 570,
+        "genre": "Rock"
+      }
+    ],
+    "albums_released": [],
+    "members": [
+      {
+        "name": "Duke",
+        "instrument": "Guitar",
+        "skill": 25,
+        "loyalty": 75,
+        "drug_problem": false
+      },
+      {
+        "name": "Hawk",
+        "instrument": "Bass",
+        "skill": 20,
+        "loyalty": 80,
+        "drug_problem": false
+      },
+      {
+        "name": "Urban",
+        "instrument": "Drums",
+        "skill": 30,
+        "loyalty": 70,
+        "drug_problem": false
+      }
+    ],
+    "record_deal": null,
+    "reputation": {
+      "critical_acclaim": 11,
+      "commercial_success": 5,
+      "live_performance": 15,
+      "media_presence": 0
+    }
+  },
+  "world": {
+    "music_market": {
+      "demand": 74,
+      "saturation": 95,
+      "economic_state": "Growing"
+    },
+    "bands": [
+      {
+        "name": "Tears Crown",
+        "fame": 43,
+        "peak_fame": 43,
+        "latest_release": "Smiling Moon",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Frozen Kings",
+        "fame": 10,
+        "peak_fame": 11,
+        "latest_release": "Sunset Strip",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Crystal Vision",
+        "fame": 8,
+        "peak_fame": 13,
+        "latest_release": "Dancing Thunder",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Mind",
+        "fame": 52,
+        "peak_fame": 53,
+        "latest_release": "Lose Control",
+        "genre": "Alternative",
+        "label": "Touch and Go Records",
+        "momentum": 1
+      },
+      {
+        "name": "Shadow Dancers",
+        "fame": 10,
+        "peak_fame": 10,
+        "latest_release": "Hearts",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Dark Dragons",
+        "fame": 35,
+        "peak_fame": 39,
+        "latest_release": "Valley of Wolf",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dark Kings",
+        "fame": 2,
+        "peak_fame": 4,
+        "latest_release": "Find My Way",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Heroes Time",
+        "fame": 5,
+        "peak_fame": 7,
+        "latest_release": "Moon",
+        "genre": "Folk",
+        "label": null,
+        "momentum": -1
+      },
+      {
+        "name": "The Neon Tiger",
+        "fame": 65,
+        "peak_fame": 66,
+        "latest_release": "Heroes",
+        "genre": "Jazz",
+        "label": "Atlantic Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Shield",
+        "fame": 44,
+        "peak_fame": 44,
+        "latest_release": "War of Snake",
+        "genre": "Folk",
+        "label": "Touch and Go Records",
+        "momentum": 0
+      },
+      {
+        "name": "Rain Body",
+        "fame": 11,
+        "peak_fame": 14,
+        "latest_release": "Eagle",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Body",
+        "fame": 12,
+        "peak_fame": 14,
+        "latest_release": "Red Wolf",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Moon Mind",
+        "fame": 29,
+        "peak_fame": 30,
+        "latest_release": "Highway",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Hot Villains",
+        "fame": 63,
+        "peak_fame": 66,
+        "latest_release": "Lift Me Up",
+        "genre": "Jazz",
+        "label": "RCA Records",
+        "momentum": 0
+      },
+      {
+        "name": "Devils Eagle",
+        "fame": 16,
+        "peak_fame": 18,
+        "latest_release": "Loving Eagle",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Silk Road",
+        "fame": 65,
+        "peak_fame": 66,
+        "latest_release": "Low Mountain",
+        "genre": "Alternative",
+        "label": "Atlantic Records",
+        "momentum": 1
+      },
+      {
+        "name": "Purple Hearts",
+        "fame": 13,
+        "peak_fame": 15,
+        "latest_release": "Phoenix",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Pink Life",
+        "fame": 55,
+        "peak_fame": 57,
+        "latest_release": "Wings",
+        "genre": "Pop",
+        "label": "Dischord Records",
+        "momentum": 0
+      },
+      {
+        "name": "Dim Sun",
+        "fame": 59,
+        "peak_fame": 64,
+        "latest_release": "Modern Rain",
+        "genre": "Jazz",
+        "label": "RCA Records",
+        "momentum": 0
+      },
+      {
+        "name": "Shadow Snake",
+        "fame": 12,
+        "peak_fame": 12,
+        "latest_release": "Broken Lion",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Midnight Angels",
+        "fame": 21,
+        "peak_fame": 24,
+        "latest_release": "Steel Hearts",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Pink Train",
+        "fame": 1,
+        "peak_fame": 6,
+        "latest_release": "Singing Blood",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Eagle Wings",
+        "fame": 60,
+        "peak_fame": 61,
+        "latest_release": "Crystal Devils",
+        "genre": "Alternative",
+        "label": "Capitol Records",
+        "momentum": 0
+      },
+      {
+        "name": "Ugly Thorn",
+        "fame": 54,
+        "peak_fame": 54,
+        "latest_release": "Dancing Lightning",
+        "genre": "Folk",
+        "label": "Matador Records",
+        "momentum": 1
+      },
+      {
+        "name": "White Wolf",
+        "fame": 2,
+        "peak_fame": 3,
+        "latest_release": "Route 66",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Sun Devils",
+        "fame": 7,
+        "peak_fame": 8,
+        "latest_release": "Dance of Touch",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The High Valley",
+        "fame": 1,
+        "peak_fame": 6,
+        "latest_release": "Ugly Dreams",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dangerous City",
+        "fame": 9,
+        "peak_fame": 13,
+        "latest_release": "Life",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Lost Thorn",
+        "fame": 55,
+        "peak_fame": 55,
+        "latest_release": "Healing Queens",
+        "genre": "Folk",
+        "label": "Dischord Records",
+        "momentum": 1
+      },
+      {
+        "name": "The Thunder Death",
+        "fame": 39,
+        "peak_fame": 39,
+        "latest_release": "Snake of Thunder",
+        "genre": "Folk",
+        "label": "Factory Records",
+        "momentum": 0
+      },
+      {
+        "name": "Purple Thunder",
+        "fame": 15,
+        "peak_fame": 17,
+        "latest_release": "Velvet Knights",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Wild Fire",
+        "fame": 17,
+        "peak_fame": 17,
+        "latest_release": "Lion of Roads",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Death",
+        "fame": 15,
+        "peak_fame": 17,
+        "latest_release": "Calm My Fears",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Red City",
+        "fame": 59,
+        "peak_fame": 59,
+        "latest_release": "Never Die",
+        "genre": "Electronic",
+        "label": "Dischord Records",
+        "momentum": 0
+      },
+      {
+        "name": "Silver Tower",
+        "fame": 35,
+        "peak_fame": 39,
+        "latest_release": "Hating Castle",
+        "genre": "Pop",
+        "label": "Touch and Go Records",
+        "momentum": 1
+      },
+      {
+        "name": "The Underdogs",
+        "fame": 73,
+        "peak_fame": 73,
+        "latest_release": "Calm My Fears",
+        "genre": "Folk",
+        "label": "SST Records",
+        "momentum": 1
+      },
+      {
+        "name": "Orange Crush",
+        "fame": 62,
+        "peak_fame": 68,
+        "latest_release": "Take My Hand",
+        "genre": "Punk",
+        "label": "Elektra Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Green Voice",
+        "fame": 28,
+        "peak_fame": 34,
+        "latest_release": "Red Ocean",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Tiger Space",
+        "fame": 14,
+        "peak_fame": 15,
+        "latest_release": "Beautiful Moon",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "River Villains",
+        "fame": 34,
+        "peak_fame": 34,
+        "latest_release": "Plane of Shield",
+        "genre": "Folk",
+        "label": "Creation Records",
+        "momentum": 1
+      },
+      {
+        "name": "Orange Time",
+        "fame": 13,
+        "peak_fame": 17,
+        "latest_release": "Show Me How",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Heroes",
+        "fame": 20,
+        "peak_fame": 23,
+        "latest_release": "Body of Dreams",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Drums Rose",
+        "fame": 8,
+        "peak_fame": 10,
+        "latest_release": "Bitter Eagle",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Yellow Submarine",
+        "fame": 1,
+        "peak_fame": 3,
+        "latest_release": "Love Me Tonight",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Digital Age",
+        "fame": 9,
+        "peak_fame": 9,
+        "latest_release": "Ship",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Train River",
+        "fame": 46,
+        "peak_fame": 51,
+        "latest_release": "Leave Me Alone",
+        "genre": "Pop",
+        "label": "SST Records",
+        "momentum": 0
+      },
+      {
+        "name": "Ice Storm",
+        "fame": 17,
+        "peak_fame": 24,
+        "latest_release": "Glasgow",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Pink Rain",
+        "fame": 22,
+        "peak_fame": 22,
+        "latest_release": "New York Minute",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Electric Forest",
+        "fame": 10,
+        "peak_fame": 15,
+        "latest_release": "Screaming Hate",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Shadow Love",
+        "fame": 26,
+        "peak_fame": 29,
+        "latest_release": "Nights of Highway",
+        "genre": "Metal",
+        "label": "Creation Records",
+        "momentum": 0
+      },
+      {
+        "name": "Ship Villains",
+        "fame": 15,
+        "peak_fame": 16,
+        "latest_release": "Toronto",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Grey Space",
+        "fame": 11,
+        "peak_fame": 14,
+        "latest_release": "Midnight Highway",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Silver Ice",
+        "fame": 52,
+        "peak_fame": 54,
+        "latest_release": "Song of Mind",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Tower",
+        "fame": 28,
+        "peak_fame": 28,
+        "latest_release": "Never Die",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Knights",
+        "fame": 14,
+        "peak_fame": 16,
+        "latest_release": "Keep Me Safe",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Thorn Rose",
+        "fame": 78,
+        "peak_fame": 82,
+        "latest_release": "Crying Highway",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Rebels",
+        "fame": 4,
+        "peak_fame": 5,
+        "latest_release": "Country Road",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Wild Desert",
+        "fame": 20,
+        "peak_fame": 20,
+        "latest_release": "Dancing Train",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Bright Tears",
+        "fame": 27,
+        "peak_fame": 32,
+        "latest_release": "Make Me Whole",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Time Knights",
+        "fame": 15,
+        "peak_fame": 17,
+        "latest_release": "Shield of Shield",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Song Bridge",
+        "fame": 47,
+        "peak_fame": 52,
+        "latest_release": "Tower",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Satellite Signal",
+        "fame": 23,
+        "peak_fame": 25,
+        "latest_release": "Route 66",
+        "genre": "Electronic",
+        "label": "Creation Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Shadow Mountain",
+        "fame": 54,
+        "peak_fame": 56,
+        "latest_release": "Time",
+        "genre": "Folk",
+        "label": "Dischord Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Beautiful Mind",
+        "fame": 9,
+        "peak_fame": 9,
+        "latest_release": "Green Drums",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Slow Tiger",
+        "fame": 42,
+        "peak_fame": 45,
+        "latest_release": "Sun",
+        "genre": "Metal",
+        "label": "Matador Records",
+        "momentum": 0
+      },
+      {
+        "name": "Loud Nights",
+        "fame": 18,
+        "peak_fame": 18,
+        "latest_release": "Dreaming Ice",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Heavy Knights",
+        "fame": 18,
+        "peak_fame": 21,
+        "latest_release": "Deep Song",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Thunder Rain",
+        "fame": 11,
+        "peak_fame": 16,
+        "latest_release": "Song of Hate",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Toxic Waste",
+        "fame": 2,
+        "peak_fame": 9,
+        "latest_release": "Kiss Me Goodbye",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Rose",
+        "fame": 22,
+        "peak_fame": 25,
+        "latest_release": "Playing Time",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Quiet Body",
+        "fame": 38,
+        "peak_fame": 38,
+        "latest_release": "Take My Hand",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Bitter Body",
+        "fame": 10,
+        "peak_fame": 13,
+        "latest_release": "Calling Thorn",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Quiet Dreams",
+        "fame": 13,
+        "peak_fame": 13,
+        "latest_release": "Portland Storm",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Highway Mountain",
+        "fame": 10,
+        "peak_fame": 10,
+        "latest_release": "Leaving Thunder",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Ugly Rose",
+        "fame": 73,
+        "peak_fame": 73,
+        "latest_release": "Burning Soul",
+        "genre": "Jazz",
+        "label": "Capitol Records",
+        "momentum": 1
+      },
+      {
+        "name": "The Burning Castle",
+        "fame": 50,
+        "peak_fame": 50,
+        "latest_release": "Georgia Peach",
+        "genre": "Electronic",
+        "label": "Sub Pop Records",
+        "momentum": 2
+      },
+      {
+        "name": "Cassette Tape",
+        "fame": 11,
+        "peak_fame": 12,
+        "latest_release": "Phoenix of Ice",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dull Devils",
+        "fame": 11,
+        "peak_fame": 12,
+        "latest_release": "Spirit",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Iron Angels",
+        "fame": 13,
+        "peak_fame": 14,
+        "latest_release": "Touch",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Black Thunder",
+        "fame": 47,
+        "peak_fame": 51,
+        "latest_release": "Forbidden Roads",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Beautiful Love",
+        "fame": 6,
+        "peak_fame": 6,
+        "latest_release": "Castle",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dim Rain",
+        "fame": 58,
+        "peak_fame": 58,
+        "latest_release": "Ice",
+        "genre": "Rock",
+        "label": "Dischord Records",
+        "momentum": 1
+      },
+      {
+        "name": "Black Lion",
+        "fame": 0,
+        "peak_fame": 3,
+        "latest_release": "Life",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Nights Plane",
+        "fame": 13,
+        "peak_fame": 14,
+        "latest_release": "Always Remember",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Crimson Spirit",
+        "fame": 10,
+        "peak_fame": 14,
+        "latest_release": "Throne",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Mountain Shield",
+        "fame": 14,
+        "peak_fame": 17,
+        "latest_release": "Bones of Lion",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Velvet Storm",
+        "fame": 36,
+        "peak_fame": 36,
+        "latest_release": "Forest",
+        "genre": "Alternative",
+        "label": "Creation Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Golden Highway",
+        "fame": 45,
+        "peak_fame": 53,
+        "latest_release": "Tell Me Why",
+        "genre": "Electronic",
+        "label": "Sub Pop Records",
+        "momentum": -1
+      },
+      {
+        "name": "Slow Moon",
+        "fame": 52,
+        "peak_fame": 52,
+        "latest_release": "Turn Around",
+        "genre": "Rock",
+        "label": "SST Records",
+        "momentum": 2
+      },
+      {
+        "name": "The Fire",
+        "fame": 1,
+        "peak_fame": 3,
+        "latest_release": "River of Soul",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Midnight Express",
+        "fame": 9,
+        "peak_fame": 14,
+        "latest_release": "Keep Me Safe",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Thunder Road",
+        "fame": 29,
+        "peak_fame": 31,
+        "latest_release": "Vegas Lights",
+        "genre": "Alternative",
+        "label": "Factory Records",
+        "momentum": 0
+      },
+      {
+        "name": "Diamond Dogs",
+        "fame": 15,
+        "peak_fame": 16,
+        "latest_release": "Tokyo Nights",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Broken Strings",
+        "fame": 41,
+        "peak_fame": 41,
+        "latest_release": "Ship of Ice",
+        "genre": "Alternative",
+        "label": "Dischord Records",
+        "momentum": 1
+      },
+      {
+        "name": "The Space",
+        "fame": 4,
+        "peak_fame": 5,
+        "latest_release": "City of Phoenix",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Guitar Roads",
+        "fame": 35,
+        "peak_fame": 38,
+        "latest_release": "Winning War",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Endless Kings",
+        "fame": 60,
+        "peak_fame": 62,
+        "latest_release": "Blue Bridge",
+        "genre": "Electronic",
+        "label": "RCA Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Midnight Thunder",
+        "fame": 0,
+        "peak_fame": 5,
+        "latest_release": "City of Crown",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Sweet Space",
+        "fame": 26,
+        "peak_fame": 31,
+        "latest_release": "Highway",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Neon Nightmare",
+        "fame": 14,
+        "peak_fame": 14,
+        "latest_release": "Sun of Forest",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Loud Kiss",
+        "fame": 59,
+        "peak_fame": 62,
+        "latest_release": "Neon Fire",
+        "genre": "Alternative",
+        "label": "Columbia Records",
+        "momentum": 0
+      },
+      {
+        "name": "White Lightning",
+        "fame": 15,
+        "peak_fame": 16,
+        "latest_release": "London Calling",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Burning Tiger",
+        "fame": 13,
+        "peak_fame": 15,
+        "latest_release": "London Calling",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Frozen Snake",
+        "fame": 93,
+        "peak_fame": 93,
+        "latest_release": "Ocean of River",
+        "genre": "Electronic",
+        "label": "Atlantic Records",
+        "momentum": 1
+      },
+      {
+        "name": "Red Mountain",
+        "fame": 11,
+        "peak_fame": 15,
+        "latest_release": "Make Me Feel",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Cold Tiger",
+        "fame": 6,
+        "peak_fame": 8,
+        "latest_release": "Vancouver",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Secret Life",
+        "fame": 55,
+        "peak_fame": 55,
+        "latest_release": "Bitter Thunder",
+        "genre": "Metal",
+        "label": "Touch and Go Records",
+        "momentum": 0
+      },
+      {
+        "name": "Lost Ocean",
+        "fame": 8,
+        "peak_fame": 12,
+        "latest_release": "Tokyo Nights",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Shallow Train",
+        "fame": 13,
+        "peak_fame": 17,
+        "latest_release": "Spirit of Valley",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dark War",
+        "fame": 17,
+        "peak_fame": 17,
+        "latest_release": "Feel Alive",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Shallow Time",
+        "fame": 15,
+        "peak_fame": 16,
+        "latest_release": "Never Die",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Ancient Soul",
+        "fame": 12,
+        "peak_fame": 14,
+        "latest_release": "Start Again",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Electric Mind",
+        "fame": 5,
+        "peak_fame": 9,
+        "latest_release": "Hold Me Close",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Dim Eagle",
+        "fame": 24,
+        "peak_fame": 24,
+        "latest_release": "Ice",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Quiet Kings",
+        "fame": 4,
+        "peak_fame": 6,
+        "latest_release": "Turn Around",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Steel Panthers",
+        "fame": 0,
+        "peak_fame": 4,
+        "latest_release": "Shining Guitar",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "River Rain",
+        "fame": 11,
+        "peak_fame": 12,
+        "latest_release": "Nights",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Bitter Life",
+        "fame": 21,
+        "peak_fame": 24,
+        "latest_release": "White Stars",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Wild Kings",
+        "fame": 16,
+        "peak_fame": 16,
+        "latest_release": "California Sun",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Bright Ocean",
+        "fame": 5,
+        "peak_fame": 5,
+        "latest_release": "Mind of Ocean",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Dim Shield",
+        "fame": 28,
+        "peak_fame": 28,
+        "latest_release": "Blood",
+        "genre": "Punk",
+        "label": "Creation Records",
+        "momentum": 0
+      },
+      {
+        "name": "Touch Angels",
+        "fame": 35,
+        "peak_fame": 35,
+        "latest_release": "Break My Heart",
+        "genre": "Metal",
+        "label": "Rough Trade Records",
+        "momentum": 0
+      },
+      {
+        "name": "Electric Wings",
+        "fame": 6,
+        "peak_fame": 8,
+        "latest_release": "Chasing Dragons",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Spirit Guitar",
+        "fame": 14,
+        "peak_fame": 15,
+        "latest_release": "White Angels",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Crimson River",
+        "fame": 17,
+        "peak_fame": 17,
+        "latest_release": "Life",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Modern Sun",
+        "fame": 61,
+        "peak_fame": 62,
+        "latest_release": "Leave Me Alone",
+        "genre": "Jazz",
+        "label": "4AD Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Velvet City",
+        "fame": 12,
+        "peak_fame": 14,
+        "latest_release": "Staying Storm",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Lost Phoenix",
+        "fame": 9,
+        "peak_fame": 9,
+        "latest_release": "Time of Storm",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Nights Dreams",
+        "fame": 4,
+        "peak_fame": 8,
+        "latest_release": "Cold Thunder",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Golden Dreams",
+        "fame": 0,
+        "peak_fame": 5,
+        "latest_release": "Tears",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Soul Tower",
+        "fame": 42,
+        "peak_fame": 42,
+        "latest_release": "Burning Song",
+        "genre": "Metal",
+        "label": "SST Records",
+        "momentum": 3
+      },
+      {
+        "name": "Sharp Ocean",
+        "fame": 0,
+        "peak_fame": 4,
+        "latest_release": "Ancient Castle",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Loud Sun",
+        "fame": 21,
+        "peak_fame": 28,
+        "latest_release": "Smiling Throne",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Forbidden Wolf",
+        "fame": 13,
+        "peak_fame": 17,
+        "latest_release": "Sword of Fire",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Blood Wolf",
+        "fame": 2,
+        "peak_fame": 4,
+        "latest_release": "Lion",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The High Hearts",
+        "fame": 59,
+        "peak_fame": 60,
+        "latest_release": "Forest Deep",
+        "genre": "Alternative",
+        "label": "RCA Records",
+        "momentum": 0
+      },
+      {
+        "name": "Train Dreams",
+        "fame": 48,
+        "peak_fame": 48,
+        "latest_release": "Bridge to Nowhere",
+        "genre": "Electronic",
+        "label": "Matador Records",
+        "momentum": 0
+      },
+      {
+        "name": "Voice City",
+        "fame": 8,
+        "peak_fame": 10,
+        "latest_release": "Calm My Fears",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Velvet Underground",
+        "fame": 15,
+        "peak_fame": 15,
+        "latest_release": "Nights of Angels",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Doors",
+        "fame": 10,
+        "peak_fame": 10,
+        "latest_release": "Tear Me Down",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Bright Death",
+        "fame": 49,
+        "peak_fame": 49,
+        "latest_release": "Spirit of Hearts",
+        "genre": "Rock",
+        "label": "Sub Pop Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Storm",
+        "fame": 38,
+        "peak_fame": 40,
+        "latest_release": "California Sun",
+        "genre": "Punk",
+        "label": "Touch and Go Records",
+        "momentum": 0
+      },
+      {
+        "name": "Highway Queens",
+        "fame": 47,
+        "peak_fame": 53,
+        "latest_release": "Voice",
+        "genre": "Punk",
+        "label": "Dischord Records",
+        "momentum": 0
+      },
+      {
+        "name": "The Kiss",
+        "fame": 10,
+        "peak_fame": 14,
+        "latest_release": "Pink Body",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Crimson Sword",
+        "fame": 8,
+        "peak_fame": 9,
+        "latest_release": "Rain",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Devils",
+        "fame": 40,
+        "peak_fame": 42,
+        "latest_release": "Broadway",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Red Crown",
+        "fame": 16,
+        "peak_fame": 17,
+        "latest_release": "Dark Death",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Drums Space",
+        "fame": 34,
+        "peak_fame": 35,
+        "latest_release": "Bones of River",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Lightning Strike",
+        "fame": 22,
+        "peak_fame": 24,
+        "latest_release": "Slow Shield",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Nights Lion",
+        "fame": 5,
+        "peak_fame": 5,
+        "latest_release": "Losing River",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Roads",
+        "fame": 2,
+        "peak_fame": 4,
+        "latest_release": "Staying Ship",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Sugar Rush",
+        "fame": 66,
+        "peak_fame": 66,
+        "latest_release": "Ice of Kiss",
+        "genre": "Metal",
+        "label": "Warner Bros Records",
+        "momentum": 0
+      },
+      {
+        "name": "Bitter Ocean",
+        "fame": 64,
+        "peak_fame": 65,
+        "latest_release": "Body of Castle",
+        "genre": "Electronic",
+        "label": "Columbia Records",
+        "momentum": 1
+      },
+      {
+        "name": "The Lost Guitar",
+        "fame": 9,
+        "peak_fame": 13,
+        "latest_release": "Show Me Love",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Windows",
+        "fame": 5,
+        "peak_fame": 8,
+        "latest_release": "Paris Streets",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Pink Sun",
+        "fame": 32,
+        "peak_fame": 40,
+        "latest_release": "Hating Mind",
+        "genre": "Punk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Ice Death",
+        "fame": 29,
+        "peak_fame": 31,
+        "latest_release": "Bridge of Thunder",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Blue Angels",
+        "fame": 9,
+        "peak_fame": 11,
+        "latest_release": "Thorn of Voice",
+        "genre": "Electronic",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Wolf Tower",
+        "fame": 32,
+        "peak_fame": 40,
+        "latest_release": "Creating Song",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": -1
+      },
+      {
+        "name": "The Black Dance",
+        "fame": 14,
+        "peak_fame": 15,
+        "latest_release": "Never Forget",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Rain",
+        "fame": 8,
+        "peak_fame": 13,
+        "latest_release": "Texas Moon",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Neon Lightning",
+        "fame": 43,
+        "peak_fame": 43,
+        "latest_release": "Rain",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 2
+      },
+      {
+        "name": "The Neon Mind",
+        "fame": 2,
+        "peak_fame": 6,
+        "latest_release": "Dreams of Heroes",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Purple Haze",
+        "fame": 0,
+        "peak_fame": 4,
+        "latest_release": "Tell Me Why",
+        "genre": "Pop",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Silver Bullets",
+        "fame": 17,
+        "peak_fame": 17,
+        "latest_release": "City Lights",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Crystal Hearts",
+        "fame": 48,
+        "peak_fame": 50,
+        "latest_release": "Screaming Lion",
+        "genre": "Jazz",
+        "label": "4AD Records",
+        "momentum": 0
+      },
+      {
+        "name": "Purple Ice",
+        "fame": 8,
+        "peak_fame": 8,
+        "latest_release": "Staying Wings",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Sweet Voice",
+        "fame": 11,
+        "peak_fame": 12,
+        "latest_release": "High Devils",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Denim Dreams",
+        "fame": 19,
+        "peak_fame": 19,
+        "latest_release": "Vancouver",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Hearts",
+        "fame": 17,
+        "peak_fame": 17,
+        "latest_release": "Roads",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Touch Nights",
+        "fame": 20,
+        "peak_fame": 20,
+        "latest_release": "Miami Vice",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Dull Dreams",
+        "fame": 20,
+        "peak_fame": 20,
+        "latest_release": "Returning Tower",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Love",
+        "fame": 3,
+        "peak_fame": 3,
+        "latest_release": "Orange Mountain",
+        "genre": "Metal",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Deep Touch",
+        "fame": 11,
+        "peak_fame": 11,
+        "latest_release": "Beautiful Ocean",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "White Moon",
+        "fame": 13,
+        "peak_fame": 13,
+        "latest_release": "Heroes",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Body Tears",
+        "fame": 3,
+        "peak_fame": 4,
+        "latest_release": "London Calling",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "Chrome Hearts",
+        "fame": 24,
+        "peak_fame": 24,
+        "latest_release": "Soul",
+        "genre": "Folk",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Bitter Sun",
+        "fame": 7,
+        "peak_fame": 7,
+        "latest_release": "Sunset Strip",
+        "genre": "Alternative",
+        "label": null,
+        "momentum": 2
+      },
+      {
+        "name": "Low Tiger",
+        "fame": 20,
+        "peak_fame": 20,
+        "latest_release": "Roads of Snake",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "The Fire Valley",
+        "fame": 22,
+        "peak_fame": 22,
+        "latest_release": "Sweet Queens",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 0
+      },
+      {
+        "name": "The Sweet Plane",
+        "fame": 13,
+        "peak_fame": 13,
+        "latest_release": "Love",
+        "genre": "Jazz",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Storm Crown",
+        "fame": 4,
+        "peak_fame": 4,
+        "latest_release": "Amsterdam Café",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 1
+      },
+      {
+        "name": "Lion Sword",
+        "fame": 16,
+        "peak_fame": 16,
+        "latest_release": "Nights of Thunder",
+        "genre": "Rock",
+        "label": null,
+        "momentum": 1
+      }
+    ],
+    "venues": [
+      {
+        "name": "Quantum Lounge",
+        "capacity": 50,
+        "prestige": 10,
+        "base_payment": 100,
+        "location": "Downtown, Boston"
+      },
+      {
+        "name": "Rooftop Rocks",
+        "capacity": 200,
+        "prestige": 25,
+        "base_payment": 300,
+        "location": "City Center, Pittsburgh"
+      },
+      {
+        "name": "Thunder Dome",
+        "capacity": 500,
+        "prestige": 40,
+        "base_payment": 800,
+        "location": "Industrial District, Kansas City"
+      },
+      {
+        "name": "Bronze Medal",
+        "capacity": 2000,
+        "prestige": 70,
+        "base_payment": 3000,
+        "location": "Uptown, Los Angeles"
+      },
+      {
+        "name": "The Observatory",
+        "capacity": 20000,
+        "prestige": 95,
+        "base_payment": 15000,
+        "location": "Sports Complex, Berlin"
+      }
+    ],
+    "current_trends": "Rock",
+    "dynamic_genre_modifiers": {},
+    "charts": [
+      {
+        "title": "Snake of Thunder",
+        "band_name": "The Thunder Death",
+        "is_player": false,
+        "score": 332,
+        "weeks_on_chart": 2
+      },
+      {
+        "title": "Never Forget",
+        "band_name": "Soul Tower",
+        "is_player": false,
+        "score": 296,
+        "weeks_on_chart": 1
+      },
+      {
+        "title": "Ice",
+        "band_name": "The Dim Rain",
+        "is_player": false,
+        "score": 266,
+        "weeks_on_chart": 3
+      },
+      {
+        "title": "Burning Song",
+        "band_name": "Soul Tower",
+        "is_player": false,
+        "score": 243,
+        "weeks_on_chart": 0
+      },
+      {
+        "title": "Calm My Fears",
+        "band_name": "The Underdogs",
+        "is_player": false,
+        "score": 238,
+        "weeks_on_chart": 3
+      },
+      {
+        "title": "Dancing Lightning",
+        "band_name": "Ugly Thorn",
+        "is_player": false,
+        "score": 227,
+        "weeks_on_chart": 1
+      },
+      {
+        "title": "Georgia Peach",
+        "band_name": "The Burning Castle",
+        "is_player": false,
+        "score": 198,
+        "weeks_on_chart": 3
+      },
+      {
+        "title": "Smiling Moon",
+        "band_name": "Tears Crown",
+        "is_player": false,
+        "score": 196,
+        "weeks_on_chart": 0
+      },
+      {
+        "title": "Low Mountain",
+        "band_name": "Silk Road",
+        "is_player": false,
+        "score": 194,
+        "weeks_on_chart": 0
+      },
+      {
+        "title": "Plane of Shield",
+        "band_name": "River Villains",
+        "is_player": false,
+        "score": 182,
+        "weeks_on_chart": 0
+      }
+    ]
+  },
+  "events": {
+    "last_event_week": 12
+  },
+  "timeline": {
+    "eras": {
+      "1993": {
+        "year": 1993,
+        "era_name": "Grunge Dominance",
+        "dominant_genres": [
+          "Grunge",
+          "Alternative",
+          "Hip Hop",
+          "Brit Pop"
+        ],
+        "market_conditions": {
+          "overall_demand": 85,
+          "saturation": 60,
+          "innovation_openness": 90,
+          "major_label_dominance": 75,
+          "touring_market": 80,
+          "record_sales_growth": 25.0
+        },
+        "major_events": [
+          "Grunge completely reshapes rock landscape",
+          "Nirvana's success changes industry focus",
+          "Alternative radio becomes mainstream",
+          "Hair metal virtually disappears",
+          "Brit Pop emerges as UK response"
+        ],
+        "technology_changes": [
+          "Digital recording completely standard",
+          "Internet file sharing begins",
+          "CD production costs drop significantly",
+          "Portable recording equipment improves"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.95,
+          "studio_quality_importance": 60,
+          "image_importance": 50,
+          "media_influence": 70,
+          "fan_loyalty_factor": 85
+        },
+        "recording_cost_modifier": 1.2,
+        "gig_pay_modifier": 1.4
+      },
+      "1983": {
+        "year": 1983,
+        "era_name": "MTV Generation",
+        "dominant_genres": [
+          "New Wave",
+          "Pop Rock",
+          "Heavy Metal",
+          "Synth Pop"
+        ],
+        "market_conditions": {
+          "overall_demand": 90,
+          "saturation": 50,
+          "innovation_openness": 75,
+          "major_label_dominance": 85,
+          "touring_market": 85,
+          "record_sales_growth": 30.0
+        },
+        "major_events": [
+          "MTV revolution in full swing",
+          "Michael Jackson's Thriller dominates",
+          "Heavy Metal enters mainstream",
+          "Music videos become essential",
+          "Corporate rock reaches peak"
+        ],
+        "technology_changes": [
+          "Music videos standard for promotion",
+          "Digital synthesizers dominate production",
+          "CD format introduced commercially",
+          "MIDI technology emerges"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.8,
+          "studio_quality_importance": 85,
+          "image_importance": 95,
+          "media_influence": 90,
+          "fan_loyalty_factor": 65
+        },
+        "recording_cost_modifier": 1.8,
+        "gig_pay_modifier": 1.5
+      },
+      "1990": {
+        "year": 1990,
+        "era_name": "Alternative Revolution Begins",
+        "dominant_genres": [
+          "Alternative",
+          "Grunge",
+          "Hip Hop",
+          "Industrial"
+        ],
+        "market_conditions": {
+          "overall_demand": 80,
+          "saturation": 75,
+          "innovation_openness": 85,
+          "major_label_dominance": 80,
+          "touring_market": 75,
+          "record_sales_growth": 15.0
+        },
+        "major_events": [
+          "Grunge emerges from Seattle underground",
+          "Hair metal begins noticeable decline",
+          "Independent labels gain significant power",
+          "Alternative radio formats expand",
+          "Hip hop diversifies and grows"
+        ],
+        "technology_changes": [
+          "Digital audio workstations become standard",
+          "Compact disc dominance established",
+          "Home studio capabilities expand",
+          "Internet begins to impact music discovery"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.9,
+          "studio_quality_importance": 70,
+          "image_importance": 60,
+          "media_influence": 75,
+          "fan_loyalty_factor": 80
+        },
+        "recording_cost_modifier": 1.4,
+        "gig_pay_modifier": 1.3
+      },
+      "1975": {
+        "year": 1975,
+        "era_name": "Arena Rock Peak",
+        "dominant_genres": [
+          "Arena Rock",
+          "Southern Rock",
+          "Disco",
+          "Hard Rock"
+        ],
+        "market_conditions": {
+          "overall_demand": 85,
+          "saturation": 45,
+          "innovation_openness": 70,
+          "major_label_dominance": 75,
+          "touring_market": 80,
+          "record_sales_growth": 25.0
+        },
+        "major_events": [
+          "Stadium tours become massive business",
+          "Disco begins mainstream takeover",
+          "Southern rock gains national attention",
+          "Arena rock perfects the formula",
+          "Record industry profits soar"
+        ],
+        "technology_changes": [
+          "Digital recording experiments begin",
+          "Massive concert sound systems",
+          "24-track recording standard",
+          "Synthesizer orchestration advances"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.9,
+          "studio_quality_importance": 80,
+          "image_importance": 70,
+          "media_influence": 60,
+          "fan_loyalty_factor": 70
+        },
+        "recording_cost_modifier": 1.5,
+        "gig_pay_modifier": 1.3
+      },
+      "1988": {
+        "year": 1988,
+        "era_name": "Underground Brewing",
+        "dominant_genres": [
+          "Hair Metal",
+          "Hip Hop",
+          "Alternative",
+          "House"
+        ],
+        "market_conditions": {
+          "overall_demand": 85,
+          "saturation": 80,
+          "innovation_openness": 70,
+          "major_label_dominance": 85,
+          "touring_market": 85,
+          "record_sales_growth": 10.0
+        },
+        "major_events": [
+          "Hip hop gains serious mainstream attention",
+          "Alternative rock builds underground following",
+          "Hair metal reaches saturation point",
+          "House music emerges from Chicago",
+          "Independent labels gain more power"
+        ],
+        "technology_changes": [
+          "Sampling technology advances rapidly",
+          "Home recording becomes truly viable",
+          "Digital audio workstations emerge",
+          "Pro Tools early versions appear"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.85,
+          "studio_quality_importance": 85,
+          "image_importance": 80,
+          "media_influence": 80,
+          "fan_loyalty_factor": 65
+        },
+        "recording_cost_modifier": 1.7,
+        "gig_pay_modifier": 1.6
+      },
+      "1977": {
+        "year": 1977,
+        "era_name": "Punk Revolution",
+        "dominant_genres": [
+          "Punk",
+          "Disco",
+          "Arena Rock",
+          "New Wave"
+        ],
+        "market_conditions": {
+          "overall_demand": 75,
+          "saturation": 55,
+          "innovation_openness": 90,
+          "major_label_dominance": 70,
+          "touring_market": 70,
+          "record_sales_growth": 10.0
+        },
+        "major_events": [
+          "Punk explodes in UK and spreads to US",
+          "Saturday Night Fever peaks disco mania",
+          "Independent labels surge in importance",
+          "DIY recording culture emerges",
+          "Anti-establishment music gains momentum"
+        ],
+        "technology_changes": [
+          "Cheaper recording equipment available",
+          "4-track home recording possible",
+          "Portable PA systems improve",
+          "Electronic drums introduced"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.6,
+          "studio_quality_importance": 40,
+          "image_importance": 80,
+          "media_influence": 70,
+          "fan_loyalty_factor": 85
+        },
+        "recording_cost_modifier": 0.8,
+        "gig_pay_modifier": 0.9
+      },
+      "1980": {
+        "year": 1980,
+        "era_name": "New Wave Emergence",
+        "dominant_genres": [
+          "New Wave",
+          "Post-Punk",
+          "Hard Rock",
+          "Pop"
+        ],
+        "market_conditions": {
+          "overall_demand": 70,
+          "saturation": 60,
+          "innovation_openness": 85,
+          "major_label_dominance": 75,
+          "touring_market": 65,
+          "record_sales_growth": 5.0
+        },
+        "major_events": [
+          "Disco backlash complete",
+          "New Wave enters mainstream consciousness",
+          "MTV planning intensifies",
+          "Synthesizer-based music dominates",
+          "Post-punk art rock emerges"
+        ],
+        "technology_changes": [
+          "Digital synthesizers affordable",
+          "Digital recording advances rapidly",
+          "Music video production begins",
+          "Drum machines become popular"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.7,
+          "studio_quality_importance": 75,
+          "image_importance": 85,
+          "media_influence": 80,
+          "fan_loyalty_factor": 60
+        },
+        "recording_cost_modifier": 1.3,
+        "gig_pay_modifier": 1.0
+      },
+      "1972": {
+        "year": 1972,
+        "era_name": "Glam and Progressive Era",
+        "dominant_genres": [
+          "Glam Rock",
+          "Progressive Rock",
+          "Hard Rock",
+          "Folk Rock"
+        ],
+        "market_conditions": {
+          "overall_demand": 80,
+          "saturation": 35,
+          "innovation_openness": 85,
+          "major_label_dominance": 65,
+          "touring_market": 70,
+          "record_sales_growth": 20.0
+        },
+        "major_events": [
+          "David Bowie's Ziggy Stardust phenomenon",
+          "Pink Floyd's concept albums gain massive popularity",
+          "Arena rock concerts become standard",
+          "Glam fashion influences music industry",
+          "Progressive rock reaches artistic peak"
+        ],
+        "technology_changes": [
+          "Moog synthesizers widespread",
+          "Better PA systems for larger venues",
+          "16-track recording available",
+          "Electronic effects proliferate"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.8,
+          "studio_quality_importance": 70,
+          "image_importance": 75,
+          "media_influence": 55,
+          "fan_loyalty_factor": 75
+        },
+        "recording_cost_modifier": 1.2,
+        "gig_pay_modifier": 1.1
+      },
+      "1970": {
+        "year": 1970,
+        "era_name": "Post-Beatles Revolution",
+        "dominant_genres": [
+          "Rock",
+          "Folk Rock",
+          "Blues Rock",
+          "Progressive Rock"
+        ],
+        "market_conditions": {
+          "overall_demand": 75,
+          "saturation": 30,
+          "innovation_openness": 80,
+          "major_label_dominance": 60,
+          "touring_market": 65,
+          "record_sales_growth": 15.0
+        },
+        "major_events": [
+          "The Beatles officially break up",
+          "Woodstock aftermath continues to influence music",
+          "FM radio becomes dominant format",
+          "Multi-track recording becomes standard",
+          "Album-oriented rock emerges"
+        ],
+        "technology_changes": [
+          "8-track recording standard",
+          "Synthesizers enter mainstream",
+          "Better studio monitors available",
+          "Multi-tracking becomes affordable"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.7,
+          "studio_quality_importance": 60,
+          "image_importance": 50,
+          "media_influence": 45,
+          "fan_loyalty_factor": 70
+        },
+        "recording_cost_modifier": 1.0,
+        "gig_pay_modifier": 1.0
+      },
+      "1985": {
+        "year": 1985,
+        "era_name": "Corporate Rock Era",
+        "dominant_genres": [
+          "Pop Metal",
+          "Pop Rock",
+          "Alternative",
+          "Hip Hop"
+        ],
+        "market_conditions": {
+          "overall_demand": 95,
+          "saturation": 70,
+          "innovation_openness": 60,
+          "major_label_dominance": 90,
+          "touring_market": 90,
+          "record_sales_growth": 20.0
+        },
+        "major_events": [
+          "Live Aid concert showcases global reach",
+          "Hair metal reaches commercial peak",
+          "Alternative underground grows stronger",
+          "Hip hop gains mainstream attention",
+          "Corporate sponsorship of tours begins"
+        ],
+        "technology_changes": [
+          "CDs begin replacing vinyl significantly",
+          "Digital recording becomes standard",
+          "Concert production advances dramatically",
+          "Sampling technology develops"
+        ],
+        "industry_trends": {
+          "album_vs_singles": 0.9,
+          "studio_quality_importance": 90,
+          "image_importance": 85,
+          "media_influence": 85,
+          "fan_loyalty_factor": 60
+        },
+        "recording_cost_modifier": 2.0,
+        "gig_pay_modifier": 1.8
+      }
+    },
+    "current_year": 1970,
+    "triggered_events": [
+      "Album-oriented rock emerges"
+    ]
+  },
+  "pending_deal_offers": [],
+  "pending_support_offer": null,
+  "regional_fame": {},
+  "week": 13,
+  "game_over": false,
+  "next_song_id": 6,
+  "next_release_id": 1,
+  "just_released_music": []
+}
