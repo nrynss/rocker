@@ -88,13 +88,10 @@ pub const BREAK_WEEKS: u32 = 4;
 pub(super) const GENRE_TREND_HOT: f32 = 1.15;
 pub(super) const GENRE_TREND_COLD: f32 = 0.85;
 
-// Determinism: everything after seed selection derives from world_seed, so a
-// seed replays a whole career. Two independent streams share the splitmix64
-// key derivation (see `advance_week_events` for the world stream): the world
-// stream evolves the scene, the action stream feeds every roll the player's
-// own actions make. Salting the action keys keeps the streams uncorrelated —
-// your tour luck never mirrors next week's scene news.
-pub(super) const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3; // π's fraction bits: arbitrary, fixed forever
-// Setup rolls (bandmate names) draw from a reserved pre-game week, so they
-// can never replay week 1's action stream.
+// Determinism salts — stream construction lives in `rng.rs`.
+// ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
+// stream (π's fractional bits: arbitrary, fixed forever).
+pub(super) const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3;
+// Setup rolls (bandmate names) use this reserved pre-game week so they
+// never replay week 1's action stream.
 pub(super) const SETUP_STREAM_WEEK: u64 = 0;

@@ -130,31 +130,6 @@ impl Game {
         std::mem::take(&mut self.turn_log)
     }
 
-    /// The action-stream RNG for a given week: the same splitmix64 key
-    /// derivation the world stream uses in `advance_week_events`, applied to
-    /// the salted seed (see `ACTION_STREAM_SALT`). Derived on demand, never
-    /// stored — saves carry no RNG state, and a loaded game rolls exactly
-    /// what the unsaved one would have.
-    fn action_rng_for_week(&self, week: u64) -> StdRng {
-        let mut key = (self.world_seed ^ constants::ACTION_STREAM_SALT)
-            .wrapping_add(week)
-            .wrapping_mul(0x9E3779B97F4A7C15);
-        key = (key ^ (key >> 30)).wrapping_mul(0xBF58476D1CE4E5B8);
-        key = (key ^ (key >> 27)).wrapping_mul(0x94D049BB133111EB);
-        key ^= key >> 31;
-        StdRng::seed_from_u64(key)
-    }
-
-    /// Every roll made while resolving the current turn draws from this one
-    /// stream, in order: the action itself, then the week's random event,
-    /// then offer generation. Turn-consuming actions move the calendar, so
-    /// consecutive turns get fresh streams; the rare same-week paperwork
-    /// action (rejecting two deals in one sitting) rereads the week's stream,
-    /// which is deterministic and harmless.
-    pub(super) fn action_rng(&self) -> StdRng {
-        self.action_rng_for_week(self.week as u64)
-    }
-
     pub fn initialize_player(
         &mut self,
         player_name: &str,

@@ -2,10 +2,10 @@
 //! events and news, ages offers, tracks visibility decay, and checks
 //! for the end of the road.
 
-use rand::rngs::StdRng;
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 
 use super::constants::{self, *};
+use super::rng;
 use super::*;
 
 impl Game {
@@ -141,20 +141,13 @@ impl Game {
 
         self.player.weekly_health_decay();
 
-        // Derive a weekly StdRng using splitmix64 key derivation from world_seed + week
-        let mut key = self
-            .world_seed
-            .wrapping_add(self.week as u64)
-            .wrapping_mul(0x9E3779B97F4A7C15);
-        key = (key ^ (key >> 30)).wrapping_mul(0xBF58476D1CE4E5B8);
-        key = (key ^ (key >> 27)).wrapping_mul(0x94D049BB133111EB);
-        key ^= key >> 31;
-        let mut wk_rng = StdRng::seed_from_u64(key);
+        // World stream: scene + historical event selection (see `rng`).
+        let mut wk_rng = rng::world_rng_for_week(self.world_seed, self.week as u64);
 
-        // The world stream (wk_rng) is drawn in a fixed order — historical
-        // events, then the scene update — so a seed's world evolves the same
-        // regardless of what the player did. The player-facing consequences
-        // of a historical event roll on the action stream instead.
+        // Drawn in a fixed order — historical events, then the scene update —
+        // so a seed's world evolves the same regardless of what the player did.
+        // Player-facing consequences of a historical event roll on the action
+        // stream instead (`rng` on the process_turn path).
         if let Some(historical_event) = self.timeline.take_historical_event(&mut wk_rng) {
             self.apply_historical_event(&historical_event, rng)?;
             self.log(format!("📰 MUSIC NEWS: {}", historical_event));

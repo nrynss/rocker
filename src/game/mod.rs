@@ -13,6 +13,7 @@ mod events_apply;
 pub mod genre;
 pub mod music;
 pub mod player;
+mod rng;
 #[cfg(test)]
 mod sim; // Track D balance lab: bot-driven career sims, tests only.
 pub mod timeline;

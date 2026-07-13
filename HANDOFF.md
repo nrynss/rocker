@@ -130,7 +130,7 @@ run **in parallel on the same branch** — never via extra branches.
 | **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ✅ done | grok-struct-t5 | struct/t4-genre | b601eab |
 | **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ✅ done | pier-t6 | struct/t4-genre | 567f348 |
 | **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ✅ done | grok-struct-t7 | struct/t4-genre | ba6a74c |
-| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/core.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
+| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/core.rs`, `src/game/turn.rs` *(import paths)* | ✅ done | grok-struct-t8 | struct/t4-genre | |
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
 | **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | 356d957 |
@@ -176,7 +176,7 @@ src/game/
   mod.rs                 # module list + pub use only (≪ 80 lines)
   constants.rs           # all tuning knobs + design comments
   core.rs                # Game, GameAction, SupportTourOffer, new/init/save/load
-  rng.rs                 # optional (T8): action_rng_for_week + salts
+  rng.rs                 # T8: world/action stream builders + Game::action_rng*
   genre.rs               # MusicGenre + Display + aliases (+ room for ability_weights later)
   band.rs
   player.rs
@@ -548,4 +548,5 @@ _Example:_
 - 2026-07-13 T12 claimed+done by grok-struct-t12 on `struct/t4-genre`: `render/modals.rs` → `modals/{mod,deals,charts,marketing,file,pickers}.rs` with re-exports; parallel-safe with T7.
 - 2026-07-13 T7 done by grok-struct-t7 on `struct/t4-genre`: `world.rs` → `world/{mod,scene,charts,deals,venues}.rs`; public API re-exported from `world/mod.rs`; tests stay under `world::tests`. No impact on T2 (disjoint owns).
 - 2026-07-13 T2 done by pier-t2 (extract) + grok-t2-polish (land): 40 game tuning consts → `src/game/constants.rs`; data constants re-exported; `pub use constants::{PRESSING_TIERS, BREAK_WEEKS}`; uniform `use …constants::{self, *}` (or `use …constants` where only path form); clippy clean; committed to `struct/t4-genre`.
-- 2026-07-13 T3 done by antigravity on `struct/t4-genre`: `Game`, `GameAction`, `SupportTourOffer`, and core lifecycle/save/load logic moved to `game.rs`; `mod.rs` reduced to submodule definitions and re-exports; clippy clean.
+- 2026-07-13 T3 done by antigravity on `struct/t4-genre`: `Game`, `GameAction`, `SupportTourOffer`, and core lifecycle/save/load logic moved to `core.rs`; `mod.rs` reduced to submodule definitions and re-exports; clippy clean.
+- 2026-07-13 T8 done by grok-struct-t8 on `struct/t4-genre`: `rng.rs` holds splitmix64 mixer + `world_rng_for_week` / `action_rng_for_week` + `Game::action_rng*`; salts stay in `constants.rs`; turn uses world builder. Determinism tests green.
