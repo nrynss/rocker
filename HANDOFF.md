@@ -134,7 +134,7 @@ run **in parallel on the same branch** — never via extra branches.
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
 | **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | 356d957 |
-| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10, T12 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | struct/t4-genre | |
+| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10, T12 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ✅ done | claude-t11 | struct/t4-genre | |
 
 ### Parallelism map (waves)
 
@@ -550,3 +550,19 @@ _Example:_
 - 2026-07-13 T2 done by pier-t2 (extract) + grok-t2-polish (land): 40 game tuning consts → `src/game/constants.rs`; data constants re-exported; `pub use constants::{PRESSING_TIERS, BREAK_WEEKS}`; uniform `use …constants::{self, *}` (or `use …constants` where only path form); clippy clean; committed to `struct/t4-genre`.
 - 2026-07-13 T3 done by antigravity on `struct/t4-genre`: `Game`, `GameAction`, `SupportTourOffer`, and core lifecycle/save/load logic moved to `core.rs`; `mod.rs` reduced to submodule definitions and re-exports; clippy clean.
 - 2026-07-13 T8 done by grok-struct-t8 on `struct/t4-genre`: `rng.rs` holds splitmix64 mixer + `world_rng_for_week` / `action_rng_for_week` + `Game::action_rng*`; salts stay in `constants.rs`; turn uses world builder. Determinism tests green.
+- 2026-07-14 T11 done by claude-t11 on `struct/t4-genre`. **Cycle close, cut as 0.5.1.** Board audit: T1–T10 + T12 all ✅ with real commit SHAs (verified via `git cat-file`); T8 (optional) done. Full suite green: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` → 42 passed / 2 ignored (same names as the 0.5.0 baseline). CHANGELOG 0.5.1 Internal added; `Cargo.toml`/`Cargo.lock` bumped 0.5.0 → 0.5.1. Archive of this file deferred to the human Musician-cycle trigger (step 4).
+
+### T11 line-count report (production `.rs`; `tests/` and `sim.rs` excluded)
+
+Monolith → package, **start-of-cycle → now** (lines):
+
+| Was | Lines | Now |
+|-----|-------|-----|
+| `game/mod.rs` | 1060 → **27** | shell; + `core` 189, `constants` 97, `rng` 67, `genre` 85, `events_apply` 266, `tests/**` |
+| `game/world.rs` | 1090 → `world/**` | `mod` 486, `scene` 253, `deals` 186, `charts` 68, `venues` 49 |
+| `game/actions.rs` | 719 → `actions/**` | `studio` 279, `live` 244, `business` 162, `rest` 41, `mod` 41 |
+| `game/turn.rs` | 537 → **281** | event outcomes → `events_apply` 266 |
+| `ui/render.rs` | 1052 → `render/**` | `panels` 319, `setup` 101, `mod` 84, `game_over` 67, `layout` 33, `modals/{pickers 222, deals 146, marketing 77, charts 60, file 44, mod 15}` |
+| `ui/app.rs` | 986 → **420** | + `input/{pickers 170, main 127, setup 120, deals 82, marketing 72, file 46, mod 8}` |
+
+Largest production file now: `game/world/mod.rs` at **486** (< 500 hard cap). Shell modules meet targets: `game/mod.rs` 27 (≪80), `actions/mod.rs` 41 (≪80), `ui/render/modals/mod.rs` 15, `ui/input/mod.rs` 8. All production `.rs` ≤ 486 lines.
