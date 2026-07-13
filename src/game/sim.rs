@@ -52,7 +52,7 @@ const STALL_LIMIT: u32 = 100;
 /// harness assembles the identical state directly instead. Keep this in
 /// lockstep with `Game::new`; `seeded_worlds_are_reproducible_in_the_harness`
 /// guards the determinism property itself.
-fn seeded_game(seed: u64) -> Game {
+pub(super) fn seeded_game(seed: u64) -> Game {
     let data_files = GameDataFiles::load().expect("data files present");
     let mut init_rng = StdRng::seed_from_u64(seed);
     let world = GameWorld::new(&data_files, &mut init_rng);
@@ -573,6 +573,27 @@ fn seeded_worlds_are_reproducible_in_the_harness() {
         band_names(&seeded_game(42)),
         band_names(&seeded_game(43)),
         "different seed, different scene"
+    );
+
+    // Since Track B seeded the action stream too, an entire short career —
+    // not just the opening scene — replays exactly.
+    let career_facts = |seed: u64| {
+        let career = run_career(Bot::BalancedIndie, seed, 2 * constants::WEEKS_PER_YEAR);
+        (
+            career.weeks,
+            career.final_fame,
+            career.peak_fame,
+            career.final_money,
+            career.albums,
+            career.singles,
+            career.sell_outs,
+            career.weeks_to_first_album,
+        )
+    };
+    assert_eq!(
+        career_facts(42),
+        career_facts(42),
+        "same seed, same policy, same career — to the week and the dollar"
     );
 }
 
