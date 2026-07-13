@@ -76,7 +76,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         just_released_music: Vec::new(),
         turn_log: Vec::new(),
     };
-    game.initialize_player("Sim Driver", "The Test Pattern", world::MusicGenre::Rock);
+    game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
 }
 

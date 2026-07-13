@@ -2,6 +2,7 @@ mod actions;
 pub mod band;
 mod economy;
 pub mod events;
+pub mod genre;
 pub mod music;
 pub mod player;
 #[cfg(test)]
@@ -254,7 +255,7 @@ impl Game {
         &mut self,
         player_name: &str,
         band_name: &str,
-        genre: world::MusicGenre,
+        genre: genre::MusicGenre,
     ) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
@@ -559,7 +560,7 @@ mod tests {
     #[test]
     fn a_hit_release_enters_the_charts_and_a_flop_misses() {
         let mut game = test_game();
-        game.initialize_player("Test", "The Tests", world::MusicGenre::Rock);
+        game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
         // A crowded chart: ten scene records the player has to outsell.
         for i in 0..world::CHART_SIZE {
             game.world.submit_chart_entry(
@@ -612,7 +613,7 @@ mod tests {
     #[test]
     fn a_full_season_of_turns_never_panics() {
         let mut game = test_game();
-        game.initialize_player("Test", "The Tests", world::MusicGenre::Rock);
+        game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
         for i in 0..30 {
             let action = match i % 6 {
                 0 => GameAction::WriteSongs,
@@ -750,13 +751,13 @@ mod tests {
 
         let year = game.timeline.get_current_year();
         let era_fit =
-            |genre: &world::MusicGenre| game.data_files.era_genre_modifier(year, genre.aliases());
-        let hot = world::MusicGenre::ALL
+            |genre: &genre::MusicGenre| game.data_files.era_genre_modifier(year, genre.aliases());
+        let hot = genre::MusicGenre::ALL
             .iter()
             .max_by(|a, b| era_fit(a).total_cmp(&era_fit(b)))
             .expect("genres exist")
             .clone();
-        let cold = world::MusicGenre::ALL
+        let cold = genre::MusicGenre::ALL
             .iter()
             .min_by(|a, b| era_fit(a).total_cmp(&era_fit(b)))
             .expect("genres exist")
@@ -780,7 +781,7 @@ mod tests {
 
     #[test]
     fn bands_saved_before_genres_existed_load_as_rock() {
-        assert_eq!(Band::default().genre, world::MusicGenre::Rock);
+        assert_eq!(Band::default().genre, genre::MusicGenre::Rock);
 
         // A pre-genre save is a Band JSON object with no "genre" key at all.
         let mut saved = serde_json::to_value(Band::default()).expect("bands serialize");
@@ -789,14 +790,14 @@ mod tests {
             .expect("a band serializes to an object")
             .remove("genre");
         let loaded: Band = serde_json::from_value(saved).expect("old saves must keep loading");
-        assert_eq!(loaded.genre, world::MusicGenre::Rock);
+        assert_eq!(loaded.genre, genre::MusicGenre::Rock);
     }
 
     #[test]
     fn the_press_calls_a_hot_genre_once_not_weekly() {
         let mut game = test_game();
         // Rock is the sound of 1970 in the era data — clearly hot.
-        game.band.genre = world::MusicGenre::Rock;
+        game.band.genre = genre::MusicGenre::Rock;
 
         game.process_turn(GameAction::LazeAround)
             .expect("lazing always works");
@@ -815,7 +816,7 @@ mod tests {
     fn the_press_notices_a_genre_the_era_left_behind() {
         let mut game = test_game();
         // Punk is years ahead of 1970's tastes — out of fashion on day one.
-        game.band.genre = world::MusicGenre::Punk;
+        game.band.genre = genre::MusicGenre::Punk;
 
         game.process_turn(GameAction::LazeAround)
             .expect("lazing always works");
@@ -1044,7 +1045,7 @@ mod tests {
         assert_eq!(game.genre_trend_reported, 0);
         assert_eq!(
             game.band.genre,
-            world::MusicGenre::Rock,
+            genre::MusicGenre::Rock,
             "pre-genre bands load as Rock"
         );
         let single = &game.band.singles_released[0];

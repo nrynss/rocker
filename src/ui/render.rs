@@ -7,8 +7,8 @@ use ratatui::{
 };
 
 use crate::data::{calculate_weeks_to_years_months, constants, format_money};
+use crate::game::genre::MusicGenre;
 use crate::game::music::{MarketingCampaignType, ReleaseType};
-use crate::game::world::MusicGenre;
 use crate::game::{Game, PRESSING_TIERS};
 
 use super::app::{App, FileMode, LogKind, Screen, SetupField};

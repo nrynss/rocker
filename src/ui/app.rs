@@ -2,8 +2,8 @@ use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::data::constants;
+use crate::game::genre::MusicGenre;
 use crate::game::music::{MarketingCampaignType, ReleaseType};
-use crate::game::world::MusicGenre;
 use crate::game::{BREAK_WEEKS, Game, GameAction, PRESSING_TIERS};
 
 use super::render;

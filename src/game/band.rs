@@ -1,5 +1,5 @@
+use super::genre::MusicGenre;
 use super::music::{Release, Song}; // Import new structs
-use super::world::MusicGenre;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
