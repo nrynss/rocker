@@ -1,5 +1,7 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use rand::Rng;
+
 use super::super::constants::{self, *};
 use super::super::*;
 

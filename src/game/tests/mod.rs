@@ -5,6 +5,9 @@
 //! here; each concern is a submodule that pulls it in via `use super::*`.
 //! Test function names are unchanged from when they lived in `mod.rs`.
 
+use crate::game::music::{Release, ReleaseType};
+use crate::game::world::PotentialDealOffer;
+
 use super::constants::{self, *};
 use super::*;
 

@@ -1,5 +1,7 @@
 //! Save/serde compatibility: pre-genre bands and real v0.4.0 saves keep loading.
 
+use crate::game::band::Band;
+
 use super::*;
 
 #[test]

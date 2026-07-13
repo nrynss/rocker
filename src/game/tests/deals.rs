@@ -1,5 +1,8 @@
 //! Record-deal offer lifecycle: expiry, the resuming stream, and legacy saves.
 
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
 use super::*;
 
 #[test]

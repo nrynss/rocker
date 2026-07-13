@@ -125,12 +125,12 @@ run **in parallel on the same branch** — never via extra branches.
 |----|------|------|---------|------------------|--------|------------|--------|------|
 | **T1** | Extract `game` unit tests out of `mod.rs` into `src/game/tests/` | M | — | `src/game/mod.rs` *(tests module only + `mod tests` wiring)*, **new** `src/game/tests/**` | ✅ done | claude-t1 | struct/t4-genre | 78f93a5 |
 | **T2** | Extract tuning knobs → `src/game/constants.rs` | S | T1 | `src/game/constants.rs` *(new)*, `src/game/mod.rs` *(const block → re-export)*, imports in modules that referenced parent consts | ✅ done | pier-t2 / grok-t2-polish | struct/t4-genre | 40aadef |
-| **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/game.rs`; thin `mod.rs` | S | T2 | `src/game/game.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ✅ done | antigravity | struct/t4-genre | ed92e39 |
+| **T3** | Extract `Game` / `GameAction` / lifecycle → `src/game/core.rs`; thin `mod.rs` | S | T2 | `src/game/core.rs` *(new)*, `src/game/mod.rs` *(shell)*, `src/game/tests/**` *(paths/`use` only if needed)* | ✅ done | antigravity | struct/t4-genre | ed92e39 |
 | **T4** | Extract `MusicGenre` → `src/game/genre.rs` | S | — | `src/game/genre.rs` *(new)*, `src/game/world.rs` *(remove genre)*, all `use` sites of `MusicGenre` | ✅ done | grok-struct-t4 | struct/t4-genre | 860fb6f |
 | **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ✅ done | grok-struct-t5 | struct/t4-genre | b601eab |
 | **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ✅ done | pier-t6 | struct/t4-genre | 567f348 |
 | **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ✅ done | grok-struct-t7 | struct/t4-genre | ba6a74c |
-| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/game.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
+| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/core.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
 | **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | 356d957 |
@@ -149,7 +149,7 @@ Wave 1:
   T12 (modals split)  ← after T10  (parallel with T7 — disjoint owns)
 
 Wave 2:
-  T3 (game.rs shell)  ← after T2
+  T3 (core.rs shell)  ← after T2
   T8 (rng.rs)         ← after T3, optional
 
 Wave 3:
@@ -175,7 +175,7 @@ Wave 3:
 src/game/
   mod.rs                 # module list + pub use only (≪ 80 lines)
   constants.rs           # all tuning knobs + design comments
-  game.rs                # Game, GameAction, SupportTourOffer, new/init/save/load
+  core.rs                # Game, GameAction, SupportTourOffer, new/init/save/load
   rng.rs                 # optional (T8): action_rng_for_week + salts
   genre.rs               # MusicGenre + Display + aliases (+ room for ability_weights later)
   band.rs
@@ -295,12 +295,12 @@ serde shape.
 3. Modules that used bare `PRESSING_TIERS` via `super::*` should
    `use crate::game::constants::*` or `super::constants::*` as appropriate.
 
-**Acceptance:** no gameplay consts left in `mod.rs` / `game.rs` except
+**Acceptance:** no gameplay consts left in `mod.rs` / `core.rs` except
 re-exports; tests pass unchanged.
 
 ---
 
-### T3 — `game.rs` thin shell
+### T3 — `core.rs` thin shell
 
 **Why:** `mod.rs` should only declare submodules.
 
@@ -308,17 +308,17 @@ re-exports; tests pass unchanged.
 
 1. Move `GameAction`, `SupportTourOffer`, `Game`, `default_seed`,
    `impl Game` lifecycle (`new`, `log`, `take_turn_log`, `action_rng*`,
-   `initialize_player`, `save_game`, `load_game`) into `src/game/game.rs`.
-2. `mod.rs` becomes module declarations + `pub use game::{Game, GameAction, …}`
+   `initialize_player`, `save_game`, `load_game`) into `src/game/core.rs`.
+2. `mod.rs` becomes module declarations + `pub use core::{Game, GameAction, …}`
    as needed by `main` / `ui`.
 3. Fix `actions` / `economy` / `turn` / `tests` / `sim` imports (`super::Game`
    still works if they are children of `game` module tree — today they are
-   `mod actions` siblings; keep them as siblings of `game.rs` via
-   `mod game;` and `use crate::game::game::Game` **or** the common pattern:
+   `mod actions` siblings; keep them as siblings of `core.rs` via
+   `mod core;` and `use crate::game::core::Game` **or** the common pattern:
    ```rust
    // mod.rs
-   mod game;
-   pub use game::*;
+   mod core;
+   pub use core::*;
    ```
    Prefer the pattern that minimizes churn in `actions.rs` (`use super::*`).
 

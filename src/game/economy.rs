@@ -1,6 +1,8 @@
 //! The money pipeline: recording and pressing costs, sales scoring,
 //! and the weekly release/catalog payout.
 
+use crate::game::music::{Release, ReleaseType};
+
 use super::constants::{self, *};
 use super::*;
 

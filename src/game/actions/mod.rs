@@ -6,6 +6,8 @@ mod live;
 mod rest;
 mod studio;
 
+use rand::Rng;
+
 use super::*;
 impl Game {
     pub(super) fn execute_action(

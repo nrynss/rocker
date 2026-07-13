@@ -1,5 +1,8 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
 
+use crate::game::music::ReleaseType;
+use rand::Rng;
+
 use super::super::constants::{self, *};
 use super::super::*;
 

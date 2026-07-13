@@ -2,6 +2,9 @@
 //! events and news, ages offers, tracks visibility decay, and checks
 //! for the end of the road.
 
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
+
 use super::constants::{self, *};
 use super::*;
 

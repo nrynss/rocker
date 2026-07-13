@@ -1,6 +1,10 @@
 //! Release economics: indie vs. label reach, pressing runs, charts, marketing,
 //! recording safety, and era-genre fit.
 
+use crate::game::music::{MarketingCampaignType, ReleaseType};
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
 use super::*;
 
 #[test]

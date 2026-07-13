@@ -1,5 +1,8 @@
 //! Support-tour offers: accepting, declining, arrival conditions, and expiry.
 
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
 use super::*;
 
 #[test]
