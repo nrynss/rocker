@@ -133,7 +133,8 @@ run **in parallel on the same branch** — never via extra branches.
 | **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/game.rs`, `src/game/turn.rs` *(import paths)* | ⬜ open | | struct/t4-genre | |
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
-| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | struct/t4-genre | |
+| **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | |
+| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10, T12 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ⬜ open | | struct/t4-genre | |
 
 ### Parallelism map (waves)
 
@@ -145,13 +146,14 @@ Wave 0 (immediate, fully parallel — disjoint owns):
 Wave 1:
   T2 (constants)      ← after T1
   T7 (world split)    ← after T4
+  T12 (modals split)  ← after T10  (parallel with T7 — disjoint owns)
 
 Wave 2:
   T3 (game.rs shell)  ← after T2
   T8 (rng.rs)         ← after T3, optional
 
 Wave 3:
-  T11 (close)         ← after required tasks
+  T11 (close)         ← after required tasks (incl. T12)
 ```
 
 **Conflict warnings (same branch — Owns are the mutex):**
@@ -161,6 +163,7 @@ Wave 3:
 | T1 ∥ T2 ∥ T3 | All touch `mod.rs` — **serialized** by prereqs (T1→T2→T3) |
 | T4 ∥ T7 | T7 must wait for T4 so genre is not moved twice |
 | T9 ∥ T10 | Both may touch `ui/mod.rs` — only add `mod` lines; never reformat the other’s files. Prefer one claimed at a time if unsure |
+| T12 ∥ T7 | Fully parallel — UI modals vs game world; no shared paths |
 | T6 | May add one `mod events_apply;` line in `game/mod.rs` while T1–T3 run — pull --rebase; keep that line-only |
 | Any ∥ any | **Pull --rebase before push.** Do not force-push unless the human says so |
 
@@ -212,7 +215,16 @@ src/ui/
   mod.rs
   app.rs                 # App struct, run loop, thin dispatch
   input/…                # key handlers by screen
-  render/…               # draw_* by panel/modal
+  render/
+    mod.rs               # draw() conductor + shared helpers
+    layout.rs / panels.rs / setup.rs / game_over.rs
+    modals/              # T12 — overlay family package
+      mod.rs             # re-exports draw_* for render::draw
+      deals.rs           # deals + support offer
+      charts.rs
+      marketing.rs
+      file.rs
+      pickers.rs         # venue, pressing, region
 ```
 
 Line-count **soft caps** after the cycle (not enforced by CI):
@@ -437,11 +449,40 @@ Shared style helpers can live in `render/mod.rs`.
 
 ---
 
+### T12 — Split render modals package
+
+**Why:** After T10, `render/modals.rs` was still ~470–500 lines — the
+largest remaining UI file. Musician UI will add more overlays; keep each
+modal family small. **Not part of T7** (game world); parallel-safe.
+
+**Prereq:** T10 ✅.
+
+**Do:** pure move only:
+
+| File | Contents |
+|------|----------|
+| `modals/mod.rs` | submodule list + `pub(super) use` of each `draw_*` |
+| `modals/deals.rs` | deals modal + support-slot modal |
+| `modals/charts.rs` | charts modal |
+| `modals/marketing.rs` | marketing release/campaign modal |
+| `modals/file.rs` | save/load modal |
+| `modals/pickers.rs` | venue, pressing-run, region pickers |
+
+Keep `render/mod.rs` calling `modals::draw_*` (re-exports). Shared helpers
+stay in `render/mod.rs` (`centered_rect`, `ACCENT`, …). Leaf draw fns may
+use `pub(crate)` so they can be re-exported (same nested-module visibility
+pattern as T5/T9).
+
+**Acceptance:** no monolithic `render/modals.rs`; each leaf file under ~250
+lines preferred; `cargo test` / clippy / fmt clean; no visual redesign.
+
+---
+
 ### T11 — Cycle close
 
 **Do:**
 
-1. Confirm board: all required tasks ✅, claims consistent with git history.
+1. Confirm board: all required tasks ✅ (incl. T12), claims consistent with git history.
 2. Paste a short **line-count table** (production files only) under Notes
    below.
 3. Add 2–4 lines under CHANGELOG **Internal** (unreleased / 0.5.1) listing
@@ -463,7 +504,7 @@ all required ✅.
 | `src/game/actions.rs` → `actions/` | T5 only |
 | `src/game/turn.rs` | T6 primarily; T8 imports only |
 | `src/ui/app.rs` | T9 |
-| `src/ui/render.rs` | T10 |
+| `src/ui/render.rs` → `render/**` | T10; then T12 owns only `render/modals*` |
 | `HANDOFF.md` board rows | **Every agent** for their claim/complete only — do not rewrite other tasks’ details |
 | `FUTURE.md` | nobody this cycle |
 | `data/**` | nobody this cycle |
@@ -504,3 +545,4 @@ _Example:_
 - 2026-07-13 T5 done by grok-struct-t5 on `struct/t4-genre`: `actions.rs` → `actions/{mod,studio,live,business,rest}.rs`; action methods use `pub(in crate::game)` so nested modules stay visible to game tests/turn.
 - 2026-07-13 T6 done by pier-t6 on `struct/t4-genre`: `apply_random_event` + `apply_historical_event` → `events_apply.rs` as `pub(super) impl Game`; `turn.rs` down from 538 to 285 lines; `mod events_apply;` in `mod.rs`. ⚠ cargo test / git push blocked by env (SSL + index-lock); code structure verified manually.
 - 2026-07-13 T10 done by antigravity on `struct/t4-genre`: `render.rs` → `render/{mod,setup,layout,panels,modals,game_over}.rs`; shared helpers (centered_rect, gauge, scale_color, format_population) in `render/mod.rs`; `pub(crate)` for ACCENT const.
+- 2026-07-13 T12 claimed+done by grok-struct-t12 on `struct/t4-genre`: `render/modals.rs` → `modals/{mod,deals,charts,marketing,file,pickers}.rs` with re-exports; parallel-safe with T7.
