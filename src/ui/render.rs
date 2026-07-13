@@ -7,8 +7,8 @@ use ratatui::{
 };
 
 use crate::data::{calculate_weeks_to_years_months, constants, format_money};
-use crate::game::Game;
-use crate::game::music::MarketingCampaignType;
+use crate::game::music::{MarketingCampaignType, ReleaseType};
+use crate::game::{Game, PRESSING_TIERS};
 
 use super::app::{App, FileMode, LogKind, Screen, SetupField};
 
@@ -29,6 +29,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::File { .. } => draw_file_modal(frame, app),
                 Screen::VenuePicker { .. } => draw_venue_picker_modal(frame, app),
                 Screen::RegionPicker { .. } => draw_region_picker_modal(frame, app),
+                Screen::PressingPicker { .. } => draw_pressing_picker_modal(frame, app),
                 _ => {}
             }
         }
@@ -646,6 +647,49 @@ fn draw_venue_picker_modal(frame: &mut Frame, app: &App) {
             Block::bordered()
                 .title(" 🎤 Select Venue to Play Gig ")
                 .title_bottom(" Enter perform · Esc close "),
+        )
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
+    let Screen::PressingPicker { release_type, selected } = app.screen else { return };
+    let area = centered_rect(72, 40, frame.area());
+    frame.render_widget(Clear, area);
+
+    let recording = app.game.recording_cost(&release_type);
+    let items: Vec<ListItem> = PRESSING_TIERS
+        .iter()
+        .map(|(name, copies)| {
+            let pressing = app.game.pressing_cost(&release_type, *copies);
+            let affordable = app.game.player.can_afford(recording + pressing);
+            let style = if affordable {
+                Style::new().fg(Color::White)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<14}", name), style.bold()),
+                Span::styled(format!("  {:>6} copies", copies), style),
+                Span::styled(format!("  Pressing: {:<8}", format_money(pressing)), style),
+                Span::styled(
+                    format!("  Total with studio: {:<8}", format_money(recording + pressing)),
+                    style,
+                ),
+            ]))
+        })
+        .collect();
+
+    let kind = match release_type {
+        ReleaseType::Single => "Single",
+        ReleaseType::Album => "Album",
+    };
+    let list = List::new(items)
+        .block(
+            Block::bordered()
+                .title(format!(" 📀 Press the {} — choose your run ", kind))
+                .title_bottom(" Enter record · Esc cancel "),
         )
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
     let mut state = ListState::default().with_selected(Some(selected));

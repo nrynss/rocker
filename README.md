@@ -1,3 +1,5 @@
+# 🎸 Rocker - Rock Star Management Simulator
+
 A Rust-based clone of the classic 1989 DOS game "Rockstar" by Wizard Games, enhanced with historical accuracy and customizable content. Start your musical journey in 1970, right after the Beatles' breakup, and navigate the changing music industry through the decades!
 
 ## 🎮 About the Game
@@ -62,14 +64,14 @@ Each turn represents one week in your rock career:
 - **Laze Around** (1) - Recover energy and reduce stress
 - **Write Songs** (2) - Create material for future releases
 - **Practice** (3) - Improve band skill
-- **Record Single** (4) - Release a single (requires songs and ~$100)
-- **Record Album** (5) - Release an album (requires 8+ songs and ~$1000)
+- **Record Single** (4) - Release a single (requires songs, ~$100 studio time, plus your pressing run when unsigned)
+- **Record Album** (5) - Release an album (requires 8+ songs, ~$1000 studio time, plus your pressing run when unsigned)
 - **Play a Gig** (6) - Opens the venue picker to select a venue from local pubs to stadiums
 - **Go on Tour** (7) - Opens the region picker to select a tour destination across global markets
 - **Support Slot** (T) - Open for a bigger act when they come calling: modest pay, serious exposure
-- **Take a Break** (8) - Full health/energy recovery
+- **Take a Break** (8) - Four weeks off: full recovery, but the spotlight moves on without you
 - **Visit Doctor** (9) - Restore health ($50)
-- **Marketing** (M) - Run press, radio, and promo-film campaigns for your releases
+- **Marketing** (M) - Run press, radio, and promo-film campaigns for your releases (independents only — a label runs its own promo)
 - **Deal Offers** (V) - Review, accept, or reject record label offers
 - **Save / Load** (S / L) - Persist your career to a JSON save file
 
@@ -77,14 +79,27 @@ Navigate with ↑/↓ and Enter, or press an action's hotkey directly.
 Recording a release opens a 4-week sales window — market it before it drops
 to boost its first-run sales.
 
+Live shows only carry you so far: a venue can't make you more famous than
+the crowd it holds, and without records word of mouth stalls — gig and tour
+fame caps out until you put out new music. Records, and the labels that
+distribute them, are what turn a hot local act into a star. Support slots
+are the exception: opening for a bigger act reaches their audience, not
+yours.
+
+Fame also fades. After a quiet week with no shows and nothing in its sales
+window, the public starts to forget you — stay on stage or on the shelves.
+
 ### Independent vs. Signed
 
 Distribution is everything. Without a label your records only reach as far
-as your fame carries them, and you pay up front to press and ship every
-release — a cost that grows with the size of your following. A label puts
-its market reach behind every release and covers distribution, but only pays
-you a royalty slice. Unknown bands earn more signed; superstars can afford
-to go independent and keep everything.
+as your fame carries them, and you press them yourself: choose a run from a
+500-copy garage pressing to a 50,000-copy national one, paying setup and
+per-copy costs up front. Press too few and a hit sells out with money left
+on the table; press too many and you've burned cash on boxes in the garage.
+A label presses and promotes every release itself — run size and promo push
+scale with its network — but only pays you a royalty slice. Unknown bands
+earn more signed; superstars can afford to go independent and keep
+everything.
 
 ### The Scene & Record Deals
 
@@ -133,7 +148,9 @@ The entire game world can be seeded. Launching the game with `ROCKER_SEED=42 car
 - ✅ **Venue-based Gigs** - Gig at 5 distinct venues with prestige fame gates, ticket sales attendance, and base payouts
 - ✅ **Regional Markets & Tours** - Tour regions in the US, UK, Europe, Japan, and Australia, with population-tier fame gates, travel multipliers, and regional fame progression
 - ✅ **Deal Poaching** - Scene bands dynamically poach record deals that you reject
-- ✅ **Distribution economics** - Indie releases capped by your fame with up-front pressing costs; labels bring reach but take their cut
+- ✅ **Pressing runs** - Choose your own run size as an independent (and live with sell-outs); labels press and promote to the size of their network
+- ✅ **Distribution economics** - Indie reach capped by your fame; labels bring reach but take their cut
+- ✅ **Fame decay** - Disappear from view and the public starts to forget you
 - ✅ **Support tours** - Bigger acts offer you opening slots: modest pay, major exposure
 - ✅ **A living scene** - 180+ bands rise and fall with the trends, split up, and new bands debut
 - ✅ **External data files** - Fully customizable names and content
@@ -233,4 +250,4 @@ The game automatically creates editable text files in a `data/` directory:
 - **Infinite variety** - More entries = more unique combinations
 - **Comments supported** - Lines starting with `#` are ignored
 
-Example song generation: "Electric" + "Dreams" = "Electric Dreams"# 🎸 Rocker - Rock Star Management Simulator
+Example song generation: "Electric" + "Dreams" = "Electric Dreams"
