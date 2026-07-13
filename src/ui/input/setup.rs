@@ -55,7 +55,7 @@ impl App {
     }
 
     /// Hand the chosen identity to the game and start playing.
-    pub(super) fn finish_setup(&mut self) {
+    pub(crate) fn finish_setup(&mut self) {
         let name = self.name_input.trim().to_string();
         let band = self.band_input.trim().to_string();
         let genre = MusicGenre::ALL[self.genre_selected.min(MusicGenre::ALL.len() - 1)].clone();
