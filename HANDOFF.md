@@ -130,7 +130,7 @@ run **in parallel on the same branch** — never via extra branches.
 | **T5** | Split `actions.rs` → `actions/{mod,studio,live,business,rest}.rs` | M | — | `src/game/actions.rs` → `src/game/actions/**` only | ✅ done | grok-struct-t5 | struct/t4-genre | b601eab |
 | **T6** | Split event *outcomes* out of `turn.rs` → `events_apply.rs` | S | — | `src/game/turn.rs`, **new** `src/game/events_apply.rs`, `src/game/mod.rs` *(one `mod` line)* | ✅ done | pier-t6 | struct/t4-genre | 567f348 |
 | **T7** | Split `world.rs` → `world/{mod,scene,charts,deals,venues}.rs` | L | T4 | `src/game/world.rs` → `src/game/world/**`, world unit tests relocate with code | ✅ done | grok-struct-t7 | struct/t4-genre | ba6a74c |
-| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/core.rs`, `src/game/turn.rs` *(import paths)* | ✅ done | grok-struct-t8 | struct/t4-genre | |
+| **T8** | Optional: `src/game/rng.rs` (action-stream helpers only) | S | T3 | `src/game/rng.rs` *(new)*, `src/game/core.rs`, `src/game/turn.rs` *(import paths)* | ✅ done | grok-struct-t8 | struct/t4-genre | 28596c5 |
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
 | **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | 356d957 |
