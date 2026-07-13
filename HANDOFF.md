@@ -1,10 +1,11 @@
 # Rocker — Multi-Track Handoff (v0.5 cycle)
 
-Written 2026-07-13. This replaces the ecosystem-refactor handoff (see git
-history for it). The project is healthy: **25 tests pass, clippy is
-warning-free**, and the fame/economy rework just landed — live-fame caps,
-idle-week fame decay, 4-week breaks, pressing runs with sell-outs, and
-label-run marketing.
+Written 2026-07-13, refreshed the same day after the first parallel round
+merged. The project is healthy: **34 tests pass (+2 `#[ignore]`d sim
+sweeps), clippy is warning-free**. Landed so far this cycle: the
+fame/economy rework (live-fame caps, idle decay, 4-week breaks, pressing
+runs, label marketing), then Tracks A (player on the charts), C (genre
+identity), and D (balance lab + first tuning pass) in parallel.
 
 This document splits the next cycle into **five tracks (A–E) designed for
 parallel agents**. Each track lists the files it owns, exact entry points,
@@ -13,7 +14,7 @@ track; skim the others' "files owned" so you don't wander into them.
 
 ---
 
-## Track 0 — coordinator prerequisite (NOT parallel)
+## Track 0 — coordinator prerequisite (NOT parallel) ✅ DONE
 
 Before any agent branches:
 
@@ -43,6 +44,12 @@ Agents branch from the result. One branch per track, named `track/<letter>-<slug
   the design intent, not the arithmetic.
 - Don't touch files another track owns; if you must, note it in your PR
   description so the coordinator sequences the merge.
+- **Integration is the coordinator's job and it is real work**: parallel
+  branches that each build green can still break when combined (round one:
+  two tracks called `initialize_player` with the pre-genre signature —
+  textually clean merge, three compile errors). After every merge round,
+  build and run the FULL suite on the merged result before anyone branches
+  from it.
 
 ### Do-not-undo design decisions
 
@@ -71,7 +78,9 @@ Agents branch from the result. One branch per track, named `track/<letter>-<slug
 
 ### How to verify
 
-- `cargo test` — 25 tests across data_loader, timeline, world, game.
+- `cargo test` — 34 tests across data_loader, timeline, world, game, ui;
+  plus 2 `#[ignore]`d sim sweeps (`cargo test -- --ignored --nocapture`,
+  ~2 min, prints the balance table).
 - `cargo clippy --all-targets` — warning-free.
 - `ROCKER_SEED=42 cargo run` twice → identical opening scene (worldgen
   determinism; full-run determinism is Track B's job).
@@ -82,17 +91,18 @@ Agents branch from the result. One branch per track, named `track/<letter>-<slug
 
 ## Track map
 
-| Track | Goal | Size | Owns | Merge order |
+| Track | Goal | Size | Owns | Status / merge order |
 |---|---|---|---|---|
-| A | Player on the charts + charts UI | S–M | render.rs, app.rs, one mod.rs hook | 1st |
-| B | Deterministic gameplay (seeded action RNG) | M | mod.rs action fns, events.rs | 3rd (rebase last of A–C) |
-| C | Genre identity stepping stone | M | band.rs, record actions, setup UI | 2nd |
-| D | Balance lab: headless sim + tuning | M | new src/game/sim.rs only | anytime |
+| A | Player on the charts + charts UI | S–M | render.rs, app.rs, one mod.rs hook | ✅ merged (PR #7) |
+| C | Genre identity stepping stone | M | band.rs, record actions, setup UI | ✅ merged (PR #8) |
+| D | Balance lab: headless sim + tuning | M | new src/game/sim.rs only | ✅ merged (PR #9, incl. tuning) |
+| F | Deal pipeline actually scouts you | S–M | world.rs deal gen, mod.rs offer handling | round two — merges before B |
+| B | Deterministic gameplay (seeded action RNG) | M | mod.rs action fns, events.rs, sim.rs tie-in | round two — merges after F |
 | E | Structure & infra (mod.rs split, dead-code, CI, save-compat) | L | everything | strictly last |
 
-A, C, D can start immediately in parallel. B can start immediately but
-expect to rebase over A and C (all three touch `src/game/mod.rs` in
-different functions). E starts only after A–D are merged.
+Round two: F and B run in parallel; F is small and merges first, B rebases
+over it (both touch the deal-offer region of mod.rs). E starts only after
+everything else is merged.
 
 ---
 
@@ -241,10 +251,60 @@ mechanical-move commits separate from any fix; CI gates active.
 
 ---
 
+## Track F — the deal pipeline actually scouts you (round two)
+
+**Why:** Track D's lab proved the deal stream is broken-by-placeholder.
+`generate_deal_offers` (src/game/world.rs) gates label tiers on
+`buzz = fame / 5`: majors need buzz 30 → fame 150 (impossible), boutiques
+fame 100; only independent labels ever make offers. Worse, pending offers
+never expire and block new ones — "ignore the offer" silences the deal
+stream forever. Half of D's label-loyalist careers won before seeing a
+single offer.
+
+**Tasks:**
+1. Redesign buzz so tiers unlock along a real career: indies early
+   (fame ~25 + a release), boutiques mid (~45–60), majors for genuinely
+   big acts (~65–80), with the catalog (and, nice-to-have, chart
+   history) weighing in — not fame alone. Document the formula intent in
+   a comment; the numbers are yours to tune with a test per tier band.
+2. Offers expire after a few weeks (mirror `SupportTourOffer.expires_week`).
+   **Serde trap:** a new `expires_week: u32` with a bare `#[serde(default)]`
+   is 0 in old saves → instant expiry of live offers. Use `Option<u32>`
+   (None = no expiry, legacy) or a defaulted sentinel handled explicitly.
+3. Expiry is not rejection: no poaching on expiry (`poach_rejected_deal`
+   stays a consequence of `action_reject_deal` only), and new offers can
+   arrive once the slate is clear.
+
+**Acceptance:** tests that each tier is reachable in its intended fame
+band and majors are reachable at all; that an ignored offer expires and
+the stream resumes; that reject-then-poach still works (existing test
+`rejected_deals_get_poached_by_the_biggest_unsigned_act` keeps passing).
+Optionally borrow the Track D harness: label-loyalist sees its first
+offer meaningfully earlier (report numbers).
+
+**Conflict note:** owns world.rs deal generation and the offer-handling
+region of mod.rs (`check_and_generate_deal_offers`, `action_reject_deal`).
+Track B threads RNG through the same region — F merges first, B rebases.
+
+---
+
 ## Backlog (unassigned, roughly ordered)
 
 - **FUTURE.md §1–§6** — the Musician/abilities/personality arc. Blocked on
   Track E's split; §2 supersedes Track C's bridge when it lands.
+- **Decade pacing** (from Track D's lab): even after the first tuning pass,
+  optimal play wins at median ~year 5 — the 1977/1983/1990 era content is
+  unreachable in a typical winning run. Constants alone can't fix it;
+  needs logic-level pacing (era-scaled gig fame, event fame sizes, maybe
+  win criteria). Target: median win ~year 10–12.
+- **Random-event fame audit** (from D): events are an uncapped fame source —
+  a never-records bot still peaks at median 46 via events alone. Decide
+  whether event fame should respect the catalog cap or stay the wildcard.
+- **Tour economics are unexercised**: no D bot tours; add a touring bot and
+  check regional-fame profit loops before trusting those numbers.
+- **Studio-rat debt spiral** (from D): garage albums lose money at fame 0
+  (~$1,350 cost vs ~$1,000 max first-run gross); ~35% of record-only
+  careers go broke. Possibly intended — decide, then tune or document.
 - "Outgrown" tag in the venue picker (the cap is invisible until you hit it).
 - Count only non-flop releases toward the catalog fame cap.
 - Player choices inside random events (currently auto-resolved).
