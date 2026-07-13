@@ -2,6 +2,7 @@ pub mod band;
 pub mod events;
 pub mod music;
 pub mod player;
+#[cfg(test)] mod sim; // Track D balance lab: bot-driven career sims, tests only.
 pub mod timeline;
 pub mod world;
 
