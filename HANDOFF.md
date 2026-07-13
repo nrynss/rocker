@@ -134,7 +134,7 @@ run **in parallel on the same branch** — never via extra branches.
 | **T9** | Split UI input handlers out of `app.rs` | M | — | `src/ui/app.rs`, **new** `src/ui/input/**` (or `src/ui/input.rs` + submodules), `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 043ccf8 |
 | **T10** | Split UI drawing out of `render.rs` | M | — | `src/ui/render.rs`, **new** `src/ui/render/**`, `src/ui/mod.rs` | ✅ done | antigravity | struct/t4-genre | 7258107 |
 | **T12** | Split `render/modals.rs` → `modals/{deals,charts,marketing,file,pickers}` | S | T10 | `src/ui/render/modals.rs` → `src/ui/render/modals/**` only | ✅ done | grok-struct-t12 | struct/t4-genre | 356d957 |
-| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10, T12 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ✅ done | claude-t11 | struct/t4-genre | |
+| **T11** | Cycle close: line-count report, board audit, archive note | S | T1–T7, T9–T10, T12 *(T8 optional)* | `HANDOFF.md`, optional short note in `CHANGELOG.md` under Internal | ✅ done | claude-t11 | struct/t4-genre | d7b1e59 |
 
 ### Parallelism map (waves)
 
