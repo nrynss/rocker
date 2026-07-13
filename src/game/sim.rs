@@ -66,6 +66,7 @@ fn seeded_game(seed: u64) -> Game {
         pending_support_offer: None,
         regional_fame: std::collections::HashMap::new(),
         idle_streak: 0,
+        genre_trend_reported: 0,
         week: 1,
         game_over: false,
         next_song_id: 0,
@@ -73,7 +74,7 @@ fn seeded_game(seed: u64) -> Game {
         just_released_music: Vec::new(),
         turn_log: Vec::new(),
     };
-    game.initialize_player("Sim Driver", "The Test Pattern");
+    game.initialize_player("Sim Driver", "The Test Pattern", world::MusicGenre::Rock);
     game
 }
 
