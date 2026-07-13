@@ -82,6 +82,12 @@ const IDLE_GRACE_WEEKS: u32 = 1;
 const IDLE_FAME_DECAY_PER_WEEK: u8 = 1;
 pub const BREAK_WEEKS: u32 = 4;
 
+// Era-genre fit: past these bounds the era clearly loves or has abandoned
+// the band's sound, and the press says so — once per swing, not every week.
+// (A genre missing from an era's table reads as out of fashion at 0.85.)
+const GENRE_TREND_HOT: f32 = 1.15;
+const GENRE_TREND_COLD: f32 = 0.85;
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
@@ -136,6 +142,10 @@ pub struct Game {
     /// Consecutive weeks with no public activity (no shows, nothing on sale).
     #[serde(default)]
     pub idle_streak: u32,
+    /// The last era-fit verdict the press reported on the band's genre
+    /// (-1 cold, 0 unremarkable, +1 hot) — the news speaks only on change.
+    #[serde(default)]
+    pub genre_trend_reported: i8,
     pub week: u32,
     pub game_over: bool,
     pub next_song_id: u32,
@@ -174,6 +184,7 @@ impl Game {
             pending_support_offer: None,
             regional_fame: std::collections::HashMap::new(),
             idle_streak: 0,
+            genre_trend_reported: 0,
             week: 1,
             game_over: false,
             next_song_id: 0,
@@ -297,8 +308,13 @@ impl Game {
             .and_then(|g| self.world.dynamic_genre_modifiers.get(g).copied())
             .unwrap_or(1.0);
 
+        // The era's tastes: the same modifier scene-band releases live by.
+        let era_genre_modifier = release.genre.as_ref()
+            .map(|g| self.data_files.era_genre_modifier(self.timeline.get_current_year(), g.aliases()))
+            .unwrap_or(1.0);
+
         let base_score = quality_score + marketing_score + fame_score;
-        (base_score * era_sales_modifier * genre_modifier).max(0.0) as u32
+        (base_score * era_sales_modifier * genre_modifier * era_genre_modifier).max(0.0) as u32
     }
 
     /// How much of a release's potential audience the band can actually reach.
@@ -469,7 +485,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().map(|_s| world::MusicGenre::Rock), // Placeholder
+            genre: Some(self.band.genre.clone()),
             copies_pressed: copies,
             copies_sold: 0,
         };
@@ -529,7 +545,7 @@ impl Game {
             marketing_level_achieved: 0,
             initial_sales_score: 0,
             total_income_generated: 0,
-            genre: selected_songs.first().map(|_s| world::MusicGenre::Rock), // Placeholder
+            genre: Some(self.band.genre.clone()),
             copies_pressed: copies,
             copies_sold: 0,
         };
@@ -1143,6 +1159,37 @@ impl Game {
         }
     }
 
+    /// When the era clearly loves — or has clearly abandoned — the band's
+    /// sound, the press notices. Said once per swing, not every week.
+    fn update_genre_trend_news(&mut self) {
+        let era_fit = self
+            .data_files
+            .era_genre_modifier(self.timeline.get_current_year(), self.band.genre.aliases());
+        let verdict: i8 = if era_fit >= GENRE_TREND_HOT {
+            1
+        } else if era_fit <= GENRE_TREND_COLD {
+            -1
+        } else {
+            0
+        };
+        if verdict == self.genre_trend_reported {
+            return;
+        }
+        self.genre_trend_reported = verdict;
+        let genre = self.band.genre.name();
+        match verdict {
+            1 => self.log(format!(
+                "🎸 {} is exploding — you're in the right scene at the right time.",
+                genre
+            )),
+            -1 => self.log(format!(
+                "🥶 {} is out of step with the times — the crowds are chasing a different sound.",
+                genre
+            )),
+            _ => {}
+        }
+    }
+
     fn advance_week_events(&mut self) -> Result<(), String> {
         // Sync the timeline with the current week. Tours can jump several weeks
         // at once, so catch up year by year instead of testing a single boundary.
@@ -1154,6 +1201,7 @@ impl Game {
             let era_name = self.timeline.get_current_era().era_name.clone();
             self.log(format!("🗓️ It's now {} — the era of {}.", year, era_name));
         }
+        self.update_genre_trend_news();
 
         if let Some(event) = self.events.try_trigger_event(self.week) {
             self.apply_random_event(event)?;
@@ -1870,6 +1918,84 @@ mod tests {
         let offer = game.pending_support_offer.as_ref().unwrap();
         assert!(offer.host_fame >= game.band.fame + SUPPORT_OFFER_FAME_GAP);
         assert!(offer.pay > 0);
+    }
+
+    #[test]
+    fn a_release_riding_the_era_outsells_one_against_it() {
+        let mut game = test_game();
+        game.band.fame = 40;
+        game.world.dynamic_genre_modifiers.clear(); // era taste is the only genre input
+
+        let year = game.timeline.get_current_year();
+        let era_fit =
+            |genre: &world::MusicGenre| game.data_files.era_genre_modifier(year, genre.aliases());
+        let hot = world::MusicGenre::ALL
+            .iter()
+            .max_by(|a, b| era_fit(a).total_cmp(&era_fit(b)))
+            .expect("genres exist")
+            .clone();
+        let cold = world::MusicGenre::ALL
+            .iter()
+            .min_by(|a, b| era_fit(a).total_cmp(&era_fit(b)))
+            .expect("genres exist")
+            .clone();
+        assert!(era_fit(&hot) > era_fit(&cold), "the era should actually have tastes");
+
+        let mut on_trend = test_release(1, ReleaseType::Single);
+        on_trend.genre = Some(hot);
+        let mut against_the_grain = test_release(2, ReleaseType::Single);
+        against_the_grain.genre = Some(cold);
+
+        assert!(
+            game.calculate_release_sales_score(&on_trend)
+                > game.calculate_release_sales_score(&against_the_grain),
+            "identical records should sell by the era's tastes"
+        );
+    }
+
+    #[test]
+    fn bands_saved_before_genres_existed_load_as_rock() {
+        assert_eq!(Band::default().genre, world::MusicGenre::Rock);
+
+        // A pre-genre save is a Band JSON object with no "genre" key at all.
+        let mut saved = serde_json::to_value(Band::default()).expect("bands serialize");
+        saved
+            .as_object_mut()
+            .expect("a band serializes to an object")
+            .remove("genre");
+        let loaded: Band = serde_json::from_value(saved).expect("old saves must keep loading");
+        assert_eq!(loaded.genre, world::MusicGenre::Rock);
+    }
+
+    #[test]
+    fn the_press_calls_a_hot_genre_once_not_weekly() {
+        let mut game = test_game();
+        // Rock is the sound of 1970 in the era data — clearly hot.
+        game.band.genre = world::MusicGenre::Rock;
+
+        game.process_turn(GameAction::LazeAround).expect("lazing always works");
+        game.process_turn(GameAction::LazeAround).expect("lazing always works");
+
+        let mentions = game
+            .turn_log
+            .iter()
+            .filter(|line| line.contains("right scene at the right time"))
+            .count();
+        assert_eq!(mentions, 1, "the trend is news once, not every week");
+    }
+
+    #[test]
+    fn the_press_notices_a_genre_the_era_left_behind() {
+        let mut game = test_game();
+        // Punk is years ahead of 1970's tastes — out of fashion on day one.
+        game.band.genre = world::MusicGenre::Punk;
+
+        game.process_turn(GameAction::LazeAround).expect("lazing always works");
+
+        assert!(
+            game.turn_log.iter().any(|line| line.contains("chasing a different sound")),
+            "an off-trend band should hear about it"
+        );
     }
 
     #[test]
