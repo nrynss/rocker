@@ -3,6 +3,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::{MarketingCampaignType, ReleaseType};
+use crate::game::world::MusicGenre;
 use crate::game::{BREAK_WEEKS, Game, GameAction, PRESSING_TIERS};
 
 use super::render;
@@ -29,6 +30,7 @@ pub struct LogEntry {
 pub enum SetupField {
     Name,
     BandName,
+    Genre,
 }
 
 #[derive(Clone, Copy)]
@@ -92,6 +94,7 @@ pub struct App {
     pub menu_selected: usize,
     pub name_input: String,
     pub band_input: String,
+    pub genre_selected: usize,
     should_exit: bool,
 }
 
@@ -104,6 +107,7 @@ impl App {
             menu_selected: 0,
             name_input: String::new(),
             band_input: String::new(),
+            genre_selected: 0,
             should_exit: false,
         }
     }
@@ -376,43 +380,69 @@ impl App {
 
     fn handle_setup_key(&mut self, key: KeyEvent) {
         let Screen::Setup { field } = self.screen else { return };
-        let input = match field {
-            SetupField::Name => &mut self.name_input,
-            SetupField::BandName => &mut self.band_input,
-        };
 
-        match key.code {
-            KeyCode::Char(c) if input.len() < INPUT_MAX_LEN => input.push(c),
-            KeyCode::Backspace => {
-                input.pop();
-            }
-            KeyCode::Esc => self.should_exit = true,
-            KeyCode::Enter => {
-                if input.trim().is_empty() {
-                    return;
-                }
-                match field {
-                    SetupField::Name => {
-                        self.screen = Screen::Setup { field: SetupField::BandName };
-                    }
-                    SetupField::BandName => {
-                        let name = self.name_input.trim().to_string();
-                        let band = self.band_input.trim().to_string();
-                        self.game.initialize_player(&name, &band);
-                        self.push_log(
-                            LogKind::Ui,
-                            format!("Welcome to {}, {}. Make '{}' a legend.", constants::STARTING_YEAR, name, band),
-                        );
-                        self.push_log(
-                            LogKind::Ui,
-                            "Tip: hotkeys act instantly — V reviews deal offers, M runs marketing.",
-                        );
-                        self.screen = Screen::Main;
-                    }
-                }
-            }
-            _ => {}
+        if key.code == KeyCode::Esc {
+            self.should_exit = true;
+            return;
         }
+
+        match field {
+            SetupField::Name | SetupField::BandName => {
+                let input = match field {
+                    SetupField::Name => &mut self.name_input,
+                    _ => &mut self.band_input,
+                };
+                match key.code {
+                    KeyCode::Char(c) if input.len() < INPUT_MAX_LEN => input.push(c),
+                    KeyCode::Backspace => {
+                        input.pop();
+                    }
+                    KeyCode::Enter if !input.trim().is_empty() => {
+                        let next = if field == SetupField::Name {
+                            SetupField::BandName
+                        } else {
+                            SetupField::Genre
+                        };
+                        self.screen = Screen::Setup { field: next };
+                    }
+                    _ => {}
+                }
+            }
+            SetupField::Genre => {
+                let count = MusicGenre::ALL.len();
+                match key.code {
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.genre_selected = self.genre_selected.checked_sub(1).unwrap_or(count - 1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.genre_selected = (self.genre_selected + 1) % count;
+                    }
+                    KeyCode::Enter => self.finish_setup(),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    /// Hand the chosen identity to the game and start playing.
+    fn finish_setup(&mut self) {
+        let name = self.name_input.trim().to_string();
+        let band = self.band_input.trim().to_string();
+        let genre = MusicGenre::ALL[self.genre_selected.min(MusicGenre::ALL.len() - 1)].clone();
+        let genre_name = genre.name();
+        self.game.initialize_player(&name, &band, genre);
+        self.push_log(
+            LogKind::Ui,
+            format!(
+                "Welcome to {}, {}. Make '{}' the biggest name in {}.",
+                constants::STARTING_YEAR, name, band, genre_name
+            ),
+        );
+        self.push_log(
+            LogKind::Ui,
+            "Tip: hotkeys act instantly — V reviews deal offers, M runs marketing.",
+        );
+        self.screen = Screen::Main;
     }
 
     fn handle_main_key(&mut self, key: KeyEvent) {
@@ -764,6 +794,41 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn press(app: &mut App, code: KeyCode) {
+        app.handle_setup_key(KeyEvent::new(code, KeyModifiers::empty()));
+    }
+
+    fn type_text(app: &mut App, text: &str) {
+        for c in text.chars() {
+            press(app, KeyCode::Char(c));
+        }
+    }
+
+    #[test]
+    fn setup_can_found_a_band_in_every_genre() {
+        for (index, genre) in MusicGenre::ALL.iter().enumerate() {
+            let mut app = App::new(Game::new().expect("data files present"));
+
+            type_text(&mut app, "Ray");
+            press(&mut app, KeyCode::Enter);
+            type_text(&mut app, "The Rayguns");
+            press(&mut app, KeyCode::Enter);
+            for _ in 0..index {
+                press(&mut app, KeyCode::Down);
+            }
+            press(&mut app, KeyCode::Enter);
+
+            assert!(matches!(app.screen, Screen::Main), "setup should end on the main screen");
+            assert_eq!(app.game.band.genre, *genre);
+            assert_eq!(app.game.band.name, "The Rayguns");
         }
     }
 }

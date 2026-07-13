@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
 use super::music::{Song, Release}; // Import new structs
+use super::world::MusicGenre;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Band {
     pub name: String,
+    /// The sound the band plays. Saves from before genres existed load as Rock.
+    #[serde(default)]
+    pub genre: MusicGenre,
     pub fame: u8,  // 0-100
     pub skill: u8, // 0-100
     pub unreleased_songs: Vec<Song>,
@@ -61,6 +65,7 @@ impl Default for Band {
     fn default() -> Self {
         Self {
             name: String::new(),
+            genre: MusicGenre::Rock,
             fame: 0,
             skill: 20,
             unreleased_songs: Vec::new(),
