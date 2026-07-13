@@ -141,7 +141,7 @@ The entire game world can be seeded. Launching the game with `ROCKER_SEED=42 car
 
 ## 🎨 Features
 
-### Current Features (v0.4.0)
+### Current Features (v0.5.0)
 - ✅ **Full-screen TUI** - ratatui interface with stat gauges, modals, and a live event log
 - ✅ **Historical timeline** - Accurate music industry evolution 1970-1990+
 - ✅ **Reproducible Seeding** - Fully seeded world generation and deterministic week-by-week updates via `ROCKER_SEED` env var
