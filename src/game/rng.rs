@@ -9,8 +9,8 @@
 //! | **World** | `world_seed + week` | historical event *selection*, scene/`update_week` |
 //! | **Action** | `(world_seed ^ ACTION_STREAM_SALT) + week` | player actions, random-event outcomes, deal rolls |
 //!
-//! Salts and the reserved setup week live in [`crate::game::constants`] next
-//! to the other tuning knobs (`ACTION_STREAM_SALT`, `SETUP_STREAM_WEEK`).
+//! Salts and the reserved setup week live in [`super::constants`] next to
+//! the other tuning knobs (`ACTION_STREAM_SALT`, `SETUP_STREAM_WEEK`).
 //! Streams are derived on demand and never stored — saves stay compatible
 //! and a loaded game rolls exactly what the unsaved one would have.
 //!
@@ -20,8 +20,8 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-use crate::game::constants;
-use crate::game::core::Game;
+use super::constants;
+use super::core::Game;
 
 /// Splitmix64 finalizer shared by both streams. `key` is the pre-mix material
 /// (seed±week, already salted for the action stream).
@@ -39,17 +39,22 @@ pub(super) fn world_rng_for_week(world_seed: u64, week: u64) -> StdRng {
     mix_to_rng(world_seed.wrapping_add(week))
 }
 
+/// Action-stream seed material for a week (seed ⊕ salt, then + week).
+fn action_stream_key(world_seed: u64, week: u64) -> u64 {
+    (world_seed ^ constants::ACTION_STREAM_SALT).wrapping_add(week)
+}
+
 /// Action-stream RNG for a calendar week: every player-facing roll.
 /// Salted so tour luck never mirrors the same week's scene news.
-pub(super) fn action_rng_for_week(world_seed: u64, week: u64) -> StdRng {
-    mix_to_rng((world_seed ^ constants::ACTION_STREAM_SALT).wrapping_add(week))
+pub(super) fn action_stream_rng(world_seed: u64, week: u64) -> StdRng {
+    mix_to_rng(action_stream_key(world_seed, week))
 }
 
 impl Game {
     /// Action-stream RNG for an arbitrary week (setup uses
     /// [`constants::SETUP_STREAM_WEEK`]).
     pub(super) fn action_rng_for_week(&self, week: u64) -> StdRng {
-        action_rng_for_week(self.world_seed, week)
+        action_stream_rng(self.world_seed, week)
     }
 
     /// Action-stream RNG for the current week. Turn-consuming actions advance
@@ -57,6 +62,6 @@ impl Game {
     /// paperwork (e.g. rejecting two deals) rereads this stream, which is
     /// deterministic and harmless.
     pub(super) fn action_rng(&self) -> StdRng {
-        action_rng_for_week(self.world_seed, self.week as u64)
+        action_stream_rng(self.world_seed, self.week as u64)
     }
 }
