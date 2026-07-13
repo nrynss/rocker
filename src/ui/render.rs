@@ -414,11 +414,21 @@ fn draw_deals_modal(frame: &mut Frame, app: &App) {
         frame.render_widget(block, area);
 
         let data = &offer.original_label_data;
-        let lines = vec![
+        let mut lines = vec![
             Line::from(""),
             Line::from(format!("  Advance          {}", format_money(offer.advance as i32))),
             Line::from(format!("  Royalty rate     {:.1}%", offer.royalty_rate * 100.0)),
             Line::from(format!("  Albums required  {}", offer.albums_required)),
+        ];
+        if let Some(deadline) = offer.expires_week {
+            let weeks_left = deadline.saturating_sub(app.game.week);
+            lines.push(Line::from(format!(
+                "  Offer expires in {} week{}",
+                weeks_left,
+                if weeks_left == 1 { "" } else { "s" }
+            )));
+        }
+        lines.extend([
             Line::from(""),
             Line::styled("  About the label", Style::new().fg(Color::Cyan).bold()),
             Line::from(format!("  Market reach       {}/100", data.market_reach)),
@@ -428,7 +438,7 @@ fn draw_deals_modal(frame: &mut Frame, app: &App) {
             Line::from(format!("  Reputation: {}", data.reputation)),
             Line::from(""),
             Line::styled("  [A]ccept · [R]eject · [Esc] back", Style::new().fg(Color::DarkGray)),
-        ];
+        ]);
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
     } else {
         let items: Vec<ListItem> = offers

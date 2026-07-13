@@ -12,6 +12,12 @@ pub struct PotentialDealOffer {
     pub royalty_rate: f32,
     pub albums_required: u8,
     pub original_label_data: RecordLabel,
+    /// The week the label withdraws the offer if it's ignored. `None`
+    /// means it never expires — deliberately, because offers saved before
+    /// expiry existed deserialize to `None`, and a bare numeric default
+    /// (0) would kill every live offer the moment an old save loaded.
+    #[serde(default)]
+    pub expires_week: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +175,14 @@ pub const SCENE_MAX_BANDS: usize = 260;
 pub const CHART_SIZE: usize = 10;
 const CHART_DECAY: f32 = 0.85;
 const CHART_FLOOR_SCORE: u32 = 25;
+
+// Deal-offer buzz: the scale the tier thresholds in record_labels.json
+// measure (independent 10, boutique 20, major 30). Fame carries most of it;
+// records prove you can deliver; a charting record adds short-lived heat.
+const BUZZ_PER_SINGLE: u32 = 3;
+const BUZZ_PER_ALBUM: u32 = 4;
+const BUZZ_CATALOG_CAP: u32 = 10;
+const BUZZ_CHART_BONUS: u32 = 2;
 
 impl GameWorld {
     pub fn new(data_files: &GameDataFiles, rng: &mut impl Rng) -> Self {
@@ -621,6 +635,33 @@ impl GameWorld {
         demand_mod * saturation_penalty * economic_mod
     }
 
+    /// Industry buzz: how loudly the trade papers talk about an act. This is
+    /// the scale the label tier thresholds in record_labels.json measure
+    /// (independent 10, boutique 20, major 30).
+    ///
+    /// Intent: tiers unlock along a real career arc, not on fame alone.
+    /// Fame is the backbone (3 buzz per 10 fame), the catalog widens each
+    /// window (a single is 3, an album 4 — proof you deliver records), and
+    /// a record on this week's chart adds a little heat while it lasts.
+    /// The catalog contribution is capped so a deep back-catalog can pull
+    /// an act one tier up, but never substitutes for genuine stardom.
+    /// Where that lands, with the JSON thresholds also applying:
+    /// independents around fame ~25 with a first record out, boutiques in
+    /// the ~45-60 mid-career, majors only for genuinely big acts (fame
+    /// ~65+ cold, ~60 while a record is charting).
+    fn band_buzz(&self, band: &Band) -> u8 {
+        let fame_heat = u32::from(band.fame) * 3 / 10;
+        let catalog_heat = (band.singles_released.len() as u32 * BUZZ_PER_SINGLE
+            + band.albums_released.len() as u32 * BUZZ_PER_ALBUM)
+            .min(BUZZ_CATALOG_CAP);
+        let chart_heat = if self.charts.iter().any(|entry| entry.is_player) {
+            BUZZ_CHART_BONUS
+        } else {
+            0
+        };
+        (fame_heat + catalog_heat + chart_heat).min(100) as u8
+    }
+
     pub fn generate_deal_offers(
         &self,
         band: &Band,
@@ -629,6 +670,7 @@ impl GameWorld {
     ) -> Vec<PotentialDealOffer> {
         let mut offers = Vec::new();
         let labels_data = game_data.get_record_labels_data();
+        let buzz = self.band_buzz(band);
 
         let label_tiers = [
             ("Major", &labels_data.major_labels, &labels_data.label_requirements.major_label_interest_threshold),
@@ -638,14 +680,14 @@ impl GameWorld {
 
         for (tier_name, labels_in_tier, threshold) in &label_tiers {
             for label in *labels_in_tier {
-                // Check if band meets threshold
-                // Placeholder for buzz: use band.fame / 10 for now, or a fixed value like 50
-                let buzz_placeholder = band.fame / 5; // Example placeholder
-
+                // The `singles` column reads as "records out, of any kind":
+                // an album on the shelf opens doors at least as well as a
+                // 45, so an act that went straight to albums isn't
+                // invisible to every A&R desk in town.
                 if band.fame >= threshold.fame &&
                    band.albums_released.len() >= threshold.albums as usize &&
-                   band.singles_released.len() >= threshold.singles as usize &&
-                   buzz_placeholder >= threshold.buzz {
+                   band.total_releases() >= threshold.singles as usize &&
+                   buzz >= threshold.buzz {
 
                     // Check if already signed with this label
                     if let Some(current_deal) = band.current_deal()
@@ -690,6 +732,9 @@ impl GameWorld {
                             royalty_rate,
                             albums_required,
                             original_label_data: label.clone(),
+                            // The world has no clock; the game stamps the
+                            // deadline when the offer lands on the table.
+                            expires_week: None,
                         });
                     }
                 }
@@ -827,5 +872,148 @@ mod tests {
         assert_eq!(poached.as_deref(), Some(biggest.as_str()));
         let signed = world.bands.iter().find(|b| b.name == biggest).unwrap();
         assert_eq!(signed.label.as_deref(), Some("Apex Records"));
+    }
+
+    // --- Deal scouting: label tiers unlock along a real career arc ---
+
+    use crate::game::music::{Release, ReleaseType};
+
+    fn record(release_type: ReleaseType) -> Release {
+        Release {
+            id: 0,
+            name: "Test Record".to_string(),
+            release_type,
+            release_quality: 50,
+            week_released: 0,
+            songs_involved_quality_avg: 50,
+            active_marketing: Vec::new(),
+            marketing_level_achieved: 0,
+            initial_sales_score: 0,
+            total_income_generated: 0,
+            genre: None,
+            copies_pressed: 0,
+            copies_sold: 0,
+        }
+    }
+
+    /// A player band with the given fame and catalog.
+    fn act(fame: u8, singles: usize, albums: usize) -> Band {
+        Band {
+            fame,
+            singles_released: (0..singles).map(|_| record(ReleaseType::Single)).collect(),
+            albums_released: (0..albums).map(|_| record(ReleaseType::Album)).collect(),
+            ..Band::default()
+        }
+    }
+
+    /// Which tiers ever bite across plenty of offer rolls. The threshold
+    /// gates are deterministic — only the per-label coin flip is random —
+    /// so enough rolls make an unlocked tier impossible to miss, while a
+    /// locked tier stays silent on every single roll.
+    fn tiers_scouting(
+        world: &GameWorld,
+        data: &GameDataFiles,
+        band: &Band,
+    ) -> std::collections::HashSet<String> {
+        let mut rng = StdRng::seed_from_u64(77);
+        let mut tiers = std::collections::HashSet::new();
+        for _ in 0..40 {
+            for offer in world.generate_deal_offers(band, data, &mut rng) {
+                tiers.insert(offer.label_tier);
+            }
+        }
+        tiers
+    }
+
+    #[test]
+    fn independent_labels_scout_a_working_act_early() {
+        let data = GameDataFiles::load().expect("data files present");
+        let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(31));
+
+        // Local fame and a first single out: indies bite, nobody bigger.
+        let tiers = tiers_scouting(&world, &data, &act(25, 1, 0));
+        assert!(
+            tiers.contains("Independent"),
+            "a fame-25 act with a single out should draw indie interest, got {tiers:?}"
+        );
+        assert!(!tiers.contains("Boutique"), "boutiques should wait for the mid-career");
+        assert!(!tiers.contains("Major"), "majors do not scout the small clubs");
+
+        // The same noise with nothing on the shelves draws nobody at all.
+        let all_talk = tiers_scouting(&world, &data, &act(30, 0, 0));
+        assert!(all_talk.is_empty(), "no catalog, no offers, got {all_talk:?}");
+
+        // An act that went straight to an album is a record out all the
+        // same — not invisible for lacking a 45.
+        let album_first = tiers_scouting(&world, &data, &act(25, 0, 1));
+        assert!(
+            album_first.contains("Independent"),
+            "an album counts as a record out, got {album_first:?}"
+        );
+    }
+
+    #[test]
+    fn boutique_labels_court_the_mid_career_act() {
+        let data = GameDataFiles::load().expect("data files present");
+        let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(31));
+
+        let tiers = tiers_scouting(&world, &data, &act(50, 2, 1));
+        assert!(
+            tiers.contains("Boutique"),
+            "a fame-50 act with a small catalog should draw boutique interest, got {tiers:?}"
+        );
+        assert!(!tiers.contains("Major"), "majors should still be out of reach at fame 50");
+    }
+
+    #[test]
+    fn major_labels_only_sign_genuinely_big_acts() {
+        let data = GameDataFiles::load().expect("data files present");
+        let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(31));
+
+        // An album and three singles out, but fame 60: the majors keep watching.
+        let almost = tiers_scouting(&world, &data, &act(60, 3, 1));
+        assert!(
+            !almost.contains("Major"),
+            "fame 60 should not yet be enough for the majors, got {almost:?}"
+        );
+        assert!(almost.contains("Boutique"), "the mid tiers should be all over them though");
+
+        // Ten more points of fame and the phone rings. (Under the old
+        // placeholder — buzz = fame/5 against a threshold of 30 — no major
+        // could call even at fame 100.)
+        let star = tiers_scouting(&world, &data, &act(70, 3, 1));
+        assert!(
+            star.contains("Major"),
+            "a fame-70 act with a real catalog should finally draw a major, got {star:?}"
+        );
+
+        // But no album, no major — singles alone don't prove you can
+        // deliver the LPs a major contract is made of.
+        let no_album = tiers_scouting(&world, &data, &act(70, 4, 0));
+        assert!(
+            !no_album.contains("Major"),
+            "majors require an album in the catalog, got {no_album:?}"
+        );
+    }
+
+    #[test]
+    fn buzz_weighs_the_catalog_and_a_charting_record() {
+        let data = GameDataFiles::load().expect("data files present");
+        let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(31));
+
+        // Same fame, deeper catalog: more buzz...
+        assert!(world.band_buzz(&act(50, 2, 1)) > world.band_buzz(&act(50, 0, 0)));
+        // ...but a shelf of records alone never adds up to stardom.
+        assert_eq!(
+            world.band_buzz(&act(0, 10, 10)),
+            BUZZ_CATALOG_CAP as u8,
+            "the catalog contribution is capped"
+        );
+
+        // A record on this week's chart adds heat while it lasts.
+        let star = act(60, 3, 1);
+        let cold = world.band_buzz(&star);
+        world.submit_chart_entry("The Hit".into(), "The Test Pattern".into(), true, 5_000);
+        assert_eq!(world.band_buzz(&star), cold + BUZZ_CHART_BONUS as u8);
     }
 }
