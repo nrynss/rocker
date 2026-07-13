@@ -1,174 +1,254 @@
-# Rocker — Ecosystem Refactor Handoff
+# Rocker — Multi-Track Handoff (v0.5 cycle)
 
-Status as of this session. The project is **mid-refactor and does not currently
-compile** (5 errors, all in `src/game/mod.rs`, all from the in-flight world
-rewrite). This document is the pick-up point.
+Written 2026-07-13. This replaces the ecosystem-refactor handoff (see git
+history for it). The project is healthy: **25 tests pass, clippy is
+warning-free**, and the fame/economy rework just landed — live-fame caps,
+idle-week fame decay, 4-week breaks, pressing runs with sell-outs, and
+label-run marketing.
 
-The goal of this refactor: turn the "world" from an authored backdrop into a
-living ecosystem — hundreds of generatively-named scene bands acting as agents
-(releasing, charting, signing, breaking up), real genre identity matched
-against era trends, venue/region-driven gigs and tours, one-shot historical
-events, and a reproducible per-run seed.
-
-Terminology note from the user: these are **scene bands / acts**, NOT "rivals".
-"Rival" is reserved for a future feud mechanic. The struct has been renamed
-`CompetingBand` → `SceneBand` and the field `competing_bands` → `bands`
-(with `#[serde(alias = "competing_bands")]` for old saves). Any remaining
-"rival" wording in the UI must go (see task #9).
+This document splits the next cycle into **five tracks (A–E) designed for
+parallel agents**. Each track lists the files it owns, exact entry points,
+acceptance criteria, and its conflict surface. Read *Ground rules* and your
+track; skim the others' "files owned" so you don't wander into them.
 
 ---
 
-## Build status: DOES NOT COMPILE
+## Track 0 — coordinator prerequisite (NOT parallel)
 
-`cargo build` → 5 errors, all stale callers of the new `world.rs` API in
-`src/game/mod.rs` (plus matching ones in `src/ui/render.rs` the compiler hasn't
-reached yet). These are the **critical path** — fixing them is tasks #1 and #3.
+Before any agent branches:
 
-| Location | Error | Fix |
-|---|---|---|
-| `src/game/mod.rs:122` | `GameWorld::new(&data_files)` takes 2 args now | pass a seeded RNG: `GameWorld::new(&data_files, &mut rng)` |
-| `src/game/mod.rs:879` | `world.update_week(&self.timeline, &self.data_files)` takes 3 args now | pass RNG: `update_week(&self.timeline, &self.data_files, &mut rng)` |
-| `src/game/mod.rs:692` | no field `competing_bands` | rename to `self.world.bands` (in `update_support_tour_offer`) |
-| `src/game/mod.rs:1374` | no field `competing_bands` | rename to `game.world.bands` (in a test) |
-| `src/ui/render.rs:279,291` | no field `competing_bands` | rename to `game.world.bands`; also rename the local `rivals` var (terminology) |
+1. **Commit the working tree.** Everything since `f8e5eb9` is uncommitted.
+   Natural split: (1) repo hygiene (dead file, README title, clippy,
+   HANDOFF truth-fixes), (2) live-fame caps + gig rebalance, (3) fame
+   decay + breaks + pressing economy + label marketing.
+2. **Bump `Cargo.toml` to 0.5.0** and change "Current Features (v0.4.0)" in
+   README.md to v0.5.0.
 
-Run `cargo build 2>&1 | rg '^error' -A6` to see them fresh.
+Agents branch from the result. One branch per track, named `track/<letter>-<slug>`.
 
 ---
 
-## Done this session
+## Ground rules for every agent
 
-- **Task #2 — Generative names (COMPLETE, compiles, tested).**
-  Added `tracery` (0.2.1, no default features) in `Cargo.toml`.
-  `GameDataFiles` now holds two `tracery::Grammar`s built at load from the word
-  lists plus two new editable pattern files, auto-created on first run:
-  `data/band_name_patterns.txt`, `data/song_title_patterns.txt` (patterns use
-  `//` comments because `#` is tracery's tag marker).
-  New API: `generate_band_name(&mut impl Rng)`, `generate_song_title(&mut impl Rng)`,
-  `era_genre_modifier(year, &[aliases])` (nearest-year lookup, absent genre =
-  0.85). `random_song_title()` now delegates to the grammar. Old
-  `adjective_noun_pattern`/`verb_pattern`/etc. helpers deleted.
-  Test `data_loader::tests::name_generation_is_seeded_and_varied` passes.
-  Sample output verified: "Electric Dragons", "The Moon", "Radio Static", etc.
+- `cargo test` and `cargo clippy --all-targets` must be clean before you
+  stop. Zero warnings is the bar, not "no new warnings".
+- Behavioral tests over plumbing tests. Name them like sentences
+  (`gigging_alone_cannot_make_you_a_star`).
+- Every new field on a serialized struct (`Game`, `Band`, `Release`, …)
+  takes `#[serde(default)]` — old `.sav` files must keep loading.
+- Log lines are the player's window into mechanics: when a rule blocks or
+  caps something, say why in the log, in-fiction
+  (see "The regulars know every word — you've outgrown this stage").
+- Constants live at the top of `src/game/mod.rs` with a comment explaining
+  the design intent, not the arithmetic.
+- Don't touch files another track owns; if you must, note it in your PR
+  description so the coordinator sequences the merge.
 
-- **Task #4 — One-shot historical events (COMPLETE, code + caller + tests;
-  UNVERIFIED because the crate won't compile yet).**
-  `MusicTimeline` gained `triggered_events: HashSet<String>` (serde default).
-  `should_trigger_historical_event(&self)` → `take_historical_event(&mut self,
-  &mut impl Rng)`: fires only events not yet seen, records them, returns None
-  once an era's history is exhausted. Caller wired at `src/game/mod.rs:874`.
-  Tests added in `timeline.rs` (`historical_events_fire_at_most_once`,
-  `advancing_year_unlocks_new_events`) — will run once the crate compiles.
+### Do-not-undo design decisions
 
-- **Task #3 — Scene rewrite (world.rs is WRITTEN but NOT integrated).**
-  `src/game/world.rs` fully rewritten. It compiles on its own terms; the
-  breakage is only the two stale callers above. What's in it:
-  - `SceneBand { name, fame, peak_fame, latest_release, genre, label, momentum }`
-  - Scene starts at **180 bands** (`SCENE_START_BANDS`), bounded 120–260, with a
-    realistic fame pyramid and some pre-signed to labels.
-  - `update_scene_bands`: momentum + trend-aware fame drift; releases scored by
-    fame/quality/era-genre-modifier/label-reach that enter a top-10 chart;
-    rising unsigned acts get signed.
-  - `ChartEntry` + `charts: Vec<ChartEntry>`, weekly `decay_charts`
-    (`CHART_DECAY` 0.85, floor 25), `submit_chart_entry` returns chart position.
-  - `update_scene_population`: low-fame + no-momentum bands break up (notable
-    ones make news), newcomers arrive (chasing trends 40% of the time),
-    refills hard below the floor.
-  - `poach_rejected_deal(label_name, rng)` — for task #8.
-  - `MusicGenre` now has `#[default] Rock`, `ALL`, `name()`, `aliases()`
-    (→ markets.json genre keys), `random`, `random_trending`, and `Display`.
-  - `GameWorld::new` and `update_week` both now require `&mut impl Rng`.
-  - Tests written (reproducibility, distinct names, bounded population, chart
-    ranking, deal poaching) — unverified pending compile.
+- **World RNG is injected** (`&mut impl Rng` through `GameWorld::new` /
+  `update_week`), seeded from `world_seed` (`ROCKER_SEED`). Never
+  `thread_rng()` inside `world.rs`.
+- **Live fame is capped twice**: by venue (`prestige + VENUE_FAME_HEADROOM`)
+  and by catalog (`LIVE_FAME_BASE_CAP + 8/single + 15/album`, releases in
+  their sales window count). Tours obey the catalog cap. **Support slots are
+  deliberately uncapped** — they borrow the host's audience and are
+  opportunity-gated, not grindable.
+- **Idle decay contract**: a week is "visible" iff the action was
+  Gig/Tour/Support **or** `just_released_music` is non-empty. One grace
+  week, then −1 fame per idle week.
+- **Unit economics anchors**: demand = `score × distribution_multiplier ×
+  UNITS_PER_SCORE_POINT`; indie income $2/copy, label $3/copy × royalty.
+  Sales (first run and long tail) never exceed `copies_pressed`
+  (`copies_pressed == 0` = legacy uncapped). Long tail draws down
+  `copies_pressed − copies_sold`.
+- **Marketing belongs to the label when signed** — the player action errors,
+  the label auto-push is `market_reach / 2` clamped 10–45.
+- **News is derived, not scripted** — generate news from state.
+- `MusicGenre` (world.rs) is the single genre enum; `aliases()` maps to
+  markets.json keys. `ReleaseType` is `Copy`.
+- `PRESSING_TIERS` and `BREAK_WEEKS` are `pub` — the UI renders them.
 
----
+### How to verify
 
-## Remaining tasks (in dependency order)
-
-### #1 — Seeded worldgen ✅ DONE
-SplitMix64 weekly seed derivation implemented. `world_seed: u64` on `Game`,
-`ROCKER_SEED` env var support, seeded `StdRng` for worldgen and weekly updates.
-
-### #3 — Scene integration ✅ DONE
-`competing_bands` → `bands` rename complete. Seeded RNG wired through
-`update_week`. All 16 tests passing.
-
-### #5 — Player genre identity ⛔ SUPERSEDED BY FUTURE.md
-The flat `genre_ratings: HashMap<MusicGenre, u8>` approach is replaced by
-FUTURE.md's ability-derived genre system. Genre proficiency is now a weighted
-sum of 11 musician abilities (vocals, guitar, bass, drums, keys, etc.), not a
-stored HashMap. `active_genre` on `Band` stays, but the quality/sales formulas
-are driven by the `MusicGenre::ability_weights()` table. **Do not implement
-the old #5 spec.** See FUTURE.md §1–§2.
-
-
-### #6 — Venue-based gigs ✅ DONE
-`GameAction::Gig(venue_index)` implemented with prestige-based fame locks, ticket sales attendance, and base payment scaling.
-
-### #7 — Region tours with markets.json economics + regional fame ✅ DONE
-`GameAction::GoOnTour(region_index)` implemented with population-tier fame gates, country-specific travel modifiers, and a custom regional fame system where repeat tours yield profit.
-
-### #8 — Scene bands pick up rejected deals ✅ DONE
-Wired in `action_reject_deal` — rejecting a deal now triggers the scene poaching logic and prints it to the news logs.
-
-### #9 — UI: pickers, charts modal, setup genre, terminology sweep 🟡 PARTIALLY SAFE
-
-**Build now (stable):**
-- Venue picker modal (for #6) — copy existing modal pattern.
-- Region picker modal (for #7) — same pattern.
-- Charts modal on `c` — show top 10 with player entries highlighted.
-- Scene panel: show band count + top act + #1 single.
-- Terminology sweep: remove ALL remaining "rival" wording.
-
-**Defer to FUTURE.md §6:**
-- Setup flow (Solo/Band toggle, genre picker, ability allocation).
-- Band panel redesign (musician abilities, relationship indicators).
-- Practice picker (ability training selection).
-- Band Management modal (`j` hotkey — Go Solo / Form Band / Join Band).
-
-`App`/`Screen` enums are in `src/ui/app.rs`; drawing in `src/ui/render.rs`.
-Existing modal pattern (Deals, Marketing, SupportOffer) is the template.
-
-### #10 — Tests, balance, e2e, README ⏳ DEFERRED
-Unit tests for genre modifier lookup, venue/tour economics, regional fame growth.
-Update the expect script `scratchpad/drive_tui.exp` for the new gig picker flow
-(Gig is no longer a single keypress — it opens a picker). Balance pass on the
-scene (fame drift rates, chart scoring). Update README + bump version to 0.5.0.
-
-**Note:** Wait until after FUTURE.md's Musician refactor lands. The quality
-formulas, practice action, and setup flow will all change — writing tests
-against the current code would produce throwaway work.
+- `cargo test` — 25 tests across data_loader, timeline, world, game.
+- `cargo clippy --all-targets` — warning-free.
+- `ROCKER_SEED=42 cargo run` twice → identical opening scene (worldgen
+  determinism; full-run determinism is Track B's job).
+- Manual smoke: setup → write songs → record (pressing picker) → gig
+  (venue picker) → marketing (indie only) → save/load.
 
 ---
 
-## Key design decisions already baked in — do not undo
+## Track map
 
-- **World RNG is injected, not ambient.** `GameWorld::new` and `update_week` take
-  `&mut impl Rng`. This is deliberate for seeding (#1). Don't revert to
-  `thread_rng()` inside world.rs.
-- **`MusicGenre` is the single genre enum** (in world.rs), now `Default` +
-  `Hash`. `aliases()` maps it to markets.json's snake_case genre keys. The player
-  band, scene bands, and releases should all use it. **FUTURE.md adds
-  `ability_weights()` to MusicGenre** for derived genre proficiency.
-- **Charts are the shared surface** where player and scene compete. Player
-  releases should call `world.submit_chart_entry(title, band, is_player=true,
-  score)` when their sales window closes (hook this in
-  `process_music_releases_and_marketing`), so the player appears on the same
-  chart as scene bands. Not yet wired — add during #9 (charts modal).
-- **FUTURE.md is the design authority** for the Musician/Abilities/Personality
-  system, solo/band identity, and relationship mechanics. Task #5's original
-  `genre_ratings` spec is obsolete. See FUTURE.md for the full design.
-- **News is derived, not scripted.** `update_week` returns `Vec<String>` of
-  events that actually happened (econ shifts, chart hits, signings, notable
-  splits/debuts). Keep generating news from state, not from canned lines.
-- Pattern files (`data/*_patterns.txt`) are user-editable content; the defaults
-  are written on first run. `.gitignore` already has `*.sav`; decide whether to
-  commit the generated pattern files (recommend yes, as documented defaults).
+| Track | Goal | Size | Owns | Merge order |
+|---|---|---|---|---|
+| A | Player on the charts + charts UI | S–M | render.rs, app.rs, one mod.rs hook | 1st |
+| B | Deterministic gameplay (seeded action RNG) | M | mod.rs action fns, events.rs | 3rd (rebase last of A–C) |
+| C | Genre identity stepping stone | M | band.rs, record actions, setup UI | 2nd |
+| D | Balance lab: headless sim + tuning | M | new src/game/sim.rs only | anytime |
+| E | Structure & infra (mod.rs split, dead-code, CI, save-compat) | L | everything | strictly last |
 
-## How to verify once compiling
-- `cargo test` — unit tests across data_loader, timeline, world, game.
-- `cargo clippy --all-targets` — was clean before this refactor; keep it clean.
-- `expect scratchpad/drive_tui.exp` — full TUI playthrough (needs the #10 update
-  for the gig picker). Run in a pty ≥ 80×24; the script sets `stty rows 30
-  columns 100`.
-- `ROCKER_SEED=42 cargo run` twice should produce an identical opening scene.
+A, C, D can start immediately in parallel. B can start immediately but
+expect to rebase over A and C (all three touch `src/game/mod.rs` in
+different functions). E starts only after A–D are merged.
+
+---
+
+## Track A — the charts are a shared scoreboard
+
+**Why:** scene bands chart every week, but the player never appears — the
+one surface where you're supposed to compete with the living scene is
+write-only. The machinery is already built and tested; it's just unfed.
+
+**Current state:**
+- `GameWorld::submit_chart_entry(title, band_name, is_player, score)` —
+  src/game/world.rs:452 — returns the chart position; `decay_charts`
+  already handles player entries (world.rs:437).
+- The hook point: src/game/mod.rs:1029, where a closing release gets
+  `initial_sales_score`. Submit there with `is_player = true`.
+- Modal pattern to copy: Deals modal (`Screen::Deals` in app.rs,
+  `draw_deals_modal` in render.rs).
+
+**Tasks:**
+1. Submit player releases to the chart when their sales window closes; log
+   the position if it charts ("📈 '…' enters the charts at #4").
+2. Charts modal on hotkey `c`: top 10, `is_player` rows highlighted, weeks
+   on chart shown.
+3. Scene panel: show the current #1 record next to the top act.
+4. Terminology sweep: the last "rival" comment — src/game/mod.rs:942.
+
+**Acceptance:** a test proving a high-scoring player release lands on the
+chart and a flop doesn't; modal renders with a player entry highlighted;
+`rg -i rival src/` returns only world.rs:20 (the "not rivals" doc comment).
+
+---
+
+## Track B — finish the determinism story
+
+**Why:** worldgen and weekly world updates are seeded, but every player
+action rolls `thread_rng()` — same seed + same inputs ≠ same run. Full
+determinism makes runs shareable and bugs reproducible, and Track D's sim
+gets vastly more useful on top of it.
+
+**Current state:**
+- Seeded: worldgen and `update_week` via splitmix64 key derivation —
+  src/game/mod.rs:1165 is the pattern to reuse.
+- Ambient `thread_rng()`: song/recording quality (mod.rs:243, 282), write
+  count (401), tour rolls (789), support offers (900–960), random events
+  (events.rs:34, apply at mod.rs:1187, royalty event ~1272).
+
+**Tasks:**
+1. Derive a per-week *action* RNG from `world_seed` + week (+ a distinct
+   stream constant so it doesn't correlate with the world RNG).
+2. Thread `&mut impl Rng` through the action helpers and `EventManager` —
+   same injection style as world.rs. No `thread_rng()` left under src/game/.
+3. Test: two games, same seed, same scripted 20-action sequence → identical
+   money, fame, week, and log text.
+
+**Acceptance:** that test passes; `rg thread_rng src/game/` is empty;
+existing 25 tests still pass (they don't assert specific random values, so
+reseeding is safe — if one does, fix the test, not the design).
+
+**Conflict note:** touches many mod.rs functions — coordinate to merge
+after A and C, rebasing over them.
+
+---
+
+## Track C — genre identity (the bridge, not the cathedral)
+
+**Why:** every release is hardcoded Rock (src/game/mod.rs:472 and :532,
+marked `// Placeholder`), while the scene has full genre identity matched
+against era trends. The player should face the same "play the trend or play
+yourself" choice. FUTURE.md §1–2 (ability-derived genre proficiency) stays
+the end state — this track is the thin bridge, so keep the surface small.
+
+**Tasks:**
+1. `Band.genre: MusicGenre` (`#[serde(default)]` — defaults Rock for old
+   saves). Setup flow gains a genre picker step (Setup screen,
+   src/ui/app.rs `handle_setup_key`).
+2. Stamp releases with the band's genre instead of the placeholder.
+3. Apply the era-genre modifier to player sales scores in
+   `calculate_release_sales_score` via `era_genre_modifier(year, aliases)`
+   (already in data_loader) — the dynamic modifier is already applied;
+   the era one isn't.
+4. Weekly news nudge when your genre is hot/cold ("Punk is exploding —
+   right place, right time").
+
+**Acceptance:** tests that a trend-matched genre outsells an off-trend one
+under identical inputs; setup can pick every `MusicGenre::ALL` entry;
+old saves load with genre Rock.
+
+**Conflict note:** shares the record-action region of mod.rs with B, and
+the Setup screen with nothing. Merge before B.
+
+---
+
+## Track D — balance lab (zero-conflict, start anytime)
+
+**Why:** the new economy (caps, decay, pressing, label promo) was tuned by
+arithmetic, not play. Nobody has watched 100 careers unfold. Numbers that
+probably need eyes: early game under decay (bleeding fame while saving for
+the first single), pressing tier costs vs. 1970 money, label pressing size
+(`reach×100 + fame×50`), win-by-year distribution.
+
+**Tasks:**
+1. New `src/game/sim.rs`, `#[cfg(test)]`-only, plus the one `mod sim;` line
+   in game/mod.rs (your only shared-file touch). Bots drive `process_turn`
+   directly with simple policies:
+   - *gig-grinder* (never records),
+   - *studio-rat* (records constantly, never performs),
+   - *balanced-indie* (write → press club runs → gig the window),
+   - *label-loyalist* (signs the first deal, delivers albums).
+2. Run each bot over many seeds × 15 game-years (`#[ignore]`-tag the long
+   ones; a fast smoke subset runs in CI). Collect: fame/money curves,
+   weeks-to-first-album, sell-out frequency, win/lose rates, panic count.
+3. Report findings in the PR; propose constant changes as a separate commit
+   with the sim numbers before/after. Invariants to encode as tests:
+   gig-grinder never exceeds `LIVE_FAME_BASE_CAP`; balanced-indie can win
+   by year ~12 on a majority of seeds; nobody panics.
+
+**Acceptance:** sim module + invariant tests green; a written tuning
+proposal (even if the proposal is "numbers are fine").
+
+---
+
+## Track E — structure & infra (after A–D merge)
+
+**Why:** src/game/mod.rs is **1,895 lines** — Game struct, constants, 15
+action handlers, the sales pipeline, events, save/load, and tests in one
+file. Every track above collides inside it. Splitting *now* would serialize
+the other tracks, so this lands last and clears the ground for the
+FUTURE.md Musician arc.
+
+**Tasks:**
+1. Split mod.rs: `game/actions.rs` (action_* handlers),
+   `game/economy.rs` (costs, pressing, sales pipeline, outcome),
+   `game/turn.rs` (process_turn, advance_week_events, visibility/decay),
+   keeping `Game` + constants + module wiring in mod.rs. Pure moves — no
+   behavior changes mixed in.
+2. Remove `#![allow(dead_code)]` (src/main.rs:3); triage what surfaces —
+   delete or justify with a targeted allow + comment.
+3. Save-compat fixture: commit a pre-0.5 `.sav`; test that `load_game`
+   accepts it (idle_streak/copies_pressed default correctly).
+4. CI: green on all three OSes, add `cargo clippy --all-targets --
+   -D warnings` and `cargo fmt --check` gates.
+5. CHANGELOG.md for 0.4.0 → 0.5.0.
+
+**Acceptance:** identical test list passes post-split; `git log` shows
+mechanical-move commits separate from any fix; CI gates active.
+
+---
+
+## Backlog (unassigned, roughly ordered)
+
+- **FUTURE.md §1–§6** — the Musician/abilities/personality arc. Blocked on
+  Track E's split; §2 supersedes Track C's bridge when it lands.
+- "Outgrown" tag in the venue picker (the cap is invisible until you hit it).
+- Count only non-flop releases toward the catalog fame cap.
+- Player choices inside random events (currently auto-resolved).
+- Difficulty levels; chart-position rewards (fame/deal interest from
+  charting); label contract renegotiation.
+- The e2e expect-script driver from the old handoff's #10 (drive the TUI in
+  a pty) — pairs well with Track B's determinism.
