@@ -9,6 +9,7 @@ pub mod constants {
     pub const MAX_SKILL: u8 = 100;
 
     pub const WEEKS_PER_YEAR: u32 = 52;
+    pub const STARTING_YEAR: u32 = 1970;
 
     // Cost constants
     pub const SINGLE_RECORDING_COST: i32 = 100;

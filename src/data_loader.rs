@@ -157,7 +157,39 @@ pub struct GameDataFiles {
     pub timeline_data: TimelineData,
     pub record_labels_data: RecordLabelsData,
     pub markets_data: MarketsData,
+    /// Tracery grammars assembled from the word lists plus the editable
+    /// pattern files. None only if grammar construction failed.
+    pub band_name_grammar: Option<tracery::Grammar>,
+    pub song_title_grammar: Option<tracery::Grammar>,
 }
+
+const BAND_NAME_PATTERNS_PATH: &str = "data/band_name_patterns.txt";
+const SONG_TITLE_PATTERNS_PATH: &str = "data/song_title_patterns.txt";
+
+const DEFAULT_BAND_NAME_PATTERNS: &str = "\
+// Band name patterns (a tracery grammar) — one pattern per line.
+// Rules you can reference: #adjective# #noun# #verb# #emotion# #place# #curated#
+// Modifiers: #noun.s# pluralizes, #noun.capitalize# capitalizes.
+The #adjective# #noun#
+The #adjective# #noun#
+The #noun#
+#adjective# #noun#
+#adjective# #noun#
+#noun# #noun#
+#curated#
+#curated#
+";
+
+const DEFAULT_SONG_TITLE_PATTERNS: &str = "\
+// Song title patterns (a tracery grammar) — one pattern per line.
+// Rules you can reference: #adjective# #noun# #verb# #emotion# #place#
+#adjective# #noun#
+#verb# #noun#
+#emotion#
+#place#
+#noun#
+#noun# of #noun#
+";
 
 impl GameDataFiles {
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
@@ -166,7 +198,7 @@ impl GameDataFiles {
             return Err("Data directory not found! Please create the data/ directory with all required files.".into());
         }
 
-        Ok(Self {
+        let mut files = Self {
             song_adjectives: Self::load_text_file("data/song_adjectives.txt")?,
             song_nouns: Self::load_text_file("data/song_nouns.txt")?,
             song_verbs: Self::load_text_file("data/song_verbs.txt")?,
@@ -180,7 +212,52 @@ impl GameDataFiles {
             timeline_data: Self::load_json_file("data/timeline.json")?,
             record_labels_data: Self::load_json_file("data/record_labels.json")?,
             markets_data: Self::load_json_file("data/markets.json")?,
-        })
+            band_name_grammar: None,
+            song_title_grammar: None,
+        };
+
+        let band_patterns =
+            Self::load_pattern_file(BAND_NAME_PATTERNS_PATH, DEFAULT_BAND_NAME_PATTERNS)?;
+        let title_patterns =
+            Self::load_pattern_file(SONG_TITLE_PATTERNS_PATH, DEFAULT_SONG_TITLE_PATTERNS)?;
+        files.band_name_grammar = files.build_grammar(band_patterns);
+        files.song_title_grammar = files.build_grammar(title_patterns);
+
+        Ok(files)
+    }
+
+    /// Load a pattern file, writing the default one first if it's missing.
+    /// Patterns use `//` comments because `#` is tracery's tag marker.
+    fn load_pattern_file(path: &str, default: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        if !Path::new(path).exists() {
+            fs::write(path, default)?;
+        }
+        let content = fs::read_to_string(path)?;
+        let patterns: Vec<String> = content
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("//"))
+            .map(str::to_string)
+            .collect();
+        if patterns.is_empty() {
+            return Err(format!("No usable patterns in {}", path).into());
+        }
+        Ok(patterns)
+    }
+
+    /// Assemble a tracery grammar: `origin` comes from a pattern file, and the
+    /// word lists are exposed as rules the patterns can reference.
+    fn build_grammar(&self, origin: Vec<String>) -> Option<tracery::Grammar> {
+        let rules: Vec<(String, Vec<String>)> = vec![
+            ("origin".to_string(), origin),
+            ("adjective".to_string(), self.song_adjectives.clone()),
+            ("noun".to_string(), self.song_nouns.clone()),
+            ("verb".to_string(), self.song_verbs.clone()),
+            ("emotion".to_string(), self.song_emotions.clone()),
+            ("place".to_string(), self.song_places.clone()),
+            ("curated".to_string(), self.band_names.clone()),
+        ];
+        tracery::Grammar::from_map(rules).ok()
     }
 
     fn load_text_file(path: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -208,39 +285,7 @@ impl GameDataFiles {
     }
 
     pub fn random_song_title(&self) -> String {
-        let mut rng = thread_rng();
-
-        match rng.gen_range(0..5) {
-            0 => self.adjective_noun_pattern(&mut rng),
-            1 => self.verb_pattern(&mut rng),
-            2 => self.emotion_pattern(&mut rng),
-            3 => self.place_pattern(&mut rng),
-            _ => self.simple_pattern(&mut rng),
-        }
-    }
-
-    fn adjective_noun_pattern(&self, rng: &mut impl Rng) -> String {
-        let adj = &self.song_adjectives[rng.gen_range(0..self.song_adjectives.len())];
-        let noun = &self.song_nouns[rng.gen_range(0..self.song_nouns.len())];
-        format!("{} {}", adj, noun)
-    }
-
-    fn verb_pattern(&self, rng: &mut impl Rng) -> String {
-        let verb = &self.song_verbs[rng.gen_range(0..self.song_verbs.len())];
-        let noun = &self.song_nouns[rng.gen_range(0..self.song_nouns.len())];
-        format!("{} {}", verb, noun)
-    }
-
-    fn emotion_pattern(&self, rng: &mut impl Rng) -> String {
-        self.song_emotions[rng.gen_range(0..self.song_emotions.len())].clone()
-    }
-
-    fn place_pattern(&self, rng: &mut impl Rng) -> String {
-        self.song_places[rng.gen_range(0..self.song_places.len())].clone()
-    }
-
-    fn simple_pattern(&self, rng: &mut impl Rng) -> String {
-        self.song_nouns[rng.gen_range(0..self.song_nouns.len())].clone()
+        self.generate_song_title(&mut thread_rng())
     }
 
     pub fn random_album_title(&self) -> String {
@@ -256,6 +301,54 @@ impl GameDataFiles {
     pub fn random_band_name(&self) -> String {
         let mut rng = thread_rng();
         self.band_names[rng.gen_range(0..self.band_names.len())].clone()
+    }
+
+    /// Compose a band name from the pattern grammar. The curated list is one
+    /// pattern among several, so the scene can hold hundreds of distinct acts.
+    pub fn generate_band_name(&self, rng: &mut impl Rng) -> String {
+        self.band_name_grammar
+            .as_ref()
+            .and_then(|grammar| grammar.flatten(rng).ok())
+            .unwrap_or_else(|| self.random_band_name())
+    }
+
+    /// Compose a song title from the pattern grammar, using the caller's RNG.
+    pub fn generate_song_title(&self, rng: &mut impl Rng) -> String {
+        self.song_title_grammar
+            .as_ref()
+            .and_then(|grammar| grammar.flatten(rng).ok())
+            .unwrap_or_else(|| {
+                format!(
+                    "{} {}",
+                    self.song_adjectives[rng.gen_range(0..self.song_adjectives.len())],
+                    self.song_nouns[rng.gen_range(0..self.song_nouns.len())]
+                )
+            })
+    }
+
+    /// Era modifier for a genre, using the nearest data year at or before
+    /// `year`. Genres the era's data doesn't mention are out of fashion.
+    pub fn era_genre_modifier(&self, year: u32, genre_aliases: &[&str]) -> f32 {
+        const OUT_OF_FASHION: f32 = 0.85;
+
+        let modifiers = &self.markets_data.market_modifiers.genre_era_modifiers;
+        let nearest_year = modifiers
+            .keys()
+            .filter_map(|k| k.parse::<u32>().ok())
+            .filter(|&y| y <= year)
+            .max();
+
+        let Some(nearest) = nearest_year else {
+            return 1.0; // Year precedes all data: no opinion.
+        };
+        let Some(year_map) = modifiers.get(&nearest.to_string()) else {
+            return 1.0;
+        };
+
+        genre_aliases
+            .iter()
+            .find_map(|alias| year_map.get(*alias).copied())
+            .unwrap_or(OUT_OF_FASHION)
     }
 
     pub fn random_band_member_name(&self) -> String {
@@ -351,5 +444,36 @@ impl GameDataFiles {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    #[test]
+    fn name_generation_is_seeded_and_varied() {
+        let data = GameDataFiles::load().expect("data files present");
+
+        let names_a: Vec<String> = {
+            let mut rng = StdRng::seed_from_u64(42);
+            (0..30).map(|_| data.generate_band_name(&mut rng)).collect()
+        };
+        let names_b: Vec<String> = {
+            let mut rng = StdRng::seed_from_u64(42);
+            (0..30).map(|_| data.generate_band_name(&mut rng)).collect()
+        };
+        assert_eq!(names_a, names_b, "same seed must give the same names");
+
+        let distinct: std::collections::HashSet<_> = names_a.iter().collect();
+        assert!(distinct.len() >= 20, "30 draws should be mostly distinct: {:?}", names_a);
+
+        let mut rng = StdRng::seed_from_u64(7);
+        for _ in 0..5 {
+            println!("band:  {}", data.generate_band_name(&mut rng));
+            println!("title: {}", data.generate_song_title(&mut rng));
+        }
     }
 }

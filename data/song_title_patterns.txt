@@ -1,0 +1,8 @@
+// Song title patterns (a tracery grammar) — one pattern per line.
+// Rules you can reference: #adjective# #noun# #verb# #emotion# #place#
+#adjective# #noun#
+#verb# #noun#
+#emotion#
+#place#
+#noun#
+#noun# of #noun#

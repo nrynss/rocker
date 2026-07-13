@@ -1,0 +1,11 @@
+// Band name patterns (a tracery grammar) — one pattern per line.
+// Rules you can reference: #adjective# #noun# #verb# #emotion# #place# #curated#
+// Modifiers: #noun.s# pluralizes, #noun.capitalize# capitalizes.
+The #adjective# #noun#
+The #adjective# #noun#
+The #noun#
+#adjective# #noun#
+#adjective# #noun#
+#noun# #noun#
+#curated#
+#curated#

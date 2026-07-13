@@ -36,42 +36,16 @@ Rocker is a text-based management simulation where you play as an aspiring rock 
 
 ### Prerequisites
 
-- Rust 1.70+ installed ([Install Rust](https://rustup.rs/))
-- Terminal/Command prompt
+- Rust 1.88+ installed ([Install Rust](https://rustup.rs/)) — the project uses the 2024 edition
+- A terminal (the game runs full-screen)
 
 ### Installation & Running
 
-1. **Clone or create the project:**
-   ```bash
-   mkdir rocker
-   cd rocker
-   ```
-
-2. **Copy the provided source files** into the following structure:
-   ```
-   rocker/
-   ├── Cargo.toml
-   ├── src/
-   │   ├── main.rs
-   │   ├── game/
-   │   │   ├── mod.rs
-   │   │   ├── player.rs
-   │   │   ├── band.rs
-   │   │   ├── music.rs
-   │   │   ├── events.rs
-   │   │   └── world.rs
-   │   ├── ui/
-   │   │   ├── mod.rs
-   │   │   └── terminal.rs
-   │   └── data/
-   │       └── mod.rs
-   └── README.md
-   ```
-
-3. **Build and run:**
-   ```bash
-   cargo run
-   ```
+```bash
+git clone <this repository>
+cd rocker
+cargo run
+```
 
 ## 🎯 Game Mechanics
 
@@ -85,14 +59,43 @@ Each turn represents one week in your rock career:
 
 ### Actions Available
 
-- **Laze Around** - Recover energy and reduce stress
-- **Write Songs** - Create material for future releases
-- **Practice** - Improve band skill
-- **Record Single** - Release a single (requires songs and $100)
-- **Record Album** - Release an album (requires 8+ songs and $1000)
-- **Play Gigs** - Earn money and gain fame
-- **Take a Break** - Full health/energy recovery
-- **Visit Doctor** - Restore health ($50)
+- **Laze Around** (1) - Recover energy and reduce stress
+- **Write Songs** (2) - Create material for future releases
+- **Practice** (3) - Improve band skill
+- **Record Single** (4) - Release a single (requires songs and ~$100)
+- **Record Album** (5) - Release an album (requires 8+ songs and ~$1000)
+- **Play a Gig** (6) - Opens the venue picker to select a venue from local pubs to stadiums
+- **Go on Tour** (7) - Opens the region picker to select a tour destination across global markets
+- **Support Slot** (T) - Open for a bigger act when they come calling: modest pay, serious exposure
+- **Take a Break** (8) - Full health/energy recovery
+- **Visit Doctor** (9) - Restore health ($50)
+- **Marketing** (M) - Run press, radio, and promo-film campaigns for your releases
+- **Deal Offers** (V) - Review, accept, or reject record label offers
+- **Save / Load** (S / L) - Persist your career to a JSON save file
+
+Navigate with ↑/↓ and Enter, or press an action's hotkey directly.
+Recording a release opens a 4-week sales window — market it before it drops
+to boost its first-run sales.
+
+### Independent vs. Signed
+
+Distribution is everything. Without a label your records only reach as far
+as your fame carries them, and you pay up front to press and ship every
+release — a cost that grows with the size of your following. A label puts
+its market reach behind every release and covers distribution, but only pays
+you a royalty slice. Unknown bands earn more signed; superstars can afford
+to go independent and keep everything.
+
+### The Scene & Record Deals
+
+The scene lives its own life: 180+ scene bands release records, chart, sign with labels, break up, and new bands arrive to take their place. When an act much bigger than you likes what they hear, they may offer you the opening slot on their tour — support slots expire fast, so decide quickly.
+
+Record labels will scout you as your fame grows. If you reject a record deal offer, the largest unsigned act on the scene may swoop in and poach the contract, which will be reported in the weekly news logs.
+
+### Reproducible Seeding
+
+The entire game world can be seeded. Launching the game with `ROCKER_SEED=42 cargo run` ensures that the starting world, names of competing acts, and week-by-week updates evolve deterministically, making runs reproducible and shareable.
+
 
 ### Win Conditions
 - **Fame ≥ 90** AND **Albums ≥ 5** = YOU'RE A ROCKSTAR! 🌟
@@ -104,17 +107,17 @@ Each turn represents one week in your rock career:
 ## 🛠️ Technical Details
 
 ### Architecture
-- **Modular design** with separate concerns
-- **Cross-platform** terminal UI using `crossterm`
-- **Serializable state** for future save/load functionality
+- **Rust 2024 edition** (MSRV 1.88)
+- **Modular design** with separate concerns (game logic knows nothing about the UI)
+- **Full-screen TUI** built with `ratatui` - panels, gauges, modals, and an event log
+- **Serializable state** - save/load to JSON
 - **Random events system** for dynamic gameplay
 - **Market simulation** with economic cycles
 
 ### Key Dependencies
-- `crossterm` - Cross-platform terminal manipulation
+- `ratatui` - Terminal UI framework (crossterm backend)
 - `serde` + `serde_json` - Serialization for save/load
 - `rand` - Random number generation
-- `chrono` - Date/time handling
 
 ### Platform Support
 ✅ **Windows** - Native terminal support
@@ -123,28 +126,33 @@ Each turn represents one week in your rock career:
 
 ## 🎨 Features
 
-### Current Features (v0.2.0)
+### Current Features (v0.4.0)
+- ✅ **Full-screen TUI** - ratatui interface with stat gauges, modals, and a live event log
 - ✅ **Historical timeline** - Accurate music industry evolution 1970-1990+
+- ✅ **Reproducible Seeding** - Fully seeded world generation and deterministic week-by-week updates via `ROCKER_SEED` env var
+- ✅ **Venue-based Gigs** - Gig at 5 distinct venues with prestige fame gates, ticket sales attendance, and base payouts
+- ✅ **Regional Markets & Tours** - Tour regions in the US, UK, Europe, Japan, and Australia, with population-tier fame gates, travel multipliers, and regional fame progression
+- ✅ **Deal Poaching** - Scene bands dynamically poach record deals that you reject
+- ✅ **Distribution economics** - Indie releases capped by your fame with up-front pressing costs; labels bring reach but take their cut
+- ✅ **Support tours** - Bigger acts offer you opening slots: modest pay, major exposure
+- ✅ **A living scene** - 180+ bands rise and fall with the trends, split up, and new bands debut
 - ✅ **External data files** - Fully customizable names and content
 - ✅ **Era-based mechanics** - Recording costs, trends, and market conditions
 - ✅ **Generated content** - Procedural song titles, band names, venues
-- ✅ Basic game loop and mechanics
-- ✅ Player and band management
-- ✅ Song writing and recording
-- ✅ Random events system
-- ✅ Market simulation
-- ✅ Terminal-based UI with colors
+- ✅ **Record deals** - Label offers with advances, royalties, and album obligations
+- ✅ **Marketing campaigns** - Press, radio, and promo films that boost release sales
+- ✅ **Save/Load** - JSON save files
+- ✅ Song writing, singles, and albums with a windowed sales model
+- ✅ Random events system and market simulation
 - ✅ Health/energy/stress management
 
 ### Planned Features
-- 🔄 **Tours and venues** - Multi-city tour management
-- 🔄 **Record deals** - Contract negotiations and obligations
 - 🔄 **Player choices in events** - Interactive decision making
-- 🔄 **Save/Load game** - Persistent progress
 - 🔄 **Multiple difficulty levels** - Easy to Rockstar mode
-- 🔄 **Band member relationships** - Deeper social dynamics
-- 🔄 **Music genres** - Style specialization
+- 🔄 **Band member relationships** - Hiring, firing, and deeper social dynamics
+- 🔄 **Music genres** - Style specialization (genre field is currently a placeholder)
 - 🔄 **Chart tracking** - Billboard-style success metrics
+
 
 ## 🎵 Development
 
@@ -166,19 +174,22 @@ RUST_LOG=debug cargo run
 ### Project Structure
 ```
 src/
-├── main.rs              # Entry point and terminal setup
+├── main.rs              # Entry point: data validation + terminal setup
+├── data_loader.rs       # Loads the customizable data/ files
 ├── game/
-│   ├── mod.rs           # Core game state and logic
+│   ├── mod.rs           # Core game state, turn processing, sales model
 │   ├── player.rs        # Player stats and attributes
-│   ├── band.rs          # Band members and dynamics
-│   ├── music.rs         # Songs, albums, and music generation
-│   ├── events.rs        # Random events and consequences
+│   ├── band.rs          # Band members, deals, and dynamics
+│   ├── music.rs         # Songs, releases, marketing campaigns
+│   ├── events.rs        # Random event triggering
+│   ├── timeline.rs      # Historical eras (1970 onward)
 │   └── world.rs         # Market conditions and competing bands
 ├── ui/
 │   ├── mod.rs           # UI module declaration
-│   └── terminal.rs      # Terminal-based interface
+│   ├── app.rs           # App state machine and input handling
+│   └── render.rs        # ratatui layout and widgets
 └── data/
-    └── mod.rs           # Configuration and game data
+    └── mod.rs           # Game constants and helpers
 ```
 
 ## 🤝 Contributing

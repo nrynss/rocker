@@ -40,6 +40,13 @@ pub struct RecordDeal {
     pub royalty_rate: f32, // Percentage
     pub albums_required: u8,
     pub albums_delivered: u8,
+    /// The label's distribution muscle (0-100), taken from the label data.
+    #[serde(default = "default_market_reach")]
+    pub market_reach: u8,
+}
+
+fn default_market_reach() -> u8 {
+    50
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,9 +108,7 @@ impl Default for BandReputation {
 
 impl Band {
     pub fn new(name: String) -> Self {
-        let mut band = Self::default();
-        band.name = name;
-        band
+        Self { name, ..Self::default() }
     }
 
     pub fn get_fame_level(&self) -> &str {
@@ -154,7 +159,7 @@ impl Band {
     }
 
     pub fn can_record_single(&self) -> bool {
-        self.unreleased_songs.len() >= 1
+        !self.unreleased_songs.is_empty()
     }
 
     pub fn total_releases(&self) -> usize { // Changed to usize to match Vec::len()
@@ -166,7 +171,7 @@ impl Band {
         // the band would have a genre field
         // For now, we'll use a placeholder that returns true for any genre
         // TODO: Add actual genre tracking to Band struct
-        target_genres.len() > 0 // Placeholder - always return true if genres provided
+        !target_genres.is_empty() // Placeholder - always return true if genres provided
     }
 
     pub fn current_deal(&self) -> Option<&RecordDeal> {
@@ -191,10 +196,10 @@ impl Band {
     }
 
     pub fn remaining_albums_for_deal(&self) -> u8 {
-        if let Some(deal) = &self.record_deal {
-            if deal.albums_delivered < deal.albums_required {
-                return deal.albums_required - deal.albums_delivered;
-            }
+        if let Some(deal) = &self.record_deal
+            && deal.albums_delivered < deal.albums_required
+        {
+            return deal.albums_required - deal.albums_delivered;
         }
         0 // No deal or deal completed
     }

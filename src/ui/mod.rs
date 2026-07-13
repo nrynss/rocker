@@ -1,1 +1,2 @@
-pub mod terminal;
+pub mod app;
+mod render;

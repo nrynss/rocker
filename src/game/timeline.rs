@@ -38,13 +38,17 @@ pub struct IndustryTrends {
 pub struct MusicTimeline {
     pub eras: HashMap<u32, MusicEra>,
     pub current_year: u32,
+    /// History only happens once: events that have already made the news.
+    #[serde(default)]
+    pub triggered_events: std::collections::HashSet<String>,
 }
 
 impl MusicTimeline {
     pub fn new(data_files: &GameDataFiles) -> Self {
         let mut timeline = Self {
             eras: HashMap::new(),
-            current_year: 1970,
+            current_year: crate::data::constants::STARTING_YEAR,
+            triggered_events: std::collections::HashSet::new(),
         };
         timeline.load_from_data_files(data_files);
         timeline
@@ -171,14 +175,25 @@ impl MusicTimeline {
         self.get_current_era().dominant_genres.clone()
     }
 
-    pub fn should_trigger_historical_event(&self) -> Option<String> {
-        let era = self.get_current_era();
-        if rand::random::<f32>() < 0.1 {
-            // 10% chance
-            Some(era.major_events[rand::random::<usize>() % era.major_events.len()].clone())
-        } else {
-            None
+    /// Fire one of the current era's historical events, at most once each.
+    /// Returns None once the era's history has fully played out.
+    pub fn take_historical_event(&mut self, rng: &mut impl rand::Rng) -> Option<String> {
+        if rng.gen_range(0..10) != 0 {
+            return None;
         }
+        let fresh: Vec<String> = self
+            .get_current_era()
+            .major_events
+            .iter()
+            .filter(|event| !self.triggered_events.contains(*event))
+            .cloned()
+            .collect();
+        if fresh.is_empty() {
+            return None;
+        }
+        let event = fresh[rng.gen_range(0..fresh.len())].clone();
+        self.triggered_events.insert(event.clone());
+        Some(event)
     }
 
     pub fn get_current_year(&self) -> u32 {
@@ -193,5 +208,66 @@ impl MusicTimeline {
 
     pub fn get_fan_loyalty_factor(&self) -> u8 {
         self.get_current_era().industry_trends.fan_loyalty_factor
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data_loader::GameDataFiles;
+    use rand::SeedableRng;
+    use rand::rngs::StdRng;
+
+    #[test]
+    fn historical_events_fire_at_most_once() {
+        let data = GameDataFiles::load().expect("data files present");
+        let mut timeline = MusicTimeline::new(&data);
+        let era_event_count = timeline.get_current_era().major_events.len();
+
+        let mut rng = StdRng::seed_from_u64(1);
+        let mut seen = Vec::new();
+        for _ in 0..2000 {
+            if let Some(event) = timeline.take_historical_event(&mut rng) {
+                assert!(
+                    !seen.contains(&event),
+                    "event '{event}' fired twice — memory failed"
+                );
+                seen.push(event);
+            }
+        }
+
+        assert!(!seen.is_empty(), "some events should fire over 2000 weeks");
+        assert!(
+            seen.len() <= era_event_count,
+            "never more distinct events than the era defines ({} > {})",
+            seen.len(),
+            era_event_count
+        );
+        // Once exhausted, the era stops producing news.
+        assert_eq!(seen.len(), timeline.triggered_events.len());
+    }
+
+    #[test]
+    fn advancing_year_unlocks_new_events() {
+        let data = GameDataFiles::load().expect("data files present");
+        let mut timeline = MusicTimeline::new(&data);
+        let mut rng = StdRng::seed_from_u64(2);
+
+        // Drain 1970's events.
+        for _ in 0..3000 {
+            timeline.take_historical_event(&mut rng);
+        }
+        let after_1970 = timeline.triggered_events.len();
+
+        // A later era brings its own, previously-unseen events.
+        timeline.current_year = 1977;
+        let mut fired_new = false;
+        for _ in 0..3000 {
+            if timeline.take_historical_event(&mut rng).is_some() {
+                fired_new = true;
+            }
+        }
+        assert!(fired_new, "a new era should surface fresh events");
+        assert!(timeline.triggered_events.len() > after_1970);
     }
 }

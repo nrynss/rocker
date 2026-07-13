@@ -14,13 +14,65 @@ pub enum ReleaseType {
     Album,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum MarketingCampaignType {
     BasicPress,      // Low cost, low impact
     RadioPromotion,  // Medium cost, medium impact
     MusicVideo,      // High cost, high impact
     SocialMediaBlitz, // Modern era, variable cost/impact
     MagazineSpread,   // Older eras, medium cost/impact
+}
+
+pub struct CampaignSpec {
+    pub name: &'static str,
+    pub cost: i32,
+    pub duration_weeks: u32,
+    pub effectiveness_bonus: u8,
+}
+
+impl MarketingCampaignType {
+    pub const ALL: [MarketingCampaignType; 5] = [
+        MarketingCampaignType::BasicPress,
+        MarketingCampaignType::MagazineSpread,
+        MarketingCampaignType::RadioPromotion,
+        MarketingCampaignType::SocialMediaBlitz,
+        MarketingCampaignType::MusicVideo,
+    ];
+
+    pub fn spec(&self) -> CampaignSpec {
+        match self {
+            MarketingCampaignType::BasicPress => CampaignSpec {
+                name: "Basic Press",
+                cost: 100,
+                duration_weeks: 4,
+                effectiveness_bonus: 5,
+            },
+            MarketingCampaignType::MagazineSpread => CampaignSpec {
+                name: "Magazine Spread",
+                cost: 300,
+                duration_weeks: 4,
+                effectiveness_bonus: 10,
+            },
+            MarketingCampaignType::RadioPromotion => CampaignSpec {
+                name: "Radio Promotion",
+                cost: 500,
+                duration_weeks: 6,
+                effectiveness_bonus: 15,
+            },
+            MarketingCampaignType::SocialMediaBlitz => CampaignSpec {
+                name: "Street Team Blitz",
+                cost: 750,
+                duration_weeks: 4,
+                effectiveness_bonus: 20,
+            },
+            MarketingCampaignType::MusicVideo => CampaignSpec {
+                name: "Promo Film",
+                cost: 2000,
+                duration_weeks: 8,
+                effectiveness_bonus: 30,
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
