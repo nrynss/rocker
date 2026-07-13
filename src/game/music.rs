@@ -1,4 +1,4 @@
-use crate::game::world::MusicGenre;
+use crate::game::genre::MusicGenre;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

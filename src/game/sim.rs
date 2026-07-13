@@ -15,6 +15,17 @@
 //! policy replays the same career exactly — exact-value assertions are
 //! fair game. `seeded_worlds_are_reproducible_in_the_harness` pins this.
 
+use crate::data_loader::GameDataFiles;
+use crate::game::band::Band;
+use crate::game::events::EventManager;
+use crate::game::music::ReleaseType;
+use crate::game::player::Player;
+use crate::game::timeline::MusicTimeline;
+use crate::game::world::GameWorld;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
+
+use super::constants::{self, *};
 use super::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -76,7 +87,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         just_released_music: Vec::new(),
         turn_log: Vec::new(),
     };
-    game.initialize_player("Sim Driver", "The Test Pattern", world::MusicGenre::Rock);
+    game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
 }
 

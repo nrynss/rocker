@@ -4,6 +4,28 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
+## 0.5.1 — 2026-07-14
+
+Structure-hardening cycle: pure refactor, no gameplay changes — the big
+files were split into owned packages so the next feature cycle lands in
+small, reviewable diffs.
+
+### Internal
+
+- Structure-only refactor, no behavior change: the four monoliths were
+  split into owned packages. `src/game/mod.rs` (~1,060 lines) → a 27-line
+  module shell plus `core`, `constants`, `rng`, `genre`, `events_apply`,
+  and a by-concern `tests/` package; `world.rs` (~1,090) →
+  `world/{mod,scene,charts,deals,venues}`; `actions.rs` (~720) →
+  `actions/{studio,live,business,rest}`; event outcomes out of `turn.rs`
+  into `events_apply.rs`.
+- UI split to match: `render.rs` (~1,050) →
+  `render/{layout,panels,modals/*,setup,game_over}` and `app.rs` (~990) →
+  `app` + `input/*`. Every production `.rs` is now under ~500 lines.
+- Same 42 tests (2 ignored), relocated by concern under `src/game/tests/`;
+  `cargo test` / `clippy -D warnings` / `fmt --check` all green. No
+  save-format, RNG-stream, or gameplay changes.
+
 ## 0.5.0 — 2026-07-13
 
 The cycle where the scene pushes back: records gate your rise, the charts
