@@ -1,4 +1,10 @@
-# Rocker — Multi-Track Handoff (v0.5 cycle)
+# Rocker — Multi-Track Handoff (v0.5 cycle) — ARCHIVED
+
+> **Archived 2026-07-13.** The cycle is complete: all six tracks merged
+> (PRs #7–#13) and `v0.5.0` is tagged. Kept verbatim below as the record
+> of how the cycle was planned and run — see CHANGELOG.md for what
+> shipped. **The *Backlog* section at the bottom is still the open work
+> list** and should seed the next cycle's handoff.
 
 Written 2026-07-13, refreshed the same day after the first parallel round
 merged. The project is healthy: **34 tests pass (+2 `#[ignore]`d sim
@@ -96,9 +102,9 @@ Agents branch from the result. One branch per track, named `track/<letter>-<slug
 | A | Player on the charts + charts UI | S–M | render.rs, app.rs, one mod.rs hook | ✅ merged (PR #7) |
 | C | Genre identity stepping stone | M | band.rs, record actions, setup UI | ✅ merged (PR #8) |
 | D | Balance lab: headless sim + tuning | M | new src/game/sim.rs only | ✅ merged (PR #9, incl. tuning) |
-| F | Deal pipeline actually scouts you | S–M | world.rs deal gen, mod.rs offer handling | round two — merges before B |
-| B | Deterministic gameplay (seeded action RNG) | M | mod.rs action fns, events.rs, sim.rs tie-in | round two — merges after F |
-| E | Structure & infra (mod.rs split, dead-code, CI, save-compat) | L | everything | strictly last |
+| F | Deal pipeline actually scouts you | S–M | world.rs deal gen, mod.rs offer handling | ✅ merged (PR #11) |
+| B | Deterministic gameplay (seeded action RNG) | M | mod.rs action fns, events.rs, sim.rs tie-in | ✅ merged (PR #12) |
+| E | Structure & infra (mod.rs split, dead-code, CI, save-compat) | L | everything | ✅ merged (PR #13) |
 
 Round two: F and B run in parallel; F is small and merges first, B rebases
 over it (both touch the deal-offer region of mod.rs). E starts only after
