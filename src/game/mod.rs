@@ -19,12 +19,7 @@ use std::io::{Read, Write};
 use timeline::MusicTimeline;
 use world::{GameWorld, PotentialDealOffer};
 
-// Existing Royalty Constants (Kept for reference if any old logic uses them, but new model is primary)
-const BASE_ALBUM_ROYALTY_PAYMENT: u32 = 500;
-const BASE_SINGLE_ROYALTY_PAYMENT: u32 = 50;
-const ROYALTY_FAME_MULTIPLIER: f32 = 10.0;
-
-// New Quality Calculation Constants
+// Quality calculation constants
 const QUALITY_BASE_SONGWRITING: u8 = 30;
 const QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS: u8 = 25;
 const QUALITY_SONGWRITING_RANDOM_VARIATION: u8 = 10;
@@ -32,24 +27,37 @@ const QUALITY_BASE_RECORDING: u8 = 30;
 const QUALITY_RECORDING_MAX_BONUS_PLAYER_STATS: u8 = 20;
 const QUALITY_RECORDING_RANDOM_VARIATION: u8 = 10;
 
-// New Sales Model Constants
+// Sales model constants
 const INITIAL_SALES_WINDOW_WEEKS: u32 = 4;
-const MARKETING_EFFECTIVENESS_DECAY_RATE: f32 = 0.90; // Not used in this simplified model yet
-const SALES_SCORE_BASE: u32 = 50; // Not directly used in this specific formula, but good for reference
 const SALES_QUALITY_WEIGHT: f32 = 2.5;
 const SALES_MARKETING_WEIGHT: f32 = 1.8;
 const SALES_FAME_WEIGHT: f32 = 1.2;
-const SALES_MARKET_DEMAND_WEIGHT: f32 = 1.0; // Not directly used in this specific formula
-const SALES_SATURATION_DIVISOR: f32 = 200.0; // Not directly used in this specific formula
-const INDEPENDENT_INCOME_PER_SCORE_POINT: u32 = 20;
-const LABEL_INCOME_PER_SCORE_POINT: u32 = 30;
+
+// Unit economics: a sales score converts into copies people want to buy,
+// bounded by how many copies actually exist.
+const UNITS_PER_SCORE_POINT: f32 = 10.0;
+const INDIE_INCOME_PER_COPY: u32 = 2;
+const LABEL_INCOME_PER_COPY: u32 = 3;
+
+// Pressing runs. Independents choose a run and pay setup plus per-copy
+// costs; a label presses to the size of its network and your name.
+pub const PRESSING_TIERS: [(&str, u32); 4] = [
+    ("Garage run", 500),
+    ("Club run", 2_000),
+    ("Regional run", 10_000),
+    ("National run", 50_000),
+];
+const PRESSING_SETUP_SINGLE: f32 = 25.0;
+const PRESSING_SETUP_ALBUM: f32 = 100.0;
+const PRESSING_PER_COPY_SINGLE: f32 = 0.10;
+const PRESSING_PER_COPY_ALBUM: f32 = 0.50;
+const LABEL_PRESSING_PER_REACH: u32 = 100;
+const LABEL_PRESSING_PER_FAME: u32 = 50;
 
 // Distribution model: how much of a release's potential audience you can
 // actually reach. Labels bring their market_reach; independents are capped
-// by their own fame and pay to press and ship records themselves.
+// by their own fame.
 const INDIE_REACH_FLOOR: f32 = 0.15;
-const INDIE_DISTRIBUTION_BASE_SINGLE: f32 = 60.0;
-const INDIE_DISTRIBUTION_BASE_ALBUM: f32 = 500.0;
 
 // Support tours: bigger acts occasionally want you as their opener.
 const SUPPORT_OFFER_MIN_FAME: u8 = 5;
@@ -60,14 +68,28 @@ const PLAYER_MARKET_IMPACT_THRESHOLD_SALES_SCORE: u32 = 600;
 const PLAYER_MARKET_IMPACT_GENRE_MOD_BONUS: f32 = 0.05;
 const PLAYER_MARKET_IMPACT_DEMAND_BONUS: u8 = 1;
 
+// Live fame ceilings: a gig only reaches the crowd in the room, and without
+// records word of mouth stalls. Gigs and tours raise fame no further than
+// the smaller of the venue's ceiling and the catalog cap.
+const VENUE_FAME_HEADROOM: u8 = 15;
+const LIVE_FAME_BASE_CAP: u8 = 35;
+const LIVE_FAME_PER_SINGLE: u8 = 8;
+const LIVE_FAME_PER_ALBUM: u8 = 15;
+
+// Fame fades when the band disappears from view: no shows, no tour, and
+// nothing new on the shelves. One quiet week is forgiven.
+const IDLE_GRACE_WEEKS: u32 = 1;
+const IDLE_FAME_DECAY_PER_WEEK: u8 = 1;
+pub const BREAK_WEEKS: u32 = 4;
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
     LazeAround,
     WriteSongs,
     Practice,
-    RecordSingle,
-    RecordAlbum,
+    RecordSingle { pressing: Option<usize> },
+    RecordAlbum { pressing: Option<usize> },
     Gig(usize),
     GoOnTour(usize),
     TakeBreak,
@@ -111,6 +133,9 @@ pub struct Game {
     pub pending_support_offer: Option<SupportTourOffer>,
     #[serde(default)]
     pub regional_fame: std::collections::HashMap<String, u8>,
+    /// Consecutive weeks with no public activity (no shows, nothing on sale).
+    #[serde(default)]
+    pub idle_streak: u32,
     pub week: u32,
     pub game_over: bool,
     pub next_song_id: u32,
@@ -129,7 +154,7 @@ impl Game {
         let world_seed = std::env::var("ROCKER_SEED")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or_else(|| rand::random::<u64>());
+            .unwrap_or_else(default_seed);
 
         let mut init_rng = StdRng::seed_from_u64(world_seed);
         let world = GameWorld::new(&data_files, &mut init_rng);
@@ -148,6 +173,7 @@ impl Game {
             pending_deal_offers: Vec::new(),
             pending_support_offer: None,
             regional_fame: std::collections::HashMap::new(),
+            idle_streak: 0,
             week: 1,
             game_over: false,
             next_song_id: 0,
@@ -287,46 +313,75 @@ impl Game {
         }
     }
 
-    /// What it costs to press and ship a release yourself. Zero when signed —
-    /// the label handles it. Scales with fame: a big act presses a big run.
-    pub fn independent_distribution_cost(&self, release_type: &ReleaseType) -> i32 {
-        if self.band.current_deal().is_some() {
-            return 0;
-        }
-        let base = match release_type {
-            ReleaseType::Single => INDIE_DISTRIBUTION_BASE_SINGLE,
-            ReleaseType::Album => INDIE_DISTRIBUTION_BASE_ALBUM,
-        };
-        let fame_scale = 1.0 + f32::from(self.band.fame) / 20.0;
-        (base * fame_scale * self.timeline.get_recording_cost_modifier()) as i32
-    }
-
-    /// Total up-front cost of a release: studio time plus, when unsigned,
-    /// pressing and shipping it yourself.
-    pub fn release_cost(&self, release_type: &ReleaseType) -> i32 {
+    /// Studio cost of a release. Pressing is a separate bill.
+    pub fn recording_cost(&self, release_type: &ReleaseType) -> i32 {
         let base = match release_type {
             ReleaseType::Single => constants::SINGLE_RECORDING_COST,
             ReleaseType::Album => constants::ALBUM_RECORDING_BASE_COST,
         };
-        let recording = (base as f32 * self.timeline.get_recording_cost_modifier()) as i32;
-        recording + self.independent_distribution_cost(release_type)
+        (base as f32 * self.timeline.get_recording_cost_modifier()) as i32
     }
 
-    fn calculate_income_from_sales_score(&self, sales_score: u32, _release_type: &ReleaseType) -> u32 {
-        let base_income_per_point = if self.band.current_deal().is_some() {
-            LABEL_INCOME_PER_SCORE_POINT
-        } else {
-            INDEPENDENT_INCOME_PER_SCORE_POINT
+    /// What a pressing run of `copies` costs to buy yourself.
+    pub fn pressing_cost(&self, release_type: &ReleaseType, copies: u32) -> i32 {
+        let (setup, per_copy) = match release_type {
+            ReleaseType::Single => (PRESSING_SETUP_SINGLE, PRESSING_PER_COPY_SINGLE),
+            ReleaseType::Album => (PRESSING_SETUP_ALBUM, PRESSING_PER_COPY_ALBUM),
         };
+        ((setup + per_copy * copies as f32) * self.timeline.get_recording_cost_modifier()) as i32
+    }
 
-        let gross =
-            (sales_score as f32 * base_income_per_point as f32 * self.distribution_multiplier()) as u32;
+    /// How many copies the label presses: its network plus your name.
+    fn label_pressing_size(&self, deal: &band::RecordDeal) -> u32 {
+        u32::from(deal.market_reach) * LABEL_PRESSING_PER_REACH
+            + u32::from(self.band.fame) * LABEL_PRESSING_PER_FAME
+    }
 
+    /// Who presses this release and what it costs the band: the label's
+    /// network for free when signed, otherwise the chosen run out of pocket.
+    fn plan_pressing(
+        &self,
+        release_type: &ReleaseType,
+        pressing: Option<usize>,
+    ) -> Result<(u32, i32), String> {
         if let Some(deal) = self.band.current_deal() {
-            (gross as f32 * deal.royalty_rate) as u32
-        } else {
-            gross
+            return Ok((self.label_pressing_size(deal), 0));
         }
+        let tier = pressing.unwrap_or(0);
+        let (_, copies) = *PRESSING_TIERS
+            .get(tier)
+            .ok_or("Invalid pressing run selected.")?;
+        Ok((copies, self.pressing_cost(release_type, copies)))
+    }
+
+    /// A label puts its promo machine behind every release it ships.
+    fn apply_label_promo(&mut self) {
+        let Some(deal) = self.band.current_deal() else { return };
+        let push = (deal.market_reach / 2).clamp(10, 45);
+        let label_name = deal.label_name.clone();
+        if let Some(release) = self.just_released_music.last_mut() {
+            release.marketing_level_achieved = push;
+            let release_name = release.name.clone();
+            self.log(format!(
+                "📣 {} puts its promo machine behind '{}' (+{} buzz).",
+                label_name, release_name, push
+            ));
+        }
+    }
+
+    /// Convert a sales score into copies moved and money in hand. Demand is
+    /// score × reach; you can't sell copies that were never pressed.
+    fn calculate_release_outcome(&self, sales_score: u32, release: &Release) -> (u32, u32, bool) {
+        let demand =
+            (sales_score as f32 * self.distribution_multiplier() * UNITS_PER_SCORE_POINT) as u32;
+        let sold_out = release.copies_pressed > 0 && demand > release.copies_pressed;
+        let units_sold = if sold_out { release.copies_pressed } else { demand };
+        let income = if let Some(deal) = self.band.current_deal() {
+            ((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32
+        } else {
+            units_sold * INDIE_INCOME_PER_COPY
+        };
+        (income, units_sold, sold_out)
     }
 
     // --- Action Helper Methods (Step 5) ---
@@ -376,20 +431,19 @@ impl Game {
         Ok(())
     }
 
-    fn action_record_single(&mut self) -> Result<(), String> {
+    fn action_record_single(&mut self, pressing: Option<usize>) -> Result<(), String> {
         if !self.band.can_record_single() {
              return Err("You need to write at least one song first!".to_string());
         }
 
-        let distribution_cost = self.independent_distribution_cost(&music::ReleaseType::Single);
-        let cost = self.release_cost(&music::ReleaseType::Single);
+        let recording_cost = self.recording_cost(&music::ReleaseType::Single);
+        let (copies, pressing_cost) = self.plan_pressing(&music::ReleaseType::Single, pressing)?;
+        let cost = recording_cost + pressing_cost;
         if !self.player.can_afford(cost) {
-            if distribution_cost > 0 {
+            if pressing_cost > 0 {
                 return Err(format!(
-                    "An independent single costs ${} — ${} studio time plus ${} to press and ship it yourself!",
-                    cost,
-                    cost - distribution_cost,
-                    distribution_cost
+                    "An independent single costs ${} — ${} studio time plus ${} to press {} copies!",
+                    cost, recording_cost, pressing_cost, copies
                 ));
             }
             return Err(format!("You need at least ${} to record a single!", cost));
@@ -403,7 +457,7 @@ impl Game {
 
         let release_quality = self.calculate_release_quality(avg_song_quality);
         let release_name = format!("Single: {}", selected_songs[0].name);
-        
+
         let new_release = music::Release {
             id: self.next_release_id,
             name: release_name,
@@ -416,41 +470,40 @@ impl Game {
             initial_sales_score: 0,
             total_income_generated: 0,
             genre: selected_songs.first().map(|_s| world::MusicGenre::Rock), // Placeholder
+            copies_pressed: copies,
+            copies_sold: 0,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
-        if distribution_cost > 0 {
+        if pressing_cost > 0 {
             self.log(format!(
-                "🎙️ Recorded '{}' for ${} and paid ${} to press and ship it yourself — out in {} weeks.",
-                name,
-                cost - distribution_cost,
-                distribution_cost,
-                INITIAL_SALES_WINDOW_WEEKS
+                "🎙️ Recorded '{}' for ${} and pressed {} copies for ${} — out in {} weeks.",
+                name, recording_cost, copies, pressing_cost, INITIAL_SALES_WINDOW_WEEKS
             ));
         } else {
             self.log(format!(
-                "🎙️ Recorded '{}' for ${} — the label ships it in {} weeks. Market it while it's hot!",
-                name, cost, INITIAL_SALES_WINDOW_WEEKS
+                "🎙️ Recorded '{}' for ${} — the label presses {} copies, out in {} weeks.",
+                name, recording_cost, copies, INITIAL_SALES_WINDOW_WEEKS
             ));
         }
+        self.apply_label_promo();
         Ok(())
     }
 
-    fn action_record_album(&mut self) -> Result<(), String> {
+    fn action_record_album(&mut self, pressing: Option<usize>) -> Result<(), String> {
         if !self.band.can_record_album() {
             return Err(format!("You need at least {} unreleased songs to record an album!", constants::MIN_ALBUM_SONGS));
         }
 
-        let distribution_cost = self.independent_distribution_cost(&music::ReleaseType::Album);
-        let cost = self.release_cost(&music::ReleaseType::Album);
+        let recording_cost = self.recording_cost(&music::ReleaseType::Album);
+        let (copies, pressing_cost) = self.plan_pressing(&music::ReleaseType::Album, pressing)?;
+        let cost = recording_cost + pressing_cost;
         if !self.player.can_afford(cost) {
-            if distribution_cost > 0 {
+            if pressing_cost > 0 {
                 return Err(format!(
-                    "An independent album costs ${} — ${} studio time plus ${} to press and ship it yourself!",
-                    cost,
-                    cost - distribution_cost,
-                    distribution_cost
+                    "An independent album costs ${} — ${} studio time plus ${} to press {} copies!",
+                    cost, recording_cost, pressing_cost, copies
                 ));
             }
             return Err(format!("You need at least ${} to record an album!", cost));
@@ -463,8 +516,8 @@ impl Game {
         self.player.spend_money(cost);
 
         let release_quality = self.calculate_release_quality(avg_song_quality);
-        let release_name = self.data_files.random_album_title(); 
-        
+        let release_name = self.data_files.random_album_title();
+
         let new_release = music::Release {
             id: self.next_release_id,
             name: release_name,
@@ -477,24 +530,24 @@ impl Game {
             initial_sales_score: 0,
             total_income_generated: 0,
             genre: selected_songs.first().map(|_s| world::MusicGenre::Rock), // Placeholder
+            copies_pressed: copies,
+            copies_sold: 0,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
         self.next_release_id += 1;
-        if distribution_cost > 0 {
+        if pressing_cost > 0 {
             self.log(format!(
-                "🎙️ Recorded the album '{}' for ${}, plus ${} to press and ship it yourself — out in {} weeks.",
-                name,
-                cost - distribution_cost,
-                distribution_cost,
-                INITIAL_SALES_WINDOW_WEEKS
+                "🎙️ Recorded the album '{}' for ${} and pressed {} copies for ${} — out in {} weeks.",
+                name, recording_cost, copies, pressing_cost, INITIAL_SALES_WINDOW_WEEKS
             ));
         } else {
             self.log(format!(
-                "🎙️ Recorded the album '{}' for ${} — the label ships it in {} weeks.",
-                name, cost, INITIAL_SALES_WINDOW_WEEKS
+                "🎙️ Recorded the album '{}' for ${} — the label presses {} copies, out in {} weeks.",
+                name, recording_cost, copies, INITIAL_SALES_WINDOW_WEEKS
             ));
         }
+        self.apply_label_promo();
 
         if self.timeline.is_album_era() {
             self.band.fame = (self.band.fame + 3).min(constants::MAX_FAME);
@@ -504,6 +557,12 @@ impl Game {
     }
     
     fn action_start_marketing_campaign(&mut self, release_id: u32, campaign_type: MarketingCampaignType) -> Result<(), String> {
+        if let Some(deal) = self.band.current_deal() {
+            return Err(format!(
+                "Promotion is {}'s job — their people are already on it.",
+                deal.label_name
+            ));
+        }
         let spec = campaign_type.spec();
         if !self.player.can_afford(spec.cost) {
             return Err(format!("Not enough money for a {} campaign. Need ${}.", spec.name, spec.cost));
@@ -577,6 +636,23 @@ impl Game {
         result
     }
 
+    /// How famous live performance alone can make you. Every record in the
+    /// catalog — including one still in its sales window — lifts the ceiling.
+    fn live_fame_cap(&self) -> u8 {
+        let mut singles = self.band.singles_released.len();
+        let mut albums = self.band.albums_released.len();
+        for release in &self.just_released_music {
+            match release.release_type {
+                ReleaseType::Single => singles += 1,
+                ReleaseType::Album => albums += 1,
+            }
+        }
+        (LIVE_FAME_BASE_CAP as usize
+            + singles * LIVE_FAME_PER_SINGLE as usize
+            + albums * LIVE_FAME_PER_ALBUM as usize)
+            .min(constants::MAX_FAME as usize) as u8
+    }
+
     fn action_play_gig(&mut self, venue_index: usize) -> Result<(), String> {
         if self.player.energy < 30 {
             return Err("You're too tired to perform!".to_string());
@@ -599,16 +675,12 @@ impl Game {
 
         let earnings = (venue.base_payment as f32 * attendance_ratio * market_modifier * era_modifier) as u32;
 
-        let base_fame_gain = if venue.capacity <= 50 {
+        let base_fame_gain = if venue.capacity <= 200 {
             1
-        } else if venue.capacity <= 200 {
-            2
-        } else if venue.capacity <= 500 {
-            3
         } else if venue.capacity <= 2000 {
-            4
+            2
         } else {
-            6
+            3
         };
         let fame_gain = if attendance_ratio < 0.5 {
             (base_fame_gain / 2).max(1)
@@ -616,12 +688,29 @@ impl Game {
             base_fame_gain
         };
 
+        let venue_ceiling = venue.prestige.saturating_add(VENUE_FAME_HEADROOM);
+        let live_cap = self.live_fame_cap();
+        let headroom = venue_ceiling.min(live_cap).saturating_sub(self.band.fame);
+        let fame_gain = fame_gain.min(headroom);
+
         self.player.earn_money(earnings);
         self.band.fame = (self.band.fame + fame_gain).min(constants::MAX_FAME);
-        self.log(format!(
-            "🎤 Played at '{}' — sold {}/{} tickets, earned ${}, fame +{}.",
-            venue.name, attendance, venue.capacity, earnings, fame_gain
-        ));
+        if fame_gain > 0 {
+            self.log(format!(
+                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}, fame +{}.",
+                venue.name, attendance, venue.capacity, earnings, fame_gain
+            ));
+        } else if self.band.fame >= live_cap {
+            self.log(format!(
+                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}. The buzz has peaked — without new records, word of mouth carries no further.",
+                venue.name, attendance, venue.capacity, earnings
+            ));
+        } else {
+            self.log(format!(
+                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}. The regulars know every word — you've outgrown this stage.",
+                venue.name, attendance, venue.capacity, earnings
+            ));
+        }
         Ok(())
     }
 
@@ -693,7 +782,9 @@ impl Game {
         self.player.earn_money(final_earnings as u32);
         self.player.energy -= 40;
         self.player.stress = (self.player.stress + 30).min(constants::MAX_STRESS);
-        self.band.fame = (self.band.fame + fame_gain).min(constants::MAX_FAME);
+        // Tours are live shows too: fame stalls at the catalog cap.
+        let fame_gain = fame_gain.min(self.live_fame_cap().saturating_sub(self.band.fame));
+        self.band.fame += fame_gain;
         
         let mut rng = rand::thread_rng();
         let regional_fame_gain = 10 + rng.gen_range(0..=5);
@@ -707,8 +798,11 @@ impl Game {
         ));
 
         if rng.gen_bool(0.3) {
-            self.band.fame = (self.band.fame + 2).min(constants::MAX_FAME);
-            self.log("🗣️ Word of your live show spreads — extra fame on the way home.");
+            let bonus = 2u8.min(self.live_fame_cap().saturating_sub(self.band.fame));
+            if bonus > 0 {
+                self.band.fame += bonus;
+                self.log("🗣️ Word of your live show spreads — extra fame on the way home.");
+            }
         } else if rng.gen_bool(0.15) {
             self.player.health = self.player.health.saturating_sub(10);
             self.log("🤒 The road took its toll — you came home run down.");
@@ -719,9 +813,41 @@ impl Game {
     fn action_take_break(&mut self) -> Result<(), String> {
         self.player.energy = constants::MAX_ENERGY;
         self.player.stress = 0;
-        self.player.health = (self.player.health + 10).min(constants::MAX_HEALTH);
-        self.log("🏖️ A proper week off — fully recharged.");
+        self.player.health = (self.player.health + 30).min(constants::MAX_HEALTH);
+        self.week += BREAK_WEEKS - 1;
+        self.log(format!(
+            "🏖️ You disappeared for {} weeks — fully recharged and healthier for it.",
+            BREAK_WEEKS
+        ));
         Ok(())
+    }
+
+    /// Track whether the band was in the public eye this turn. Fame starts
+    /// to fade after IDLE_GRACE_WEEKS consecutive quiet weeks.
+    fn update_public_visibility(&mut self, action: &GameAction, weeks_elapsed: u32) {
+        let publicly_active = matches!(
+            action,
+            GameAction::Gig(_) | GameAction::GoOnTour(_) | GameAction::AcceptSupportTour
+        ) || !self.just_released_music.is_empty();
+        if publicly_active {
+            self.idle_streak = 0;
+            return;
+        }
+        let mut faded: u8 = 0;
+        for _ in 0..weeks_elapsed {
+            self.idle_streak += 1;
+            if self.idle_streak > IDLE_GRACE_WEEKS {
+                faded = faded.saturating_add(IDLE_FAME_DECAY_PER_WEEK);
+            }
+        }
+        let faded = faded.min(self.band.fame);
+        if faded > 0 {
+            self.band.fame -= faded;
+            self.log(format!(
+                "🕰️ Out of the public eye — the buzz cools (fame -{}).",
+                faded
+            ));
+        }
     }
 
     fn action_visit_doctor(&mut self) -> Result<(), String> {
@@ -874,8 +1000,8 @@ impl Game {
             GameAction::LazeAround => self.action_laze_around(),
             GameAction::WriteSongs => self.action_write_songs(),
             GameAction::Practice => self.action_practice(),
-            GameAction::RecordSingle => self.action_record_single(),
-            GameAction::RecordAlbum => self.action_record_album(),
+            GameAction::RecordSingle { pressing } => self.action_record_single(pressing),
+            GameAction::RecordAlbum { pressing } => self.action_record_album(pressing),
             GameAction::Gig(venue_index) => self.action_play_gig(venue_index),
             GameAction::GoOnTour(region_index) => self.action_go_on_tour(region_index),
             GameAction::TakeBreak => self.action_take_break(),
@@ -902,8 +1028,9 @@ impl Game {
                 let sales_score = self.calculate_release_sales_score(&release);
                 release.initial_sales_score = sales_score;
 
-                let income = self.calculate_income_from_sales_score(sales_score, &release.release_type);
+                let (income, units_sold, sold_out) = self.calculate_release_outcome(sales_score, &release);
                 release.total_income_generated += income;
+                release.copies_sold = units_sold;
                 self.player.earn_money(income);
 
                 let verdict = match sales_score {
@@ -915,20 +1042,26 @@ impl Game {
                 // A label's distribution spreads your name further than a
                 // self-pressed run ever could.
                 let fame_gain = if self.band.current_deal().is_some() {
-                    (sales_score / 250).min(4) as u8
+                    (sales_score / 150).min(8) as u8
                 } else {
-                    (sales_score / 400).min(2) as u8
+                    (sales_score / 300).min(4) as u8
                 };
                 self.band.fame = (self.band.fame + fame_gain).min(constants::MAX_FAME);
                 if fame_gain > 0 {
                     self.log(format!(
-                        "💿 '{}' {} — first-run earnings: ${}, fame +{}.",
-                        release.name, verdict, income, fame_gain
+                        "💿 '{}' {} — moved {} copies, first-run earnings: ${}, fame +{}.",
+                        release.name, verdict, units_sold, income, fame_gain
                     ));
                 } else {
                     self.log(format!(
-                        "💿 '{}' {} — first-run earnings: ${}.",
-                        release.name, verdict, income
+                        "💿 '{}' {} — moved {} copies, first-run earnings: ${}.",
+                        release.name, verdict, units_sold, income
+                    ));
+                }
+                if sold_out {
+                    self.log(format!(
+                        "📦 '{}' sold out — all {} copies gone; demand was there for more.",
+                        release.name, release.copies_pressed
                     ));
                 }
 
@@ -957,10 +1090,10 @@ impl Game {
 
         // Deal terms are captured up front: the catalogue loop below holds
         // mutable borrows into self.band, so it cannot call &self methods.
-        let income_per_point = if self.band.current_deal().is_some() {
-            LABEL_INCOME_PER_SCORE_POINT
+        let income_per_copy = if self.band.current_deal().is_some() {
+            LABEL_INCOME_PER_COPY
         } else {
-            INDEPENDENT_INCOME_PER_SCORE_POINT
+            INDIE_INCOME_PER_COPY
         };
         let royalty_rate = self.band.current_deal().map(|deal| deal.royalty_rate);
         let distribution = self.distribution_multiplier();
@@ -980,12 +1113,23 @@ impl Game {
                      let ongoing_sales_score = release.initial_sales_score / ongoing_sales_score_divisor;
 
                      if ongoing_sales_score > 10 {
-                        let gross_income =
-                            (ongoing_sales_score as f32 * income_per_point as f32 * distribution) as u32;
+                        // The long tail moves a trickle of copies — and only
+                        // copies that still exist in the pressing.
+                        let mut units = (ongoing_sales_score as f32 * distribution
+                            * UNITS_PER_SCORE_POINT) as u32
+                            / 5;
+                        if release.copies_pressed > 0 {
+                            units = units.min(release.copies_pressed.saturating_sub(release.copies_sold));
+                        }
+                        if units == 0 {
+                            continue;
+                        }
+                        release.copies_sold += units;
+                        let gross = units * income_per_copy;
                         let ongoing_income = match royalty_rate {
-                            Some(rate) => (gross_income as f32 * rate) as u32,
-                            None => gross_income,
-                        } / 5;
+                            Some(rate) => (gross as f32 * rate) as u32,
+                            None => gross,
+                        };
                         release.total_income_generated += ongoing_income;
                         self.player.earn_money(ongoing_income);
                         catalog_income_this_week += ongoing_income;
@@ -1068,11 +1212,13 @@ impl Game {
                 | GameAction::Quit
         );
 
+        let week_before = self.week;
         self.execute_action(action.clone())?; // Execute action first
 
         if is_turn_consuming_action {
             self.week += 1; // Advance week only for turn-consuming actions
             self.advance_week_events()?; // Process standard weekly events
+            self.update_public_visibility(&action, self.week - week_before);
         }
         
         // These happen after every action resolution, regardless of turn consumption
@@ -1378,6 +1524,89 @@ mod tests {
         Game::new().expect("data files present")
     }
 
+    fn test_release(id: u32, release_type: ReleaseType) -> Release {
+        Release {
+            id,
+            name: format!("Test Release {id}"),
+            release_type,
+            release_quality: 50,
+            week_released: 0,
+            songs_involved_quality_avg: 50,
+            active_marketing: Vec::new(),
+            marketing_level_achieved: 0,
+            initial_sales_score: 0,
+            total_income_generated: 0,
+            genre: None,
+            copies_pressed: 0,
+            copies_sold: 0,
+        }
+    }
+
+    /// The biggest venue whose door policy admits the band right now.
+    fn best_open_venue(game: &Game) -> usize {
+        (0..game.world.venues.len())
+            .filter(|&i| game.world.venues[i].prestige <= game.band.fame.saturating_add(20))
+            .max_by_key(|&i| game.world.venues[i].capacity)
+            .expect("at least one venue is always open")
+    }
+
+    #[test]
+    fn gigging_alone_cannot_make_you_a_star() {
+        let mut game = test_game();
+        game.band.fame = 0;
+
+        for _ in 0..300 {
+            game.player.energy = 100;
+            let venue = best_open_venue(&game);
+            game.action_play_gig(venue).expect("gig should succeed");
+        }
+
+        assert_eq!(
+            game.band.fame, LIVE_FAME_BASE_CAP,
+            "with no records, live shows should stall at the base cap"
+        );
+    }
+
+    #[test]
+    fn records_raise_the_live_fame_cap() {
+        let mut game = test_game();
+        game.band.fame = LIVE_FAME_BASE_CAP;
+        game.player.energy = 100;
+
+        let venue = best_open_venue(&game);
+        game.action_play_gig(venue).expect("gig should succeed");
+        assert_eq!(
+            game.band.fame, LIVE_FAME_BASE_CAP,
+            "at the cap, another gig adds nothing"
+        );
+
+        game.band.albums_released.push(test_release(1, ReleaseType::Album));
+        game.band.singles_released.push(test_release(2, ReleaseType::Single));
+        game.player.energy = 100;
+        game.action_play_gig(venue).expect("gig should succeed");
+        assert!(
+            game.band.fame > LIVE_FAME_BASE_CAP,
+            "records should lift the live ceiling"
+        );
+    }
+
+    #[test]
+    fn an_outgrown_venue_adds_no_fame() {
+        let mut game = test_game();
+        for id in 0..6 {
+            game.band.albums_released.push(test_release(id, ReleaseType::Album));
+        }
+        game.band.fame = 30; // past the pub's ceiling of prestige 10 + headroom 15
+        game.player.energy = 100;
+
+        let smallest = (0..game.world.venues.len())
+            .min_by_key(|&i| game.world.venues[i].capacity)
+            .expect("venues exist");
+        game.action_play_gig(smallest).expect("gig should succeed");
+
+        assert_eq!(game.band.fame, 30, "an outgrown stage draws no new fans");
+    }
+
     fn test_deal(market_reach: u8, royalty_rate: f32) -> band::RecordDeal {
         band::RecordDeal {
             label_name: "Test Records".to_string(),
@@ -1394,11 +1623,12 @@ mod tests {
     fn unknown_indie_acts_reach_almost_nobody() {
         let mut game = test_game();
         game.band.record_deal = None;
+        let release = test_release(1, ReleaseType::Single);
 
         game.band.fame = 5;
-        let unknown = game.calculate_income_from_sales_score(300, &ReleaseType::Single);
+        let (unknown, _, _) = game.calculate_release_outcome(300, &release);
         game.band.fame = 95;
-        let famous = game.calculate_income_from_sales_score(300, &ReleaseType::Single);
+        let (famous, _, _) = game.calculate_release_outcome(300, &release);
 
         assert!(
             famous > unknown * 3,
@@ -1410,11 +1640,12 @@ mod tests {
     fn label_out_earns_indie_at_low_fame_but_not_at_high_fame() {
         let mut game = test_game();
         game.band.fame = 10;
+        let release = test_release(1, ReleaseType::Single);
 
         game.band.record_deal = None;
-        let indie_low = game.calculate_income_from_sales_score(300, &ReleaseType::Single);
+        let (indie_low, _, _) = game.calculate_release_outcome(300, &release);
         game.band.record_deal = Some(test_deal(90, 0.12));
-        let label_low = game.calculate_income_from_sales_score(300, &ReleaseType::Single);
+        let (label_low, _, _) = game.calculate_release_outcome(300, &release);
         assert!(
             label_low > indie_low,
             "an unknown band should earn more through a label: label {label_low} vs indie {indie_low}"
@@ -1422,7 +1653,7 @@ mod tests {
 
         game.band.fame = 95;
         game.band.record_deal = None;
-        let indie_high = game.calculate_income_from_sales_score(300, &ReleaseType::Single);
+        let (indie_high, _, _) = game.calculate_release_outcome(300, &release);
         assert!(
             indie_high > label_low * 2,
             "a superstar keeping everything should out-earn a royalty slice: indie {indie_high} vs label {label_low}"
@@ -1430,27 +1661,132 @@ mod tests {
     }
 
     #[test]
-    fn indie_distribution_cost_scales_with_fame_and_vanishes_when_signed() {
+    fn pressing_costs_fall_on_indies_and_labels_press_for_you() {
         let mut game = test_game();
         game.band.record_deal = None;
 
-        game.band.fame = 0;
-        let garage_band = game.independent_distribution_cost(&ReleaseType::Album);
-        game.band.fame = 100;
-        let superstar = game.independent_distribution_cost(&ReleaseType::Album);
-
-        assert!(garage_band > 0);
+        let garage = game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1);
+        let national = game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[3].1);
+        assert!(garage > 0, "an indie band pays to press its own records");
         assert!(
-            superstar >= garage_band * 5,
-            "a famous act presses a much bigger run: {garage_band} vs {superstar}"
+            national > garage * 10,
+            "a national run costs far more than a garage run: {garage} vs {national}"
         );
+        let (copies, cost) = game
+            .plan_pressing(&ReleaseType::Album, Some(0))
+            .expect("tier 0 exists");
+        assert_eq!(copies, PRESSING_TIERS[0].1);
+        assert_eq!(cost, garage);
 
         game.band.record_deal = Some(test_deal(70, 0.10));
+        game.band.fame = 40;
+        let (label_copies, label_cost) = game
+            .plan_pressing(&ReleaseType::Album, None)
+            .expect("the label always presses");
+        assert_eq!(label_cost, 0, "the label covers pressing when signed");
         assert_eq!(
-            game.independent_distribution_cost(&ReleaseType::Album),
-            0,
-            "the label handles distribution when signed"
+            label_copies,
+            70 * LABEL_PRESSING_PER_REACH + 40 * LABEL_PRESSING_PER_FAME,
+            "the run scales with the label's network and the band's name"
         );
+    }
+
+    #[test]
+    fn a_pressing_can_sell_out() {
+        let mut game = test_game();
+        game.band.record_deal = None;
+        game.band.fame = 60;
+
+        let mut release = test_release(1, ReleaseType::Single);
+        release.copies_pressed = 500;
+        let (income, units, sold_out) = game.calculate_release_outcome(400, &release);
+        assert!(sold_out, "demand should outstrip a garage run");
+        assert_eq!(units, 500);
+        assert_eq!(income, 500 * INDIE_INCOME_PER_COPY);
+
+        release.copies_pressed = 50_000;
+        let (_, units_uncapped, sold_out) = game.calculate_release_outcome(400, &release);
+        assert!(!sold_out);
+        assert!(units_uncapped > 500, "a bigger run keeps selling");
+    }
+
+    #[test]
+    fn signed_bands_do_not_run_their_own_marketing() {
+        let mut game = test_game();
+        game.just_released_music.push(test_release(7, ReleaseType::Single));
+        game.band.record_deal = Some(test_deal(60, 0.12));
+
+        let err = game
+            .action_start_marketing_campaign(7, MarketingCampaignType::BasicPress)
+            .unwrap_err();
+        assert!(err.contains("job"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn idle_weeks_erode_fame_after_a_grace_week() {
+        let mut game = test_game();
+        game.band.fame = 30;
+
+        game.update_public_visibility(&GameAction::LazeAround, 1);
+        assert_eq!(game.band.fame, 30, "the first quiet week is forgiven");
+
+        game.update_public_visibility(&GameAction::LazeAround, 1);
+        game.update_public_visibility(&GameAction::LazeAround, 1);
+        assert_eq!(game.band.fame, 28, "every idle week past the grace costs fame");
+
+        game.update_public_visibility(&GameAction::Gig(0), 1);
+        assert_eq!(game.idle_streak, 0, "a show resets the idle streak");
+    }
+
+    #[test]
+    fn a_release_on_the_shelves_keeps_the_band_visible() {
+        let mut game = test_game();
+        game.band.fame = 30;
+        game.just_released_music.push(test_release(1, ReleaseType::Single));
+
+        game.update_public_visibility(&GameAction::LazeAround, 5);
+
+        assert_eq!(game.band.fame, 30, "a record in its sales window counts as visibility");
+        assert_eq!(game.idle_streak, 0);
+    }
+
+    #[test]
+    fn a_full_season_of_turns_never_panics() {
+        let mut game = test_game();
+        game.initialize_player("Test", "The Tests");
+        for i in 0..30 {
+            let action = match i % 6 {
+                0 => GameAction::WriteSongs,
+                1 => GameAction::Gig(0),
+                2 => GameAction::LazeAround,
+                3 => GameAction::RecordSingle { pressing: Some(0) },
+                4 => GameAction::Practice,
+                _ => GameAction::TakeBreak,
+            };
+            // Rejected actions are fine; panics are not.
+            let _ = game.process_turn(action);
+            game.player.money = game.player.money.max(1_000);
+            game.player.energy = 100;
+            game.player.health = 100;
+        }
+    }
+
+    #[test]
+    fn a_break_is_a_real_break() {
+        let mut game = test_game();
+        let week_before = game.week;
+        game.player.health = 50;
+        game.player.energy = 5;
+
+        game.action_take_break().expect("a break always works");
+
+        assert_eq!(
+            game.week,
+            week_before + BREAK_WEEKS - 1,
+            "the turn itself adds the final week"
+        );
+        assert_eq!(game.player.health, 80);
+        assert_eq!(game.player.energy, constants::MAX_ENERGY);
     }
 
     #[test]
@@ -1463,7 +1799,7 @@ mod tests {
         });
         game.player.money = 0;
 
-        assert!(game.action_record_single().is_err());
+        assert!(game.action_record_single(Some(0)).is_err());
         assert_eq!(
             game.band.unreleased_songs.len(),
             1,

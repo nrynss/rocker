@@ -463,7 +463,7 @@ impl GameWorld {
             score,
             weeks_on_chart: 0,
         });
-        self.charts.sort_by(|a, b| b.score.cmp(&a.score));
+        self.charts.sort_by_key(|e| std::cmp::Reverse(e.score));
         let position = self
             .charts
             .iter()
@@ -548,9 +548,10 @@ impl GameWorld {
                 rng.gen_range(70..93)
             };
 
-            let label = if fame >= 45 && rng.gen_bool(0.7) {
-                Some(Self::random_label_for_fame(data_files, fame, rng))
-            } else if fame >= 25 && rng.gen_bool(0.3) {
+            // Stars are usually signed already; mid-tier acts sometimes are.
+            let signed =
+                (fame >= 45 && rng.gen_bool(0.7)) || (fame >= 25 && rng.gen_bool(0.3));
+            let label = if signed {
                 Some(Self::random_label_for_fame(data_files, fame, rng))
             } else {
                 None

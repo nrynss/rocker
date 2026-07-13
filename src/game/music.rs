@@ -8,7 +8,7 @@ pub struct Song {
     pub songwriting_quality: u8, // 0-100
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ReleaseType {
     Single,
     Album,
@@ -96,4 +96,11 @@ pub struct Release {
     pub initial_sales_score: u32, // Calculated after an initial sales window
     pub total_income_generated: u32,
     pub genre: Option<MusicGenre>,
+    /// How many copies exist. Sales can never exceed this; 0 means uncapped
+    /// (legacy saves from before pressing runs existed).
+    #[serde(default)]
+    pub copies_pressed: u32,
+    /// Copies sold so far, across the first run and the catalog long tail.
+    #[serde(default)]
+    pub copies_sold: u32,
 }

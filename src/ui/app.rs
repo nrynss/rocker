@@ -3,7 +3,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::{MarketingCampaignType, ReleaseType};
-use crate::game::{Game, GameAction};
+use crate::game::{BREAK_WEEKS, Game, GameAction, PRESSING_TIERS};
 
 use super::render;
 
@@ -48,6 +48,7 @@ pub enum Screen {
     GameOver,
     VenuePicker { selected: usize },
     RegionPicker { selected: usize },
+    PressingPicker { release_type: ReleaseType, selected: usize },
 }
 
 /// What a main-menu row does when activated.
@@ -62,6 +63,8 @@ pub enum MenuKind {
     Quit,
     Gig,
     GoOnTour,
+    RecordSingle,
+    RecordAlbum,
 }
 
 pub struct MenuEntry {
@@ -120,9 +123,17 @@ impl App {
     pub fn menu_entries(&self) -> Vec<MenuEntry> {
         let game = &self.game;
         let signed = game.band.current_deal().is_some();
-        let single_cost = game.release_cost(&ReleaseType::Single);
-        let album_cost = game.release_cost(&ReleaseType::Album);
-        let cost_tag = if signed { "label" } else { "indie" };
+        let single_cost = game.recording_cost(&ReleaseType::Single);
+        let album_cost = game.recording_cost(&ReleaseType::Album);
+        // The cheapest pressing run, for affordability checks.
+        let (single_min, album_min) = if signed {
+            (single_cost, album_cost)
+        } else {
+            (
+                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1),
+                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1),
+            )
+        };
         let songs = game.band.unreleased_songs.len();
         let offers = game.pending_deal_offers.len();
         let releases = game.just_released_music.len() + game.band.total_releases();
@@ -154,22 +165,26 @@ impl App {
                 label: "Record Single",
                 detail: if songs == 0 {
                     "no songs written".into()
+                } else if signed {
+                    format!("${} — label presses", single_cost)
                 } else {
-                    format!("${} {}", single_cost, cost_tag)
+                    format!("${} + pressing", single_cost)
                 },
-                enabled: game.band.can_record_single() && game.player.can_afford(single_cost),
-                kind: MenuKind::Action(GameAction::RecordSingle),
+                enabled: game.band.can_record_single() && game.player.can_afford(single_min),
+                kind: MenuKind::RecordSingle,
             },
             MenuEntry {
                 hotkey: '5',
                 label: "Record Album",
                 detail: if songs < constants::MIN_ALBUM_SONGS as usize {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
+                } else if signed {
+                    format!("${} — label presses", album_cost)
                 } else {
-                    format!("${} {}", album_cost, cost_tag)
+                    format!("${} + pressing", album_cost)
                 },
-                enabled: game.band.can_record_album() && game.player.can_afford(album_cost),
-                kind: MenuKind::Action(GameAction::RecordAlbum),
+                enabled: game.band.can_record_album() && game.player.can_afford(album_min),
+                kind: MenuKind::RecordAlbum,
             },
             MenuEntry {
                 hotkey: '6',
@@ -204,7 +219,7 @@ impl App {
             MenuEntry {
                 hotkey: '8',
                 label: "Take a Break",
-                detail: "full recovery".into(),
+                detail: format!("{} weeks off — full recovery", BREAK_WEEKS),
                 enabled: true,
                 kind: MenuKind::Action(GameAction::TakeBreak),
             },
@@ -218,12 +233,14 @@ impl App {
             MenuEntry {
                 hotkey: 'm',
                 label: "Marketing…",
-                detail: if releases == 0 {
+                detail: if signed {
+                    "your label handles promo".into()
+                } else if releases == 0 {
                     "nothing to promote".into()
                 } else {
                     format!("{} release{}", releases, if releases == 1 { "" } else { "s" })
                 },
-                enabled: releases > 0,
+                enabled: !signed && releases > 0,
                 kind: MenuKind::Marketing,
             },
             MenuEntry {
@@ -340,6 +357,7 @@ impl App {
             Screen::GameOver => self.should_exit = true,
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
+            Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
         }
     }
 
@@ -411,6 +429,8 @@ impl App {
     fn activate(&mut self, kind: MenuKind) {
         match kind {
             MenuKind::Action(action) => self.dispatch(action),
+            MenuKind::RecordSingle => self.open_pressing_picker(ReleaseType::Single),
+            MenuKind::RecordAlbum => self.open_pressing_picker(ReleaseType::Album),
             MenuKind::Deals => {
                 if self.game.pending_deal_offers.is_empty() {
                     self.push_log(LogKind::Ui, "No deal offers on the table right now.");
@@ -426,7 +446,9 @@ impl App {
                 }
             }
             MenuKind::Marketing => {
-                if self.marketing_targets().is_empty() {
+                if self.game.band.current_deal().is_some() {
+                    self.push_log(LogKind::Ui, "Promotion is your label's job — their people are already on it.");
+                } else if self.marketing_targets().is_empty() {
                     self.push_log(LogKind::Ui, "Record something first — there's nothing to promote.");
                 } else {
                     self.screen = Screen::MarketingRelease { selected: 0 };
@@ -607,6 +629,43 @@ impl App {
                         Err(e) => self.push_log(LogKind::Error, format!("❌ Load failed: {}", e)),
                     },
                 }
+            }
+            _ => {}
+        }
+    }
+
+    /// A signed band's label decides the run; an indie band picks one.
+    fn open_pressing_picker(&mut self, release_type: ReleaseType) {
+        if self.game.band.current_deal().is_some() {
+            let action = match release_type {
+                ReleaseType::Single => GameAction::RecordSingle { pressing: None },
+                ReleaseType::Album => GameAction::RecordAlbum { pressing: None },
+            };
+            self.dispatch(action);
+        } else {
+            self.screen = Screen::PressingPicker { release_type, selected: 0 };
+        }
+    }
+
+    fn handle_pressing_picker_key(&mut self, key: KeyEvent) {
+        let Screen::PressingPicker { release_type, selected } = self.screen else { return };
+        let count = PRESSING_TIERS.len();
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                let selected = selected.checked_sub(1).unwrap_or(count - 1);
+                self.screen = Screen::PressingPicker { release_type, selected };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.screen = Screen::PressingPicker { release_type, selected: (selected + 1) % count };
+            }
+            KeyCode::Enter => {
+                self.screen = Screen::Main;
+                let action = match release_type {
+                    ReleaseType::Single => GameAction::RecordSingle { pressing: Some(selected) },
+                    ReleaseType::Album => GameAction::RecordAlbum { pressing: Some(selected) },
+                };
+                self.dispatch(action);
             }
             _ => {}
         }
