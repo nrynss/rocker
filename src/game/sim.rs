@@ -10,8 +10,10 @@
 //! - `#[ignore]`d sweeps: many seeds over fifteen game-years, printing a
 //!   summary table. Run with `cargo test -- --ignored --nocapture`.
 //!
-//! Gameplay actions still roll `thread_rng` (full determinism is Track B),
-//! so assertions here are distributional or mechanical, never exact-value.
+//! Determinism: worldgen, the weekly world update, and (since Track B)
+//! every player-action roll derive from `world_seed`, so a seed plus a
+//! policy replays the same career exactly — exact-value assertions are
+//! fair game. `seeded_worlds_are_reproducible_in_the_harness` pins this.
 
 use super::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
