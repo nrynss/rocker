@@ -1,7 +1,3 @@
-// Several data-driven systems (markets, tours, genre tracking) are scaffolded
-// ahead of use — see "Planned Features" in the README.
-#![allow(dead_code)]
-
 mod data;
 mod data_loader;
 mod game;

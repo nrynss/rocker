@@ -621,13 +621,6 @@ impl GameWorld {
         venues
     }
 
-    pub fn get_available_venues_for_fame(&self, fame: u8) -> Vec<&Venue> {
-        self.venues
-            .iter()
-            .filter(|venue| venue.prestige <= fame + 20) // Allow some stretch
-            .collect()
-    }
-
     pub fn get_market_modifier(&self) -> f32 {
         let demand_mod = self.music_market.demand as f32 / 100.0;
         let saturation_penalty = 1.0 - (self.music_market.saturation as f32 / 200.0);

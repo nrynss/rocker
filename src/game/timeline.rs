@@ -111,26 +111,6 @@ impl MusicTimeline {
         self.current_year += 1;
     }
 
-    pub fn get_genre_popularity(&self, genre: &str, rng: &mut impl rand::Rng) -> u8 {
-        let era = self.get_current_era();
-        if era
-            .dominant_genres
-            .iter()
-            .any(|g| g.to_lowercase() == genre.to_lowercase())
-        {
-            rng.gen_range(85..100)
-        } else {
-            rng.gen_range(20..80)
-        }
-    }
-
-    pub fn get_market_modifier(&self) -> f32 {
-        let era = self.get_current_era();
-        let base = era.market_conditions.overall_demand as f32 / 100.0;
-        let growth = 1.0 + (era.market_conditions.record_sales_growth / 100.0);
-        base * growth
-    }
-
     pub fn get_recording_cost_modifier(&self) -> f32 {
         self.get_current_era().recording_cost_modifier
     }
@@ -143,32 +123,8 @@ impl MusicTimeline {
         self.get_current_era().industry_trends.image_importance
     }
 
-    pub fn get_media_influence(&self) -> u8 {
-        self.get_current_era().industry_trends.media_influence
-    }
-
     pub fn is_album_era(&self) -> bool {
         self.get_current_era().industry_trends.album_vs_singles > 0.7
-    }
-
-    pub fn get_innovation_bonus(&self) -> u8 {
-        self.get_current_era().market_conditions.innovation_openness
-    }
-
-    pub fn get_major_label_power(&self) -> u8 {
-        self.get_current_era()
-            .market_conditions
-            .major_label_dominance
-    }
-
-    pub fn get_era_description(&self) -> String {
-        let era = self.get_current_era();
-        format!(
-            "{} ({}): {}",
-            self.current_year,
-            era.era_name,
-            era.major_events.join(", ")
-        )
     }
 
     pub fn get_trending_genres(&self) -> Vec<String> {
@@ -198,16 +154,6 @@ impl MusicTimeline {
 
     pub fn get_current_year(&self) -> u32 {
         self.current_year
-    }
-
-    pub fn get_studio_quality_importance(&self) -> u8 {
-        self.get_current_era()
-            .industry_trends
-            .studio_quality_importance
-    }
-
-    pub fn get_fan_loyalty_factor(&self) -> u8 {
-        self.get_current_era().industry_trends.fan_loyalty_factor
     }
 }
 

@@ -308,7 +308,6 @@ fn ending_of(game: &Game) -> Ending {
 /// Everything one simulated career leaves behind.
 struct Career {
     bot: Bot,
-    seed: u64,
     ending: Ending,
     weeks: u32,
     final_fame: u8,
@@ -342,7 +341,6 @@ fn run_career(bot: Bot, seed: u64, horizon_weeks: u32) -> Career {
 fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
     let mut career = Career {
         bot,
-        seed: game.world_seed,
         ending: Ending::StillGoing,
         weeks: 0,
         final_fame: 0,

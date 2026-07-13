@@ -26,49 +26,6 @@ impl Default for Player {
 }
 
 impl Player {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            money: 500,
-            health: 100,
-            energy: 100,
-            stress: 0,
-            drug_addiction: 0,
-            alcohol_addiction: 0,
-        }
-    }
-
-    pub fn get_health_status(&self) -> &str {
-        match self.health {
-            90..=100 => "Excellent",
-            70..=89 => "Good",
-            50..=69 => "Fair",
-            30..=49 => "Poor",
-            10..=29 => "Very Poor",
-            _ => "Critical",
-        }
-    }
-
-    pub fn get_energy_status(&self) -> &str {
-        match self.energy {
-            80..=100 => "Full of energy",
-            60..=79 => "Energetic",
-            40..=59 => "Tired",
-            20..=39 => "Exhausted",
-            _ => "Dead tired",
-        }
-    }
-
-    pub fn get_stress_status(&self) -> &str {
-        match self.stress {
-            0..=20 => "Relaxed",
-            21..=40 => "Mild stress",
-            41..=60 => "Stressed",
-            61..=80 => "Very stressed",
-            _ => "Burnout",
-        }
-    }
-
     pub fn can_afford(&self, cost: i32) -> bool {
         self.money >= cost
     }

@@ -112,13 +112,6 @@ impl Default for BandReputation {
 }
 
 impl Band {
-    pub fn new(name: String) -> Self {
-        Self {
-            name,
-            ..Self::default()
-        }
-    }
-
     pub fn get_fame_level(&self) -> &str {
         match self.fame {
             0..=10 => "Unknown",
@@ -202,19 +195,6 @@ impl Band {
             }
         }
         false // Deal not completed or no deal active
-    }
-
-    pub fn remaining_albums_for_deal(&self) -> u8 {
-        if let Some(deal) = &self.record_deal
-            && deal.albums_delivered < deal.albums_required
-        {
-            return deal.albums_required - deal.albums_delivered;
-        }
-        0 // No deal or deal completed
-    }
-
-    pub fn drop_deal(&mut self) {
-        self.record_deal = None;
     }
 }
 
