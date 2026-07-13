@@ -202,9 +202,10 @@ impl Game {
         std::mem::take(&mut self.turn_log)
     }
 
-    pub fn initialize_player(&mut self, player_name: &str, band_name: &str) {
+    pub fn initialize_player(&mut self, player_name: &str, band_name: &str, genre: world::MusicGenre) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
+        self.band.genre = genre;
         self.player.money = 500; // Starting cash in 1970
 
         self.band.members = vec![
@@ -1801,7 +1802,7 @@ mod tests {
     #[test]
     fn a_full_season_of_turns_never_panics() {
         let mut game = test_game();
-        game.initialize_player("Test", "The Tests");
+        game.initialize_player("Test", "The Tests", world::MusicGenre::Rock);
         for i in 0..30 {
             let action = match i % 6 {
                 0 => GameAction::WriteSongs,
