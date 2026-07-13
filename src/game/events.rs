@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -26,17 +26,19 @@ impl EventManager {
         current_week - self.last_event_week >= 2
     }
 
-    pub fn try_trigger_event(&mut self, current_week: u32) -> Option<RandomEvent> {
+    pub fn try_trigger_event(
+        &mut self,
+        current_week: u32,
+        rng: &mut impl Rng,
+    ) -> Option<RandomEvent> {
         if !self.should_process_events(current_week) {
             return None;
         }
 
-        let mut rng = thread_rng();
-
         // 30% chance of a random event each eligible week
         if rng.gen_range(0..100) < 30 {
             self.last_event_week = current_week;
-            Some(self.generate_random_event(&mut rng))
+            Some(self.generate_random_event(rng))
         } else {
             None
         }

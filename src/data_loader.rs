@@ -284,32 +284,28 @@ impl GameDataFiles {
         Ok(serde_json::from_str(&content)?)
     }
 
-    pub fn random_song_title(&self) -> String {
-        self.generate_song_title(&mut thread_rng())
-    }
-
-    pub fn random_album_title(&self) -> String {
-        let mut rng = thread_rng();
-
+    /// An album title from the caller's RNG: sometimes a curated title,
+    /// usually a composed song title promoted to the cover.
+    pub fn random_album_title(&self, rng: &mut impl Rng) -> String {
         if rng.gen_bool(0.3) {
             self.album_titles[rng.gen_range(0..self.album_titles.len())].clone()
         } else {
-            self.random_song_title()
+            self.generate_song_title(rng)
         }
     }
 
-    pub fn random_band_name(&self) -> String {
-        let mut rng = thread_rng();
+    pub fn random_band_name(&self, rng: &mut impl Rng) -> String {
         self.band_names[rng.gen_range(0..self.band_names.len())].clone()
     }
 
     /// Compose a band name from the pattern grammar. The curated list is one
     /// pattern among several, so the scene can hold hundreds of distinct acts.
     pub fn generate_band_name(&self, rng: &mut impl Rng) -> String {
-        self.band_name_grammar
+        let composed = self
+            .band_name_grammar
             .as_ref()
-            .and_then(|grammar| grammar.flatten(rng).ok())
-            .unwrap_or_else(|| self.random_band_name())
+            .and_then(|grammar| grammar.flatten(rng).ok());
+        composed.unwrap_or_else(|| self.random_band_name(rng))
     }
 
     /// Compose a song title from the pattern grammar, using the caller's RNG.
@@ -351,8 +347,7 @@ impl GameDataFiles {
             .unwrap_or(OUT_OF_FASHION)
     }
 
-    pub fn random_band_member_name(&self) -> String {
-        let mut rng = thread_rng();
+    pub fn random_band_member_name(&self, rng: &mut impl Rng) -> String {
         self.band_member_names[rng.gen_range(0..self.band_member_names.len())].clone()
     }
 

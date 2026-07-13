@@ -111,16 +111,16 @@ impl MusicTimeline {
         self.current_year += 1;
     }
 
-    pub fn get_genre_popularity(&self, genre: &str) -> u8 {
+    pub fn get_genre_popularity(&self, genre: &str, rng: &mut impl rand::Rng) -> u8 {
         let era = self.get_current_era();
         if era
             .dominant_genres
             .iter()
             .any(|g| g.to_lowercase() == genre.to_lowercase())
         {
-            85 + (rand::random::<u8>() % 15) // 85-100
+            rng.gen_range(85..100)
         } else {
-            20 + (rand::random::<u8>() % 60) // 20-80
+            rng.gen_range(20..80)
         }
     }
 

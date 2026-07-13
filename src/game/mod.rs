@@ -95,6 +95,17 @@ pub const BREAK_WEEKS: u32 = 4;
 const GENRE_TREND_HOT: f32 = 1.15;
 const GENRE_TREND_COLD: f32 = 0.85;
 
+// Determinism: everything after seed selection derives from world_seed, so a
+// seed replays a whole career. Two independent streams share the splitmix64
+// key derivation (see `advance_week_events` for the world stream): the world
+// stream evolves the scene, the action stream feeds every roll the player's
+// own actions make. Salting the action keys keeps the streams uncorrelated —
+// your tour luck never mirrors next week's scene news.
+const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3; // π's fraction bits: arbitrary, fixed forever
+// Setup rolls (bandmate names) draw from a reserved pre-game week, so they
+// can never replay week 1's action stream.
+const SETUP_STREAM_WEEK: u64 = 0;
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GameAction {
@@ -126,6 +137,8 @@ pub struct SupportTourOffer {
     pub expires_week: u32,
 }
 
+/// The one deliberate use of ambient entropy: choosing a world seed when
+/// ROCKER_SEED doesn't dictate one. Every roll after this derives from it.
 fn default_seed() -> u64 {
     rand::random::<u64>()
 }
@@ -209,29 +222,56 @@ impl Game {
         std::mem::take(&mut self.turn_log)
     }
 
+    /// The action-stream RNG for a given week: the same splitmix64 key
+    /// derivation the world stream uses in `advance_week_events`, applied to
+    /// the salted seed (see `ACTION_STREAM_SALT`). Derived on demand, never
+    /// stored — saves carry no RNG state, and a loaded game rolls exactly
+    /// what the unsaved one would have.
+    fn action_rng_for_week(&self, week: u64) -> StdRng {
+        let mut key = (self.world_seed ^ ACTION_STREAM_SALT)
+            .wrapping_add(week)
+            .wrapping_mul(0x9E3779B97F4A7C15);
+        key = (key ^ (key >> 30)).wrapping_mul(0xBF58476D1CE4E5B8);
+        key = (key ^ (key >> 27)).wrapping_mul(0x94D049BB133111EB);
+        key ^= key >> 31;
+        StdRng::seed_from_u64(key)
+    }
+
+    /// Every roll made while resolving the current turn draws from this one
+    /// stream, in order: the action itself, then the week's random event,
+    /// then offer generation. Turn-consuming actions move the calendar, so
+    /// consecutive turns get fresh streams; the rare same-week paperwork
+    /// action (rejecting two deals in one sitting) rereads the week's stream,
+    /// which is deterministic and harmless.
+    fn action_rng(&self) -> StdRng {
+        self.action_rng_for_week(self.week as u64)
+    }
+
     pub fn initialize_player(&mut self, player_name: &str, band_name: &str, genre: world::MusicGenre) {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
         self.band.genre = genre;
         self.player.money = 500; // Starting cash in 1970
 
+        // Bandmates are part of the seed's identity, like the scene itself.
+        let mut rng = self.action_rng_for_week(SETUP_STREAM_WEEK);
         self.band.members = vec![
             band::BandMember {
-                name: self.data_files.random_band_member_name(),
+                name: self.data_files.random_band_member_name(&mut rng),
                 instrument: band::Instrument::Guitar,
                 skill: 25,
                 loyalty: 75,
                 drug_problem: false,
             },
             band::BandMember {
-                name: self.data_files.random_band_member_name(),
+                name: self.data_files.random_band_member_name(&mut rng),
                 instrument: band::Instrument::Bass,
                 skill: 20,
                 loyalty: 80,
                 drug_problem: false,
             },
             band::BandMember {
-                name: self.data_files.random_band_member_name(),
+                name: self.data_files.random_band_member_name(&mut rng),
                 instrument: band::Instrument::Drums,
                 skill: 30,
                 loyalty: 70,
@@ -241,7 +281,7 @@ impl Game {
     }
 
     // --- Song and Release Calculation Helper Methods (Step 4) ---
-    fn calculate_songwriting_quality(&self) -> u8 {
+    fn calculate_songwriting_quality(&self, rng: &mut impl Rng) -> u8 {
         let mut quality = QUALITY_BASE_SONGWRITING as f32;
         let mut player_bonus = 0.0;
 
@@ -259,7 +299,6 @@ impl Game {
         quality += player_bonus.min(QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS as f32);
 
         // Random variation
-        let mut rng = rand::thread_rng();
         let random_offset = rng.gen_range(0..=QUALITY_SONGWRITING_RANDOM_VARIATION) as i8 - (QUALITY_SONGWRITING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
         
@@ -286,7 +325,7 @@ impl Game {
         Ok((selected_songs, avg_quality))
     }
 
-    fn calculate_release_quality(&self, avg_song_quality: u8) -> u8 {
+    fn calculate_release_quality(&self, avg_song_quality: u8, rng: &mut impl Rng) -> u8 {
         let mut quality = (QUALITY_BASE_RECORDING as f32 + avg_song_quality as f32) / 2.0; 
         
         quality += (self.band.skill / 10) as f32;
@@ -298,7 +337,6 @@ impl Game {
         else if self.player.stress < 60 { player_bonus += 1.0; }
         quality += player_bonus.min(QUALITY_RECORDING_MAX_BONUS_PLAYER_STATS as f32);
 
-        let mut rng = rand::thread_rng();
         let random_offset = rng.gen_range(0..=QUALITY_RECORDING_RANDOM_VARIATION) as i8 - (QUALITY_RECORDING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
         
@@ -416,17 +454,17 @@ impl Game {
         Ok(())
     }
 
-    fn action_write_songs(&mut self) -> Result<(), String> {
+    fn action_write_songs(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         if self.player.energy < 20 {
             return Err("You're too tired to write songs!".to_string());
         }
         self.player.energy -= 20;
 
-        let num_songs_to_write = rand::thread_rng().gen_range(1..=3);
+        let num_songs_to_write = rng.gen_range(1..=3);
         let mut titles = Vec::new();
         for _ in 0..num_songs_to_write {
-            let quality = self.calculate_songwriting_quality();
-            let song_name = self.data_files.random_song_title();
+            let quality = self.calculate_songwriting_quality(rng);
+            let song_name = self.data_files.generate_song_title(rng);
             titles.push(format!("\"{}\"", song_name));
             self.band.unreleased_songs.push(music::Song {
                 id: self.next_song_id,
@@ -455,7 +493,11 @@ impl Game {
         Ok(())
     }
 
-    fn action_record_single(&mut self, pressing: Option<usize>) -> Result<(), String> {
+    fn action_record_single(
+        &mut self,
+        pressing: Option<usize>,
+        rng: &mut impl Rng,
+    ) -> Result<(), String> {
         if !self.band.can_record_single() {
              return Err("You need to write at least one song first!".to_string());
         }
@@ -479,7 +521,7 @@ impl Game {
         }
         self.player.spend_money(cost);
 
-        let release_quality = self.calculate_release_quality(avg_song_quality);
+        let release_quality = self.calculate_release_quality(avg_song_quality, rng);
         let release_name = format!("Single: {}", selected_songs[0].name);
 
         let new_release = music::Release {
@@ -515,7 +557,11 @@ impl Game {
         Ok(())
     }
 
-    fn action_record_album(&mut self, pressing: Option<usize>) -> Result<(), String> {
+    fn action_record_album(
+        &mut self,
+        pressing: Option<usize>,
+        rng: &mut impl Rng,
+    ) -> Result<(), String> {
         if !self.band.can_record_album() {
             return Err(format!("You need at least {} unreleased songs to record an album!", constants::MIN_ALBUM_SONGS));
         }
@@ -539,8 +585,8 @@ impl Game {
         }
         self.player.spend_money(cost);
 
-        let release_quality = self.calculate_release_quality(avg_song_quality);
-        let release_name = self.data_files.random_album_title();
+        let release_quality = self.calculate_release_quality(avg_song_quality, rng);
+        let release_name = self.data_files.random_album_title(rng);
 
         let new_release = music::Release {
             id: self.next_release_id,
@@ -738,7 +784,7 @@ impl Game {
         Ok(())
     }
 
-    fn action_go_on_tour(&mut self, region_index: usize) -> Result<(), String> {
+    fn action_go_on_tour(&mut self, region_index: usize, rng: &mut impl Rng) -> Result<(), String> {
         if self.player.energy < 40 {
             return Err("You're too tired to go on tour!".to_string());
         }
@@ -809,8 +855,7 @@ impl Game {
         // Tours are live shows too: fame stalls at the catalog cap.
         let fame_gain = fame_gain.min(self.live_fame_cap().saturating_sub(self.band.fame));
         self.band.fame += fame_gain;
-        
-        let mut rng = rand::thread_rng();
+
         let regional_fame_gain = 10 + rng.gen_range(0..=5);
         let new_regional_fame = (regional_fame as u16 + regional_fame_gain as u16).min(100) as u8;
         self.regional_fame.insert(regional_fame_key.clone(), new_regional_fame);
@@ -914,21 +959,20 @@ impl Game {
         Ok(())
     }
 
-    fn action_reject_deal(&mut self, offer_index: usize) -> Result<(), String> {
+    fn action_reject_deal(&mut self, offer_index: usize, rng: &mut impl Rng) -> Result<(), String> {
         if offer_index >= self.pending_deal_offers.len() {
             return Err("Invalid deal offer selected.".to_string());
         }
         let offer = self.pending_deal_offers.remove(offer_index);
         self.log(format!("🚫 Turned down {}'s offer.", offer.label_name));
-        
-        let mut rng = rand::thread_rng();
-        if let Some(poaching_band) = self.world.poach_rejected_deal(&offer.label_name, &mut rng) {
+
+        if let Some(poaching_band) = self.world.poach_rejected_deal(&offer.label_name, rng) {
             self.log(format!("📰 NEWS: {} signed with {} after you turned them down!", poaching_band, offer.label_name));
         }
         Ok(())
     }
 
-    fn action_accept_support_tour(&mut self) -> Result<(), String> {
+    fn action_accept_support_tour(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         let Some(offer) = self.pending_support_offer.clone() else {
             return Err("Nobody has offered you a support slot.".to_string());
         };
@@ -947,7 +991,6 @@ impl Game {
             offer.host_band, offer.weeks, offer.pay, offer.fame_gain
         ));
 
-        let mut rng = rand::thread_rng();
         if rng.gen_bool(0.25) {
             self.band.fame = (self.band.fame + 2).min(constants::MAX_FAME);
             self.log("🔥 Their crowd adopted you — encores every night (+2 fame).");
@@ -965,7 +1008,7 @@ impl Game {
 
     /// Expire a stale support offer, or roll for a new one from a bigger
     /// scene act famous enough to headline over you.
-    fn update_support_tour_offer(&mut self) {
+    fn update_support_tour_offer(&mut self, rng: &mut impl Rng) {
         if let Some(offer) = &self.pending_support_offer {
             if self.week >= offer.expires_week {
                 let host = offer.host_band.clone();
@@ -981,7 +1024,6 @@ impl Game {
         if self.band.fame < SUPPORT_OFFER_MIN_FAME {
             return;
         }
-        let mut rng = rand::thread_rng();
         if !rng.gen_bool(SUPPORT_OFFER_CHANCE) {
             return;
         }
@@ -1019,20 +1061,20 @@ impl Game {
     }
     
     // --- Main execute_action ---
-    fn execute_action(&mut self, action: GameAction) -> Result<(), String> {
+    fn execute_action(&mut self, action: GameAction, rng: &mut impl Rng) -> Result<(), String> {
         match action {
             GameAction::LazeAround => self.action_laze_around(),
-            GameAction::WriteSongs => self.action_write_songs(),
+            GameAction::WriteSongs => self.action_write_songs(rng),
             GameAction::Practice => self.action_practice(),
-            GameAction::RecordSingle { pressing } => self.action_record_single(pressing),
-            GameAction::RecordAlbum { pressing } => self.action_record_album(pressing),
+            GameAction::RecordSingle { pressing } => self.action_record_single(pressing, rng),
+            GameAction::RecordAlbum { pressing } => self.action_record_album(pressing, rng),
             GameAction::Gig(venue_index) => self.action_play_gig(venue_index),
-            GameAction::GoOnTour(region_index) => self.action_go_on_tour(region_index),
+            GameAction::GoOnTour(region_index) => self.action_go_on_tour(region_index, rng),
             GameAction::TakeBreak => self.action_take_break(),
             GameAction::VisitDoctor => self.action_visit_doctor(),
             GameAction::AcceptDeal(index) => self.action_accept_deal(index),
-            GameAction::RejectDeal(index) => self.action_reject_deal(index),
-            GameAction::AcceptSupportTour => self.action_accept_support_tour(),
+            GameAction::RejectDeal(index) => self.action_reject_deal(index, rng),
+            GameAction::AcceptSupportTour => self.action_accept_support_tour(rng),
             GameAction::DeclineSupportTour => self.action_decline_support_tour(),
             GameAction::StartMarketingCampaign(release_id, campaign_type) => self.action_start_marketing_campaign(release_id, campaign_type),
             GameAction::Quit => {
@@ -1213,7 +1255,7 @@ impl Game {
         }
     }
 
-    fn advance_week_events(&mut self) -> Result<(), String> {
+    fn advance_week_events(&mut self, rng: &mut impl Rng) -> Result<(), String> {
         // Sync the timeline with the current week. Tours can jump several weeks
         // at once, so catch up year by year instead of testing a single boundary.
         let expected_year =
@@ -1226,8 +1268,8 @@ impl Game {
         }
         self.update_genre_trend_news();
 
-        if let Some(event) = self.events.try_trigger_event(self.week) {
-            self.apply_random_event(event)?;
+        if let Some(event) = self.events.try_trigger_event(self.week, rng) {
+            self.apply_random_event(event, rng)?;
         }
 
         self.player.weekly_health_decay();
@@ -1239,8 +1281,12 @@ impl Game {
         key ^= key >> 31;
         let mut wk_rng = StdRng::seed_from_u64(key);
 
+        // The world stream (wk_rng) is drawn in a fixed order — historical
+        // events, then the scene update — so a seed's world evolves the same
+        // regardless of what the player did. The player-facing consequences
+        // of a historical event roll on the action stream instead.
         if let Some(historical_event) = self.timeline.take_historical_event(&mut wk_rng) {
-            self.apply_historical_event(&historical_event)?;
+            self.apply_historical_event(&historical_event, rng)?;
             self.log(format!("📰 MUSIC NEWS: {}", historical_event));
         }
 
@@ -1249,7 +1295,7 @@ impl Game {
             self.log(item);
         }
 
-        self.update_support_tour_offer();
+        self.update_support_tour_offer(rng);
         Ok(())
     }
 
@@ -1274,11 +1320,10 @@ impl Game {
         }
     }
 
-    fn check_and_generate_deal_offers(&mut self) {
+    fn check_and_generate_deal_offers(&mut self, rng: &mut impl Rng) {
         self.expire_stale_deal_offers();
         if self.pending_deal_offers.is_empty() && self.week.is_multiple_of(4) && self.band.record_deal.is_none() {
-            let mut rng = rand::thread_rng();
-            let mut new_offers = self.world.generate_deal_offers(&self.band, &self.data_files, &mut rng);
+            let mut new_offers = self.world.generate_deal_offers(&self.band, &self.data_files, rng);
             for offer in &mut new_offers {
                 offer.expires_week = Some(self.week + DEAL_OFFER_LIFETIME_WEEKS);
             }
@@ -1308,18 +1353,22 @@ impl Game {
                 | GameAction::Quit
         );
 
+        // One stream for the whole turn, keyed by the week the player acted
+        // in. Multi-week actions (tours, breaks) re-key next turn anyway.
+        let mut rng = self.action_rng();
+
         let week_before = self.week;
-        self.execute_action(action.clone())?; // Execute action first
+        self.execute_action(action.clone(), &mut rng)?; // Execute action first
 
         if is_turn_consuming_action {
             self.week += 1; // Advance week only for turn-consuming actions
-            self.advance_week_events()?; // Process standard weekly events
+            self.advance_week_events(&mut rng)?; // Process standard weekly events
             self.update_public_visibility(&action, self.week - week_before);
         }
-        
+
         // These happen after every action resolution, regardless of turn consumption
         self.process_music_releases_and_marketing();
-        self.check_and_generate_deal_offers();
+        self.check_and_generate_deal_offers(&mut rng);
         self.check_game_over();
 
         Ok(!self.game_over)
@@ -1363,9 +1412,12 @@ impl Game {
         }
     }
 
-    fn apply_random_event(&mut self, event: events::RandomEvent) -> Result<(), String> {
+    fn apply_random_event(
+        &mut self,
+        event: events::RandomEvent,
+        rng: &mut impl Rng,
+    ) -> Result<(), String> {
         use events::RandomEvent;
-        let mut rng = rand::thread_rng();
 
         match event {
             RandomEvent::DrugOffer => {
@@ -1544,9 +1596,7 @@ impl Game {
         Ok(())
     }
 
-    fn apply_historical_event(&mut self, event: &str) -> Result<(), String> {
-        let mut rng = rand::thread_rng();
-
+    fn apply_historical_event(&mut self, event: &str, rng: &mut impl Rng) -> Result<(), String> {
         match event {
             event if event.contains("Beatles") => {
                 if self.band.dominant_genres_match(&["Rock", "Folk Rock"]) {
@@ -1939,7 +1989,8 @@ mod tests {
         });
         game.player.money = 0;
 
-        assert!(game.action_record_single(Some(0)).is_err());
+        let mut rng = StdRng::seed_from_u64(0);
+        assert!(game.action_record_single(Some(0), &mut rng).is_err());
         assert_eq!(
             game.band.unreleased_songs.len(),
             1,
@@ -1963,7 +2014,9 @@ mod tests {
         });
         let week_before = game.week;
 
-        game.action_accept_support_tour().expect("offer should be acceptable");
+        let mut rng = StdRng::seed_from_u64(0);
+        game.action_accept_support_tour(&mut rng)
+            .expect("offer should be acceptable");
 
         assert!(game.pending_support_offer.is_none());
         assert_eq!(game.player.money, 1500);
@@ -1997,9 +2050,10 @@ mod tests {
         game.world.bands[0].fame = 80;
 
         let mut offered = false;
+        let mut rng = StdRng::seed_from_u64(1);
         for week in 1..=200 {
             game.week = week;
-            game.update_support_tour_offer();
+            game.update_support_tour_offer(&mut rng);
             if game.pending_support_offer.is_some() {
                 offered = true;
                 break;
@@ -2103,7 +2157,7 @@ mod tests {
         });
         game.week = 5;
 
-        game.update_support_tour_offer();
+        game.update_support_tour_offer(&mut StdRng::seed_from_u64(0));
         assert!(game.pending_support_offer.is_none(), "offers should expire");
         assert!(
             game.turn_log.iter().any(|m| m.contains("went to another band")),
@@ -2133,12 +2187,12 @@ mod tests {
 
         // Before the deadline the offer stays on the table.
         game.week = 7;
-        game.check_and_generate_deal_offers();
+        game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
         assert_eq!(game.pending_deal_offers.len(), 1, "a live offer survives to its deadline");
 
         // At the deadline it quietly leaves — with a line in the log...
         game.week = 8;
-        game.check_and_generate_deal_offers();
+        game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
         assert!(game.pending_deal_offers.is_empty(), "an ignored offer should expire");
         let log = game.take_turn_log().join("\n");
         assert!(log.contains("interest has cooled"), "expiry is told in-fiction, got: {log}");
@@ -2154,8 +2208,8 @@ mod tests {
         game.band.fame = 30;
         game.band.singles_released.push(test_release(1, ReleaseType::Single));
         let mut resumed = false;
-        for _ in 0..80 {
-            game.check_and_generate_deal_offers();
+        for attempt in 0..80 {
+            game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(attempt));
             if !game.pending_deal_offers.is_empty() {
                 resumed = true;
                 break;
@@ -2177,7 +2231,7 @@ mod tests {
         let mut game = test_game();
         game.pending_deal_offers = vec![test_deal_offer(&game, None)];
         game.week = 501;
-        game.check_and_generate_deal_offers();
+        game.check_and_generate_deal_offers(&mut StdRng::seed_from_u64(0));
         assert_eq!(game.pending_deal_offers.len(), 1, "legacy offers must never expire");
 
         // And the on-disk shape old builds wrote — no expires_week key at
@@ -2186,5 +2240,66 @@ mod tests {
         on_disk.as_object_mut().unwrap().remove("expires_week");
         let loaded: PotentialDealOffer = serde_json::from_value(on_disk).unwrap();
         assert_eq!(loaded.expires_week, None);
+    }
+
+    /// Track B's contract: a run is fully determined by its seed and the
+    /// player's choices. Two games on the same seed, fed the same twenty
+    /// turns, must land on the same week with the same money and fame and an
+    /// identical week-by-week story; a different seed must tell a different
+    /// one.
+    #[test]
+    fn same_seed_and_same_choices_replay_the_same_career() {
+        fn scripted_run(seed: u64) -> (u32, i32, u8, String) {
+            let mut game = super::sim::seeded_game(seed);
+            // A representative career slice: writing, gigging, idling, one
+            // club-run single, and a multi-week break (so the per-week RNG
+            // keying survives calendar jumps).
+            let script = [
+                GameAction::WriteSongs,
+                GameAction::Gig(0),
+                GameAction::LazeAround,
+                GameAction::WriteSongs,
+                GameAction::LazeAround,
+                GameAction::RecordSingle { pressing: Some(1) },
+                GameAction::Gig(0),
+                GameAction::LazeAround,
+                GameAction::Gig(0),
+                GameAction::TakeBreak,
+                GameAction::WriteSongs,
+                GameAction::WriteSongs,
+                GameAction::Gig(0),
+                GameAction::LazeAround,
+                GameAction::WriteSongs,
+                GameAction::LazeAround,
+                GameAction::Gig(0),
+                GameAction::LazeAround,
+                GameAction::Gig(0),
+                GameAction::LazeAround,
+            ];
+            let mut log: Vec<String> = Vec::new();
+            for action in script {
+                // A rejection is part of the story too — it must replay.
+                if let Err(rejection) = game.process_turn(action) {
+                    log.push(format!("[rejected] {rejection}"));
+                }
+                log.append(&mut game.take_turn_log());
+            }
+            (game.week, game.player.money, game.band.fame, log.join("\n"))
+        }
+
+        let (week_a, money_a, fame_a, story_a) = scripted_run(2025);
+        let (week_b, money_b, fame_b, story_b) = scripted_run(2025);
+        assert_eq!(week_a, week_b, "same seed, same calendar");
+        assert_eq!(money_a, money_b, "same seed, same bank balance");
+        assert_eq!(fame_a, fame_b, "same seed, same fame");
+        assert_eq!(story_a, story_b, "same seed, same story, line for line");
+
+        // The script must have exercised the seeded rolls for the proof to
+        // mean anything: songs written and a single actually recorded.
+        assert!(story_a.contains("🎼 Wrote"), "the script should write songs:\n{story_a}");
+        assert!(story_a.contains("🎙️ Recorded"), "the script should record a single:\n{story_a}");
+
+        let (_, _, _, story_c) = scripted_run(2026);
+        assert_ne!(story_a, story_c, "a different seed must tell a different story");
     }
 }
