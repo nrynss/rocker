@@ -308,7 +308,6 @@ fn ending_of(game: &Game) -> Ending {
 /// Everything one simulated career leaves behind.
 struct Career {
     bot: Bot,
-    seed: u64,
     ending: Ending,
     weeks: u32,
     final_fame: u8,
@@ -342,7 +341,6 @@ fn run_career(bot: Bot, seed: u64, horizon_weeks: u32) -> Career {
 fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
     let mut career = Career {
         bot,
-        seed: game.world_seed,
         ending: Ending::StillGoing,
         weeks: 0,
         final_fame: 0,
@@ -469,7 +467,10 @@ fn print_report(careers: &[Career]) {
                 .collect(),
         );
         let died = runs.iter().filter(|c| c.ending == Ending::Died).count();
-        let broke = runs.iter().filter(|c| c.ending == Ending::WentBroke).count();
+        let broke = runs
+            .iter()
+            .filter(|c| c.ending == Ending::WentBroke)
+            .count();
         let going = runs
             .iter()
             .filter(|c| c.ending == Ending::StillGoing)
@@ -537,7 +538,9 @@ fn print_report(careers: &[Career]) {
             bot.name(),
             signed_runs,
             runs.len(),
-            show(median(runs.iter().filter_map(|c| c.first_deal_week).collect())),
+            show(median(
+                runs.iter().filter_map(|c| c.first_deal_week).collect()
+            )),
             runs.iter().map(|c| c.deals_signed).sum::<u32>() as f32 / runs.len() as f32,
             show(median(runs.iter().map(|c| c.albums).collect())),
             show(median(runs.iter().map(|c| c.singles).collect())),

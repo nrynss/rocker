@@ -1,4 +1,4 @@
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -228,7 +228,10 @@ impl GameDataFiles {
 
     /// Load a pattern file, writing the default one first if it's missing.
     /// Patterns use `//` comments because `#` is tracery's tag marker.
-    fn load_pattern_file(path: &str, default: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    fn load_pattern_file(
+        path: &str,
+        default: &str,
+    ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         if !Path::new(path).exists() {
             fs::write(path, default)?;
         }
@@ -351,68 +354,12 @@ impl GameDataFiles {
         self.band_member_names[rng.gen_range(0..self.band_member_names.len())].clone()
     }
 
-    pub fn random_venue_name(&self) -> String {
-        let mut rng = thread_rng();
-        self.venue_names[rng.gen_range(0..self.venue_names.len())].clone()
-    }
-
-    pub fn random_city(&self) -> String {
-        let mut rng = thread_rng();
-        self.city_names[rng.gen_range(0..self.city_names.len())].clone()
-    }
-
     pub fn get_timeline_data(&self) -> &TimelineData {
         &self.timeline_data
     }
 
     pub fn get_record_labels_data(&self) -> &RecordLabelsData {
         &self.record_labels_data
-    }
-
-    pub fn get_markets_data(&self) -> &MarketsData {
-        &self.markets_data
-    }
-
-    pub fn get_labels_for_tier(&self, tier: &str) -> &Vec<RecordLabel> {
-        match tier {
-            "major" => &self.record_labels_data.major_labels,
-            "independent" => &self.record_labels_data.independent_labels,
-            "boutique" => &self.record_labels_data.boutique_labels,
-            _ => &self.record_labels_data.independent_labels,
-        }
-    }
-
-    pub fn get_market_region(&self, country: &str, region: &str) -> Option<&RegionMarket> {
-        self.markets_data
-            .markets
-            .get(country)
-            .and_then(|country_data| country_data.regions.get(region))
-    }
-
-    pub fn get_all_regions(&self) -> Vec<&RegionMarket> {
-        self.markets_data
-            .markets
-            .values()
-            .flat_map(|country| country.regions.values())
-            .collect()
-    }
-
-    pub fn get_genre_modifier(&self, year: u32, genre: &str) -> f32 {
-        let year_str = year.to_string();
-        self.markets_data
-            .market_modifiers
-            .genre_era_modifiers
-            .get(&year_str)
-            .and_then(|year_modifiers| year_modifiers.get(genre))
-            .copied()
-            .unwrap_or(1.0)
-    }
-
-    pub fn get_economic_cycle_effect(&self, cycle: &str) -> Option<&EconomicCycleEffect> {
-        self.markets_data
-            .market_modifiers
-            .economic_cycle_effects
-            .get(cycle)
     }
 
     pub fn validate_data_files() -> Result<(), Box<dyn std::error::Error>> {
@@ -463,7 +410,11 @@ mod tests {
         assert_eq!(names_a, names_b, "same seed must give the same names");
 
         let distinct: std::collections::HashSet<_> = names_a.iter().collect();
-        assert!(distinct.len() >= 20, "30 draws should be mostly distinct: {:?}", names_a);
+        assert!(
+            distinct.len() >= 20,
+            "30 draws should be mostly distinct: {:?}",
+            names_a
+        );
 
         let mut rng = StdRng::seed_from_u64(7);
         for _ in 0..5 {
