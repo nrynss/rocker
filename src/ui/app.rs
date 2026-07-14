@@ -176,12 +176,12 @@ impl App {
             MenuEntry {
                 hotkey: '2',
                 label: "Write Songs",
-                detail: if game.player.energy < 20 {
-                    "too tired".into()
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
                 } else {
                     "1-3 new songs".into()
                 },
-                enabled: game.player.energy >= 20,
+                enabled: game.player.stress < 90,
                 kind: MenuKind::Action(GameAction::WriteSongs),
             },
             MenuEntry {
@@ -198,27 +198,35 @@ impl App {
             MenuEntry {
                 hotkey: '4',
                 label: "Record Single",
-                detail: if songs == 0 {
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
+                } else if songs == 0 {
                     "no songs written".into()
                 } else if signed {
                     format!("${} — label presses", single_cost)
                 } else {
                     format!("${} + pressing", single_cost)
                 },
-                enabled: game.band.can_record_single() && game.player.can_afford(single_min),
+                enabled: game.player.stress < 90
+                    && game.band.can_record_single()
+                    && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
             },
             MenuEntry {
                 hotkey: '5',
                 label: "Record Album",
-                detail: if songs < constants::MIN_ALBUM_SONGS as usize {
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
+                } else if songs < constants::MIN_ALBUM_SONGS as usize {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
                 } else if signed {
                     format!("${} — label presses", album_cost)
                 } else {
                     format!("${} + pressing", album_cost)
                 },
-                enabled: game.band.can_record_album() && game.player.can_afford(album_min),
+                enabled: game.player.stress < 90
+                    && game.band.can_record_album()
+                    && game.player.can_afford(album_min),
                 kind: MenuKind::RecordAlbum,
             },
             MenuEntry {

@@ -15,10 +15,8 @@ pub use crate::data::constants::*;
 
 // Quality calculation constants
 pub(super) const QUALITY_BASE_SONGWRITING: u8 = 30;
-pub(super) const QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS: u8 = 25;
 pub(super) const QUALITY_SONGWRITING_RANDOM_VARIATION: u8 = 10;
 pub(super) const QUALITY_BASE_RECORDING: u8 = 30;
-pub(super) const QUALITY_RECORDING_MAX_BONUS_PLAYER_STATS: u8 = 20;
 pub(super) const QUALITY_RECORDING_RANDOM_VARIATION: u8 = 10;
 
 // Sales model constants
@@ -194,6 +192,28 @@ pub(super) const BREAK_HEALTH_GAIN: u8 = 30;
 // mood/imagination, not maxed like health/energy.
 pub(super) const DEFAULT_HAPPINESS: u8 = 60;
 pub(super) const DEFAULT_CREATIVITY: u8 = 50;
+
+// --- L2: writing & quality (docs/DESIGN-v0.6-life-cycle.md §A, Quality formulas) ---
+// Writing and recording stress costs [tune], and the guard threshold.
+pub(super) const WRITE_STRESS_COST: u8 = 5;
+pub(super) const RECORD_STRESS_COST: u8 = 8;
+pub(super) const STUDIO_STRESS_BLOCK: u8 = 90;
+// Recording quality penalty threshold [tune].
+pub(super) const RECORDING_STRESS_PENALTY_THRESHOLD: u8 = 70;
+// Writing streak: fatigue kicks in on the 3rd+ consecutive week [tune].
+pub(super) const WRITING_STREAK_FATIGUE: u32 = 3;
+pub(super) const WRITING_FATIGUE_CREATIVITY_COST: u8 = 5;
+// Writing under stress drains creativity: threshold and divisor [tune].
+pub(super) const WRITING_STRESS_CREATIVITY_THRESHOLD: u8 = 50;
+pub(super) const WRITING_STRESS_CREATIVITY_DIVISOR: u8 = 5;
+// Happiness multiplier for quality: 0.8 + happiness / 500.0 (clamped 0.8–1.0).
+// Constants for the formula: min 0.8, divisor 500.
+pub(super) const HAPPINESS_QUALITY_MULTIPLIER_MIN: f32 = 0.8;
+pub(super) const HAPPINESS_QUALITY_MULTIPLIER_SCALE: f32 = 500.0;
+// Creativity divisor for songwriting bonus: creativity / 4 yields 0–25 bonus at creativity 0–100.
+pub(super) const SONGWRITING_CREATIVITY_DIVISOR: u8 = 4;
+// Recording quality penalty when stress > RECORDING_STRESS_PENALTY_THRESHOLD [tune].
+pub(super) const RECORDING_STRESS_PENALTY: i8 = 10;
 
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world

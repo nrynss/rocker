@@ -6,33 +6,28 @@ use super::super::constants::{self, *};
 use super::super::*;
 
 impl Game {
-    fn calculate_songwriting_quality(&self, rng: &mut impl Rng) -> u8 {
+    pub(crate) fn calculate_songwriting_quality(&self, rng: &mut impl Rng) -> u8 {
         let mut quality = QUALITY_BASE_SONGWRITING as f32;
-        let mut player_bonus = 0.0;
 
-        // Player energy bonus
-        if self.player.energy > 70 {
-            player_bonus += 5.0;
-        } else if self.player.energy > 40 {
-            player_bonus += 2.0;
-        }
-
-        // Player stress bonus (low stress is good)
-        if self.player.stress < 30 {
-            player_bonus += 5.0;
-        } else if self.player.stress < 60 {
-            player_bonus += 2.0;
-        }
+        // Creativity bonus (0–25 range at creativity 0–100)
+        let creativity_bonus =
+            (self.player.creativity as f32) / (SONGWRITING_CREATIVITY_DIVISOR as f32);
 
         // Band member skill bonus
-        player_bonus += (self.band.average_member_skill() / 15) as f32;
+        let skill_bonus = (self.band.average_member_skill() / 15) as f32;
 
-        quality += player_bonus.min(QUALITY_SONGWRITING_MAX_BONUS_PLAYER_STATS as f32);
+        quality += creativity_bonus + skill_bonus;
 
-        // Random variation
+        // Random variation (same RNG call as before to preserve determinism)
         let random_offset = rng.gen_range(0..=QUALITY_SONGWRITING_RANDOM_VARIATION) as i8
             - (QUALITY_SONGWRITING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
+
+        // Apply happiness multiplier: 0.8 + (happiness / 500.0), clamped 0.8–1.0
+        let happiness_multiplier = (HAPPINESS_QUALITY_MULTIPLIER_MIN
+            + (self.player.happiness as f32) / HAPPINESS_QUALITY_MULTIPLIER_SCALE)
+            .clamp(HAPPINESS_QUALITY_MULTIPLIER_MIN, 1.0);
+        quality *= happiness_multiplier;
 
         quality.clamp(1.0, 100.0) as u8
     }
@@ -71,36 +66,39 @@ impl Game {
         Ok((selected_songs, avg_quality))
     }
 
-    fn calculate_release_quality(&self, avg_song_quality: u8, rng: &mut impl Rng) -> u8 {
+    pub(crate) fn calculate_release_quality(&self, avg_song_quality: u8, rng: &mut impl Rng) -> u8 {
         let mut quality = (QUALITY_BASE_RECORDING as f32 + avg_song_quality as f32) / 2.0;
 
+        // Band skill term
         quality += (self.band.skill / 10) as f32;
 
-        let mut player_bonus: f32 = 0.0;
-        if self.player.energy > 70 {
-            player_bonus += 3.0;
-        } else if self.player.energy > 40 {
-            player_bonus += 1.0;
+        // Condition penalty: −10 if stress > threshold
+        if self.player.stress > RECORDING_STRESS_PENALTY_THRESHOLD {
+            quality -= RECORDING_STRESS_PENALTY as f32;
         }
-        if self.player.stress < 30 {
-            player_bonus += 3.0;
-        } else if self.player.stress < 60 {
-            player_bonus += 1.0;
-        }
-        quality += player_bonus.min(QUALITY_RECORDING_MAX_BONUS_PLAYER_STATS as f32);
 
+        // Random variation (same RNG call as before to preserve determinism)
         let random_offset = rng.gen_range(0..=QUALITY_RECORDING_RANDOM_VARIATION) as i8
             - (QUALITY_RECORDING_RANDOM_VARIATION / 2) as i8;
         quality += random_offset as f32;
+
+        // Apply happiness multiplier: 0.8 + (happiness / 500.0), clamped 0.8–1.0
+        let happiness_multiplier = (HAPPINESS_QUALITY_MULTIPLIER_MIN
+            + (self.player.happiness as f32) / HAPPINESS_QUALITY_MULTIPLIER_SCALE)
+            .clamp(HAPPINESS_QUALITY_MULTIPLIER_MIN, 1.0);
+        quality *= happiness_multiplier;
 
         quality.clamp((avg_song_quality as f32 / 2.0).max(1.0), 100.0) as u8
     }
 
     pub(in crate::game) fn action_write_songs(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        if self.player.energy < 20 {
-            return Err("You're too tired to write songs!".to_string());
+        // Guard: stress blocks writing (§A)
+        if self.player.stress >= STUDIO_STRESS_BLOCK {
+            return Err("You're too stressed to write coherent music!".to_string());
         }
-        self.player.energy -= 20;
+
+        // Increment writing streak at the start
+        self.writing_streak += 1;
 
         let num_songs_to_write = rng.gen_range(1..=3);
         let mut titles = Vec::new();
@@ -121,6 +119,28 @@ impl Game {
             if num_songs_to_write == 1 { "" } else { "s" },
             titles.join(", ")
         ));
+
+        // Apply stress cost and creativity consumption rules (§A)
+        self.player.stress = (self.player.stress + WRITE_STRESS_COST).min(constants::MAX_STRESS);
+
+        // Creativity consumption: only when forced
+        // 1. Writing too much: 3rd and every subsequent consecutive writing week
+        if self.writing_streak >= WRITING_STREAK_FATIGUE {
+            self.player.creativity = self
+                .player
+                .creativity
+                .saturating_sub(WRITING_FATIGUE_CREATIVITY_COST);
+        }
+
+        // 2. Writing under stress: stress > 50 at the moment of writing
+        if self.player.stress > WRITING_STRESS_CREATIVITY_THRESHOLD {
+            let stress_over_threshold = self.player.stress - WRITING_STRESS_CREATIVITY_THRESHOLD;
+            let creativity_cost = (stress_over_threshold as f32
+                / WRITING_STRESS_CREATIVITY_DIVISOR as f32)
+                .ceil() as u8;
+            self.player.creativity = self.player.creativity.saturating_sub(creativity_cost);
+        }
+
         Ok(())
     }
 
@@ -143,6 +163,11 @@ impl Game {
         pressing: Option<usize>,
         rng: &mut impl Rng,
     ) -> Result<(), String> {
+        // Guard: stress blocks recording (§A)
+        if self.player.stress >= STUDIO_STRESS_BLOCK {
+            return Err("You're too stressed to record quality music!".to_string());
+        }
+
         if !self.band.can_record_single() {
             return Err("You need to write at least one song first!".to_string());
         }
@@ -201,6 +226,10 @@ impl Game {
             ));
         }
         self.apply_label_promo();
+
+        // Apply stress cost (§A)
+        self.player.stress = (self.player.stress + RECORD_STRESS_COST).min(constants::MAX_STRESS);
+
         Ok(())
     }
 
@@ -209,6 +238,11 @@ impl Game {
         pressing: Option<usize>,
         rng: &mut impl Rng,
     ) -> Result<(), String> {
+        // Guard: stress blocks recording (§A)
+        if self.player.stress >= STUDIO_STRESS_BLOCK {
+            return Err("You're too stressed to record quality music!".to_string());
+        }
+
         if !self.band.can_record_album() {
             return Err(format!(
                 "You need at least {} unreleased songs to record an album!",
@@ -278,6 +312,10 @@ impl Game {
                 "📈 It's an album-oriented era — the announcement alone earns you buzz (+3 fame).",
             );
         }
+
+        // Apply stress cost (§A)
+        self.player.stress = (self.player.stress + RECORD_STRESS_COST).min(constants::MAX_STRESS);
+
         Ok(())
     }
 }

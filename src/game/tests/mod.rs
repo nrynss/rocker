@@ -20,6 +20,7 @@ mod lifestyle;
 mod releases;
 mod save_compat;
 mod smoke;
+mod studio;
 mod support;
 
 fn test_game() -> Game {

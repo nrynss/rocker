@@ -80,6 +80,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         regional_fame: std::collections::HashMap::new(),
         idle_streak: 0,
         genre_trend_reported: 0,
+        writing_streak: 0,
         week: 1,
         game_over: false,
         next_song_id: 0,

@@ -74,6 +74,9 @@ pub struct Game {
     /// (-1 cold, 0 unremarkable, +1 hot) — the news speaks only on change.
     #[serde(default)]
     pub genre_trend_reported: i8,
+    /// Consecutive weeks spent writing songs (v0.6 §A).
+    #[serde(default)]
+    pub writing_streak: u32,
     pub week: u32,
     pub game_over: bool,
     pub next_song_id: u32,
@@ -117,6 +120,7 @@ impl Game {
             regional_fame: std::collections::HashMap::new(),
             idle_streak: 0,
             genre_trend_reported: 0,
+            writing_streak: 0,
             week: 1,
             game_over: false,
             next_song_id: 0,

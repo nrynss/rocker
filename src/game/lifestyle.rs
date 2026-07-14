@@ -12,13 +12,19 @@ use super::*;
 impl Game {
     /// Apply the weekly stat tick. Runs once per turn that consumes a
     /// week (see the single call-site in `turn.rs`). `action` is only
-    /// consulted to track the lazing streak — health wear from turtling
-    /// only kicks in after several *consecutive* lazing weeks.
+    /// consulted to track the lazing and writing streaks — health wear from
+    /// turtling and creative fatigue kick in after several *consecutive* weeks.
     pub(super) fn update_lifestyle(&mut self, action: &GameAction) {
         if matches!(action, GameAction::LazeAround) {
             self.player.laze_streak += 1;
         } else {
             self.player.laze_streak = 0;
+        }
+
+        if matches!(action, GameAction::WriteSongs) {
+            // writing_streak is incremented in action_write_songs; just keep it here
+        } else {
+            self.writing_streak = 0;
         }
 
         // Stress bleeds off on its own, worse while broke.
