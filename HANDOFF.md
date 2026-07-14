@@ -1,6 +1,6 @@
 # Rocker — Life Cycle Handoff (v0.6)
 
-> **Active cycle.** Feature cycle: the four bars (health/stress/happiness/
+> **Cycle closed 2026-07-14 — shipped as 0.6.0.** Feature cycle: the four bars (health/stress/happiness/
 > creativity), per-show concert analysis, fame gravity with peak floors,
 > living sales tail, endless post-rockstar play, and JSON-driven incidents.
 > **Design is decided** — read `docs/DESIGN-v0.6-life-cycle.md` before
@@ -102,7 +102,7 @@ Commit prefix: `life(L#): <short description>`.
 | **L8** | Incidents → `data/incidents.json`: schema, loader, weighted selection, migrate + new content, cadence up | M | L1 | **new** `data/incidents.json`, `src/data_loader.rs`, `src/game/events.rs`, `src/game/events_apply.rs` | ✅ done | opus-l8 | life/v0.6 | d5e1477 |
 | **L9** | Endless game: rockstar becomes milestone, not ending | S | L5 | `rockstar_achieved` in `core.rs`, milestone logic in `turn.rs` (game-over fn), `src/ui/render/game_over.rs` | ✅ done | haiku-l9 | life/v0.6 | 59240b0 |
 | **L10** | Sim-lab validation: sweeps for [tune] values, income/fame trajectory report, new-system bot coverage | M | L1–L3, L5–L8 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ✅ done | sonnet-l10 | life/v0.6 | ae399c4 |
-| **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | 🔒 claimed | claude-l11 | life/v0.6 | |
+| **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | claude-l11 | life/v0.6 | HEAD |
 
 ### Parallelism map (waves)
 
@@ -229,3 +229,10 @@ _Format:_ `YYYY-MM-DD L# <claimed|done|unclaimed> by <agent> — <one line>`
 | label-loyalist | 100 | $10,819,973 | 93% (med. win yr 2) | 0 | 4 (7%) |
 
 Sweep spot-checks: tour gross by skill tier $539/$724/$807 (reception drives box office, no runaway); sales-tail lifetime income $48/$260/$510/$928 by quality tier (monotonic); fame-95 vs fame-20 catalog 5.9× (bounded by pressed copies — not runaway). **Open design finding for the Musician cycle:** live reception can never improve over a career — `average_member_skill()` and `reputation.live_performance` are written nowhere in production code; `Practice` raises only the separate `band.skill` (recording). The Musician cycle's derived-skill rework (FUTURE §1–§2) is the natural home for the fix.
+- 2026-07-14 **L11 done — cycle close.** Board audit: all 11 tasks (L1–L10, L11) ✅ with real commit SHAs verified via `git cat-file -t`. Full suite green: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` → 100 passed / 4 ignored (up from the 43/2 baseline). `CHANGELOG.md` 0.6.0 written (player-facing this time — feature cycle). `Cargo.toml`/`Cargo.lock` bumped 0.5.1 → 0.6.0. Cycle PR **#18** marked ready for the human to merge.
+
+### Cycle summary
+
+Ten agents across three model tiers (Opus: L5, L8 · Sonnet: L1, L3, L4, L10 · Haiku: L2, L6, L7, L9), each in an isolated worktree, integrated serially by the coordinator with a full gate re-run after every pick. Notable coordinator interventions beyond routine conflict resolution: comeback ×2 clamped to respect live-fame caps (L5); a gig-grinder sim assertion restored under combined L1+L5 behavior; the "Laze Around" menu copy fixed while L4 was still unclaimed; `gear_stolen` gated by fame and a doubled "night night" log string fixed (L3 integration); the energy seam fully closed — Practice and support-tour accepts, which no task owned, moved onto the stress economy; two flaky tests deflaked (unseeded `test_game` colliding with weekly incidents and historical events); the fame ramp given its own serialized clock (`decay_streak`) so a falling star's decay onset is gentle across every grace-tier boundary, closing L5's deferred edge case that L10 quantified.
+
+**Open finding for the next cycle** (not a regression, a pre-existing gap L10 surfaced): live-show reception can never improve over a career — member skill and live-performance reputation are set at band creation and written nowhere in production code. The natural fix is the Musician cycle's derived-skill rework (FUTURE.md §1–§2).
