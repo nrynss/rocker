@@ -103,6 +103,7 @@ Commit prefix: `life(L#): <short description>`.
 | **L9** | Endless game: rockstar becomes milestone, not ending | S | L5 | `rockstar_achieved` in `core.rs`, milestone logic in `turn.rs` (game-over fn), `src/ui/render/game_over.rs` | ✅ done | haiku-l9 | life/v0.6 | 59240b0 |
 | **L10** | Sim-lab validation: sweeps for [tune] values, income/fame trajectory report, new-system bot coverage | M | L1–L3, L5–L8 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ✅ done | sonnet-l10 | life/v0.6 | ae399c4 |
 | **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | claude-l11 | life/v0.6 | da70473 |
+| **L12** | Fix L10's open finding: live reception never improves — grow `average_member_skill()` via Practice, `reputation.live_performance` via playing shows | S | L1–L3 | `src/game/actions/studio.rs` (Practice member-skill growth), `src/game/actions/live.rs` (`apply_show_verdict_rewards`), live-skill consts in `src/game/constants.rs`, `src/game/tests/shows.rs` | ✅ done | claude-l12 | life/v0.6 | PLACEHOLDER |
 
 ### Parallelism map (waves)
 

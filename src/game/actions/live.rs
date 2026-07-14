@@ -70,7 +70,25 @@ impl Game {
 
     /// Apply a show's stat rewards (§A/§B): great and transcendent shows
     /// feed creativity, transcendent also lifts happiness on the spot.
+    ///
+    /// Also the fix for L12's open finding: stage time is how a live
+    /// reputation is actually built. Every show but a rough one nudges
+    /// `reputation.live_performance` up — solid gigs teach you something,
+    /// great and transcendent ones teach you more — so a touring band's
+    /// live reception keeps climbing instead of being fixed forever at
+    /// character creation.
     fn apply_show_verdict_rewards(&mut self, verdict: ShowVerdict) {
+        let live_reputation_gain = match verdict {
+            ShowVerdict::Rough => 0,
+            ShowVerdict::Solid => SOLID_SHOW_LIVE_REPUTATION_GAIN,
+            ShowVerdict::Great => GREAT_SHOW_LIVE_REPUTATION_GAIN,
+            ShowVerdict::Transcendent => TRANSCENDENT_SHOW_LIVE_REPUTATION_GAIN,
+        };
+        if live_reputation_gain > 0 {
+            self.band.reputation.live_performance =
+                (self.band.reputation.live_performance + live_reputation_gain).min(100);
+        }
+
         match verdict {
             ShowVerdict::Great => {
                 self.player.creativity = (self.player.creativity + GREAT_SHOW_CREATIVITY_GAIN)

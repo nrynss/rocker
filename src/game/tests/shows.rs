@@ -123,6 +123,69 @@ fn great_and_transcendent_shows_feed_creativity() {
     );
 }
 
+/// L12: `reputation.live_performance` is one of the two dominant reception
+/// terms (design §B) and, before this fix, was never written after band
+/// creation — a career's live show could never actually improve. Confirm
+/// it now climbs with stage time.
+#[test]
+fn playing_shows_grows_live_performance_reputation() {
+    let mut game = test_game();
+    for member in &mut game.band.members {
+        member.skill = 100;
+    }
+    game.band.reputation.live_performance = 50;
+    game.player.stress = 0;
+    game.player.health = 100;
+    let venue = best_open_venue(&game);
+    let mut rng = StdRng::seed_from_u64(105);
+    let reputation_before = game.band.reputation.live_performance;
+
+    for _ in 0..10 {
+        game.player.stress = 0;
+        game.player.health = 100;
+        game.action_play_gig(venue, &mut rng)
+            .expect("gig should succeed");
+    }
+
+    assert!(
+        game.band.reputation.live_performance > reputation_before,
+        "a run of gigs by a skilled band should raise live_performance from {reputation_before}, got {}",
+        game.band.reputation.live_performance
+    );
+    assert!(
+        game.band.reputation.live_performance <= 100,
+        "live_performance must stay clamped at 100"
+    );
+}
+
+/// L12: rehearsal is where individual musicianship — `average_member_skill()`,
+/// the reception formula's other static term — was supposed to grow, and
+/// didn't. Confirm Practice now raises it.
+#[test]
+fn practice_grows_average_member_skill() {
+    let mut game = test_game();
+    for member in &mut game.band.members {
+        member.skill = 20;
+    }
+    game.player.stress = 0;
+    let skill_before = game.band.average_member_skill();
+
+    for _ in 0..5 {
+        game.player.stress = 0;
+        game.action_practice().expect("practice should succeed");
+    }
+
+    assert!(
+        game.band.average_member_skill() > skill_before,
+        "practice should raise average member skill from {skill_before}, got {}",
+        game.band.average_member_skill()
+    );
+    assert!(
+        game.band.members.iter().all(|m| m.skill <= 100),
+        "member skill must stay clamped at 100"
+    );
+}
+
 #[test]
 fn old_save_defaults_last_tour_report_to_none() {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/pre-0.5.sav");

@@ -150,6 +150,12 @@ impl Game {
         }
         self.player.stress = (self.player.stress + PRACTICE_STRESS_COST).min(constants::MAX_STRESS);
         self.band.skill = (self.band.skill + 2).min(constants::MAX_SKILL);
+        // L12: rehearsal is also where individual musicianship grows —
+        // `average_member_skill()` feeds live reception (design §B) and,
+        // unlike `band.skill` above, was never written after band creation.
+        for member in &mut self.band.members {
+            member.skill = (member.skill + PRACTICE_MEMBER_SKILL_GAIN).min(constants::MAX_SKILL);
+        }
         let skill = self.band.skill;
         self.log(format!(
             "🥁 A week in the rehearsal room — band skill is now {}%.",

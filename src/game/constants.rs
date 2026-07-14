@@ -293,6 +293,18 @@ pub(super) const TOUR_WENT_WELL_RECEPTION_THRESHOLD: u8 = 70;
 pub(super) const TOUR_WENT_WELL_HAPPINESS_GAIN: u8 = 8;
 pub(super) const TOUR_WENT_WELL_CREATIVITY_GAIN: u8 = 5;
 
+// --- L12: derived live-skill growth (fixes the open finding that
+// `average_member_skill()` and `reputation.live_performance` were the
+// reception formula's two dominant terms yet never moved after band
+// creation). Rehearsal builds the former; stage time builds the latter. ---
+/// Each band member's individual skill gained per week of Practice. [tune]
+pub(super) const PRACTICE_MEMBER_SKILL_GAIN: u8 = 1;
+/// `reputation.live_performance` gained per show, by verdict. Rough nights
+/// teach nothing; better nights teach more. [tune]
+pub(super) const SOLID_SHOW_LIVE_REPUTATION_GAIN: u8 = 1;
+pub(super) const GREAT_SHOW_LIVE_REPUTATION_GAIN: u8 = 2;
+pub(super) const TRANSCENDENT_SHOW_LIVE_REPUTATION_GAIN: u8 = 3;
+
 // Action guards (energy guards → stress/health economy, §A). `pub` (not
 // `pub(super)`): `ui/app.rs`'s menu entries read these directly to keep the
 // enabled/disabled state in lockstep with the action guards in `live.rs`.
