@@ -3,7 +3,10 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::ReleaseType;
-use crate::game::{BREAK_WEEKS, Game, GameAction, PRESSING_TIERS};
+use crate::game::{
+    BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
+    TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
+};
 
 use super::render;
 
@@ -232,12 +235,15 @@ impl App {
             MenuEntry {
                 hotkey: '6',
                 label: "Play a Gig",
-                detail: if game.player.energy < 30 {
-                    "too tired".into()
+                detail: if game.player.stress >= GIG_STRESS_GUARD {
+                    "too stressed out".into()
+                } else if game.player.health < GIG_HEALTH_GUARD {
+                    "too unwell".into()
                 } else {
                     "venue picker".into()
                 },
-                enabled: game.player.energy >= 30,
+                enabled: game.player.stress < GIG_STRESS_GUARD
+                    && game.player.health >= GIG_HEALTH_GUARD,
                 kind: MenuKind::Gig,
             },
             MenuEntry {
@@ -245,12 +251,16 @@ impl App {
                 label: "Go on Tour",
                 detail: if game.band.fame < 25 {
                     "needs 25 fame".into()
-                } else if game.player.energy < 40 {
-                    "too tired".into()
+                } else if game.player.stress >= TOUR_STRESS_GUARD {
+                    "too stressed out".into()
+                } else if game.player.health < TOUR_HEALTH_GUARD {
+                    "too unwell".into()
                 } else {
                     "region picker".into()
                 },
-                enabled: game.band.fame >= 25 && game.player.energy >= 40,
+                enabled: game.band.fame >= 25
+                    && game.player.stress < TOUR_STRESS_GUARD
+                    && game.player.health >= TOUR_HEALTH_GUARD,
                 kind: MenuKind::GoOnTour,
             },
             MenuEntry {

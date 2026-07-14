@@ -221,6 +221,83 @@ pub(super) const RECORDING_STRESS_PENALTY: i8 = 10;
 // [tune] — §F raises cadence from 30% every-other-week to 35% weekly.
 pub(super) const INCIDENT_WEEKLY_CHANCE_PERCENT: u32 = 35;
 
+// ============================================================================
+// L3: per-show engine (docs/DESIGN-v0.6-life-cycle.md §B — `shows.rs`).
+// Every gig/tour stop resolves individually: a reception roll, a verdict,
+// and a momentum multiplier that carries word-of-mouth across a tour.
+// ============================================================================
+
+/// Five shows per tour week (decided design, not [tune]).
+pub(super) const SHOWS_PER_TOUR_WEEK: u32 = 5;
+
+// Reception = band_base + condition + era_fit + variance + creativity_upside,
+// clamped 0-100 (§B). band_base is the dominant term by design.
+pub(super) const RECEPTION_BAND_BASE_SKILL_WEIGHT: f32 = 0.7;
+pub(super) const RECEPTION_BAND_BASE_REPUTATION_WEIGHT: f32 = 0.3;
+pub(super) const RECEPTION_STRESS_THRESHOLD: u8 = 70;
+pub(super) const RECEPTION_STRESS_PENALTY: f32 = 10.0;
+pub(super) const RECEPTION_HEALTH_THRESHOLD: u8 = 40;
+pub(super) const RECEPTION_HEALTH_PENALTY: f32 = 10.0;
+/// Variance roll: inclusive -10..=10.
+pub(super) const RECEPTION_VARIANCE_RANGE: i32 = 10;
+/// Creativity upside roll: inclusive 0..=creativity/5 (0..=20 at max
+/// creativity; exactly 0 at creativity 0 — never an empty range). Creativity
+/// is upside only, never a multiplier on `band_base`.
+pub(super) const RECEPTION_CREATIVITY_UPSIDE_DIVISOR: u8 = 5;
+
+/// Era-genre fit scaled to a ±10 swing on reception. Reuses `GENRE_TREND_HOT`
+/// as the anchor: a modifier at the "hot" boundary (1.15) or beyond scores
+/// the full +10; a modifier at or past "cold" (0.85) scores -10; 1.0 → 0.
+pub(super) const ERA_FIT_MAX_SWING: f32 = 10.0;
+
+// Verdict boundaries (§B), inclusive lower bounds.
+pub(super) const VERDICT_SOLID_MIN: u8 = 40;
+pub(super) const VERDICT_GREAT_MIN: u8 = 70;
+pub(super) const VERDICT_TRANSCENDENT_MIN: u8 = 85;
+
+// Momentum: a rolling word-of-mouth multiplier across a tour, starts at 1.0,
+// clamped after every show. [tune] deltas.
+pub(super) const MOMENTUM_START: f32 = 1.0;
+pub(super) const MOMENTUM_MIN: f32 = 0.85;
+pub(super) const MOMENTUM_MAX: f32 = 1.15;
+pub(super) const MOMENTUM_DELTA_TRANSCENDENT: f32 = 0.05;
+pub(super) const MOMENTUM_DELTA_GREAT: f32 = 0.03;
+pub(super) const MOMENTUM_DELTA_SOLID: f32 = 0.0;
+pub(super) const MOMENTUM_DELTA_ROUGH: f32 = -0.05;
+
+/// Reception's effect on attendance: a modest [tune] factor mapped linearly
+/// from reception (0-100) onto this range, 1.0 at reception 50 — great
+/// nights fill rooms, rough ones don't.
+pub(super) const RECEPTION_ATTENDANCE_MIN_FACTOR: f32 = 0.85;
+pub(super) const RECEPTION_ATTENDANCE_MAX_FACTOR: f32 = 1.15;
+
+// Synthesized tour-stop venue capacity, drawn from the region's population
+// and economic strength [tune].
+pub(super) const TOUR_VENUE_CAPACITY_POP_DIVISOR: f32 = 300.0;
+pub(super) const TOUR_VENUE_CAPACITY_MIN: u32 = 300;
+pub(super) const TOUR_VENUE_CAPACITY_MAX: u32 = 25_000;
+
+// Stat costs and rewards for shows (§A/§B).
+pub(super) const GIG_STRESS_COST: u8 = 8;
+pub(super) const TOUR_STRESS_COST_PER_WEEK: u8 = 12;
+pub(super) const TOUR_HEALTH_COST_PER_WEEK: u8 = 4;
+pub(super) const GREAT_SHOW_CREATIVITY_GAIN: u8 = 2;
+pub(super) const TRANSCENDENT_SHOW_CREATIVITY_GAIN: u8 = 3;
+pub(super) const TRANSCENDENT_SHOW_HAPPINESS_GAIN: u8 = 2;
+/// Tour verdict threshold: average reception at or above this means the tour
+/// "went very well" (§B).
+pub(super) const TOUR_WENT_WELL_RECEPTION_THRESHOLD: u8 = 70;
+pub(super) const TOUR_WENT_WELL_HAPPINESS_GAIN: u8 = 8;
+pub(super) const TOUR_WENT_WELL_CREATIVITY_GAIN: u8 = 5;
+
+// Action guards (energy guards → stress/health economy, §A). `pub` (not
+// `pub(super)`): `ui/app.rs`'s menu entries read these directly to keep the
+// enabled/disabled state in lockstep with the action guards in `live.rs`.
+pub const GIG_STRESS_GUARD: u8 = 85;
+pub const GIG_HEALTH_GUARD: u8 = 20;
+pub const TOUR_STRESS_GUARD: u8 = 70;
+pub const TOUR_HEALTH_GUARD: u8 = 30;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

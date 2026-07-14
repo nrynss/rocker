@@ -86,6 +86,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         next_song_id: 0,
         next_release_id: 0,
         just_released_music: Vec::new(),
+        last_tour_report: None,
         turn_log: Vec::new(),
         rockstar_achieved: false,
     };
@@ -184,7 +185,7 @@ fn biggest_open_venue(game: &Game) -> usize {
 }
 
 fn gig_or_rest(game: &Game) -> GameAction {
-    if game.player.energy >= GIG_ENERGY {
+    if game.player.stress < GIG_STRESS_GUARD && game.player.health >= GIG_HEALTH_GUARD {
         GameAction::Gig(biggest_open_venue(game))
     } else {
         GameAction::LazeAround
@@ -635,12 +636,11 @@ fn no_bot_panics_or_stalls_inside_five_years() {
 /// that never records is fully deterministic: fame never exceeds
 /// `LIVE_FAME_BASE_CAP`, on every seed, every time.
 ///
-/// v0.6 note: the bot still gates on the dormant `energy` field
-/// (studio/live guards swap to stress in L2/L3), and laze no longer
-/// refills energy (§A), so it rests in longer streaks — but under L5's
-/// fame gravity gigs count as public activity and low fame gets a
-/// 2-week grace, so the grind still saturates the base live cap.
-/// Re-check when L2/L3 swap the bot/guards to stress (L10).
+/// v0.6 note: `gig_or_rest` now gates on the stress/health guards (L3) —
+/// gigging raises stress (§B), and `self_care` forces a real break once
+/// stress crosses `STRESS_CEILING` well before the gig guard itself would
+/// ever fire, so breaks are interspersed but the grind still saturates the
+/// base live cap. Re-check the balance in L10's sim lab.
 #[test]
 fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
     for seed in [3u64, 5, 8] {
@@ -654,9 +654,14 @@ fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
                     .expect("lazing is always allowed");
             }
             game.take_turn_log();
+            // Adapted for v0.6 (L3): gigging now costs stress (§B), so
+            // `self_care` can force a real `TakeBreak` (jumps `BREAK_WEEKS`)
+            // once stress crosses `STRESS_CEILING` — event suppression only
+            // needs `last_event_week` re-parked after every turn, which it
+            // is below, regardless of how many weeks a turn advances.
             assert!(
-                game.week <= week_before + 1,
-                "event suppression assumes one-week turns (seed {seed})"
+                game.week <= week_before + BREAK_WEEKS,
+                "event suppression re-parks every turn; no action should ever jump further than a break (seed {seed})"
             );
             game.events.last_event_week = u32::MAX;
             assert!(

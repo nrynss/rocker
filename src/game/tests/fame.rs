@@ -1,16 +1,30 @@
 //! Fame dynamics: live-show ceilings, outgrown venues, and idle decay.
 
 use super::*;
+use rand::SeedableRng;
+use rand::rngs::StdRng;
 
+// Adapted for v0.6 (L3): `action_play_gig` now rolls a per-show reception on
+// the action stream, so every call needs an rng; the vestigial
+// `game.player.energy = 100` resets are gone too (energy is unread by
+// gigs now — stress/health gate them instead, and this loop stays well
+// under both guards since fame gain per gig is small and gigs don't touch
+// stress in a way that would trip the guard within 300 gigs at fame 0... in
+// fact each successful gig now costs stress, so the loop below resets
+// stress/health each iteration deliberately: this test is about the fame
+// cap, not the stress economy.
 #[test]
 fn gigging_alone_cannot_make_you_a_star() {
     let mut game = test_game();
     game.band.fame = 0;
+    let mut rng = StdRng::seed_from_u64(1);
 
     for _ in 0..300 {
-        game.player.energy = 100;
+        game.player.stress = 0;
+        game.player.health = 100;
         let venue = best_open_venue(&game);
-        game.action_play_gig(venue).expect("gig should succeed");
+        game.action_play_gig(venue, &mut rng)
+            .expect("gig should succeed");
     }
 
     assert_eq!(
@@ -23,10 +37,11 @@ fn gigging_alone_cannot_make_you_a_star() {
 fn records_raise_the_live_fame_cap() {
     let mut game = test_game();
     game.band.fame = LIVE_FAME_BASE_CAP;
-    game.player.energy = 100;
+    let mut rng = StdRng::seed_from_u64(2);
 
     let venue = best_open_venue(&game);
-    game.action_play_gig(venue).expect("gig should succeed");
+    game.action_play_gig(venue, &mut rng)
+        .expect("gig should succeed");
     assert_eq!(
         game.band.fame, LIVE_FAME_BASE_CAP,
         "at the cap, another gig adds nothing"
@@ -38,8 +53,8 @@ fn records_raise_the_live_fame_cap() {
     game.band
         .singles_released
         .push(test_release(2, ReleaseType::Single));
-    game.player.energy = 100;
-    game.action_play_gig(venue).expect("gig should succeed");
+    game.action_play_gig(venue, &mut rng)
+        .expect("gig should succeed");
     assert!(
         game.band.fame > LIVE_FAME_BASE_CAP,
         "records should lift the live ceiling"
@@ -55,12 +70,13 @@ fn an_outgrown_venue_adds_no_fame() {
             .push(test_release(id, ReleaseType::Album));
     }
     game.band.fame = 30; // past the pub's ceiling of prestige 10 + headroom 15
-    game.player.energy = 100;
+    let mut rng = StdRng::seed_from_u64(3);
 
     let smallest = (0..game.world.venues.len())
         .min_by_key(|&i| game.world.venues[i].capacity)
         .expect("venues exist");
-    game.action_play_gig(smallest).expect("gig should succeed");
+    game.action_play_gig(smallest, &mut rng)
+        .expect("gig should succeed");
 
     assert_eq!(game.band.fame, 30, "an outgrown stage draws no new fans");
 }

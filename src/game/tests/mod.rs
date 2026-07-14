@@ -20,6 +20,7 @@ mod label_moves;
 mod lifestyle;
 mod releases;
 mod save_compat;
+mod shows;
 mod smoke;
 mod studio;
 mod support;

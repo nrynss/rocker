@@ -1,6 +1,11 @@
 //! Player weekly actions (split by concern). Methods remain on `Game`.
+//!
+//! Gigs and tours resolve through the per-show engine (`shows.rs`, design
+//! §B): every show gets its own reception roll and verdict, and a tour
+//! carries momentum — word of mouth — from one stop to the next.
 
 use crate::game::music::ReleaseType;
+use crate::game::shows::{self, ShowVerdict};
 use rand::Rng;
 
 use super::super::constants::{self, *};
@@ -63,9 +68,57 @@ impl Game {
             .min(constants::MAX_FAME as usize) as u8
     }
 
-    pub(in crate::game) fn action_play_gig(&mut self, venue_index: usize) -> Result<(), String> {
-        if self.player.energy < 30 {
-            return Err("You're too tired to perform!".to_string());
+    /// Apply a show's stat rewards (§A/§B): great and transcendent shows
+    /// feed creativity, transcendent also lifts happiness on the spot.
+    fn apply_show_verdict_rewards(&mut self, verdict: ShowVerdict) {
+        match verdict {
+            ShowVerdict::Great => {
+                self.player.creativity = (self.player.creativity + GREAT_SHOW_CREATIVITY_GAIN)
+                    .min(constants::MAX_CREATIVITY);
+            }
+            ShowVerdict::Transcendent => {
+                self.player.creativity = (self.player.creativity
+                    + TRANSCENDENT_SHOW_CREATIVITY_GAIN)
+                    .min(constants::MAX_CREATIVITY);
+                self.player.happiness = (self.player.happiness + TRANSCENDENT_SHOW_HAPPINESS_GAIN)
+                    .min(constants::MAX_HAPPINESS);
+            }
+            ShowVerdict::Solid | ShowVerdict::Rough => {}
+        }
+    }
+
+    /// A synthesized tour-stop venue's capacity, drawn from the region's
+    /// population and economic strength (design §B — Box office). [tune]
+    fn synth_tour_venue_capacity(population: u32, economic_strength: u8) -> u32 {
+        let raw = (population as f32 / TOUR_VENUE_CAPACITY_POP_DIVISOR)
+            * (economic_strength as f32 / 100.0);
+        raw.clamp(
+            TOUR_VENUE_CAPACITY_MIN as f32,
+            TOUR_VENUE_CAPACITY_MAX as f32,
+        ) as u32
+    }
+
+    /// A synthesized tour-stop venue's name: flavor from the region/city
+    /// name lists, since a tour doesn't book from the home scene's fixed
+    /// five venues (design §B — Box office).
+    fn synth_tour_venue_name(&self, region_name: &str, rng: &mut impl Rng) -> String {
+        let venue_names = &self.data_files.venue_names;
+        let city_names = &self.data_files.city_names;
+        let venue = &venue_names[rng.gen_range(0..venue_names.len())];
+        let city = &city_names[rng.gen_range(0..city_names.len())];
+        format!("{venue} ({city}, {region_name})")
+    }
+
+    pub(in crate::game) fn action_play_gig(
+        &mut self,
+        venue_index: usize,
+        rng: &mut impl Rng,
+    ) -> Result<(), String> {
+        if self.player.stress >= GIG_STRESS_GUARD {
+            return Err("You're too stressed out to perform right now!".to_string());
+        }
+        if self.player.health < GIG_HEALTH_GUARD {
+            return Err("You're too unwell to perform!".to_string());
         }
         if venue_index >= self.world.venues.len() {
             return Err("Invalid venue selected.".to_string());
@@ -78,15 +131,27 @@ impl Game {
             ));
         }
 
-        self.player.energy -= 30;
-
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();
+        let era_genre_modifier = self
+            .data_files
+            .era_genre_modifier(self.timeline.get_current_year(), self.band.genre.aliases());
 
-        let attendance_ratio =
-            ((self.band.fame as f32 + 10.0) / (venue.prestige as f32 + 10.0)).min(1.0);
+        let base_ratio = ((self.band.fame as f32 + 10.0) / (venue.prestige as f32 + 10.0)).min(1.0);
+
+        let reception = shows::compute_reception(
+            &self.band,
+            self.player.stress,
+            self.player.health,
+            era_genre_modifier,
+            self.player.creativity,
+            rng,
+        );
+        let verdict = ShowVerdict::from_reception(reception);
+        let attendance_factor = shows::reception_attendance_factor(reception);
+        let attendance_ratio = (base_ratio * attendance_factor).clamp(0.0, 1.0);
+
         let attendance = (venue.capacity as f32 * attendance_ratio) as u32;
-
         let earnings =
             (venue.base_payment as f32 * attendance_ratio * market_modifier * era_modifier) as u32;
 
@@ -108,23 +173,48 @@ impl Game {
         let headroom = venue_ceiling.min(live_cap).saturating_sub(self.band.fame);
         let fame_gain = fame_gain.min(headroom);
 
+        let venue_name = venue.name.clone();
+        let capacity = venue.capacity;
+
         self.player.earn_money(earnings);
         self.band
             .gain_fame_capped(fame_gain, venue_ceiling.min(live_cap));
+
+        self.player.stress = (self.player.stress + GIG_STRESS_COST).min(constants::MAX_STRESS);
+        self.apply_show_verdict_rewards(verdict);
+
+        self.last_tour_report = Some(TourReport::from_rows(
+            vec![ShowReport {
+                week: self.week,
+                venue_name: venue_name.clone(),
+                verdict: verdict.label().to_string(),
+                reception,
+                attendance,
+                capacity,
+                take: earnings,
+            }],
+            fame_gain,
+        ));
+
         if fame_gain > 0 {
             self.log(format!(
-                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}, fame +{}.",
-                venue.name, attendance, venue.capacity, earnings, fame_gain
+                "🎤 Played '{}' — a {} night, sold {}/{} tickets, earned ${}, fame +{}.",
+                venue_name,
+                verdict.label(),
+                attendance,
+                capacity,
+                earnings,
+                fame_gain
             ));
         } else if self.band.fame >= live_cap {
             self.log(format!(
-                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}. The buzz has peaked — without new records, word of mouth carries no further.",
-                venue.name, attendance, venue.capacity, earnings
+                "🎤 Played '{}' — a {} night, sold {}/{} tickets, earned ${}. The buzz has peaked — without new records, word of mouth carries no further.",
+                venue_name, verdict.label(), attendance, capacity, earnings
             ));
         } else {
             self.log(format!(
-                "🎤 Played at '{}' — sold {}/{} tickets, earned ${}. The regulars know every word — you've outgrown this stage.",
-                venue.name, attendance, venue.capacity, earnings
+                "🎤 Played '{}' — a {} night, sold {}/{} tickets, earned ${}. The regulars know every word — you've outgrown this stage.",
+                venue_name, verdict.label(), attendance, capacity, earnings
             ));
         }
         Ok(())
@@ -135,8 +225,11 @@ impl Game {
         region_index: usize,
         rng: &mut impl Rng,
     ) -> Result<(), String> {
-        if self.player.energy < 40 {
-            return Err("You're too tired to go on tour!".to_string());
+        if self.player.stress >= TOUR_STRESS_GUARD {
+            return Err("You're too stressed out to go on tour!".to_string());
+        }
+        if self.player.health < TOUR_HEALTH_GUARD {
+            return Err("You're too unwell to go on tour!".to_string());
         }
 
         let sorted_regions = self.get_sorted_regions();
@@ -209,13 +302,82 @@ impl Game {
 
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();
-        let final_earnings = (base_gross * era_modifier * market_modifier) as i32;
+        // The whole-tour pot: exactly the pre-v0.6 formula. Per-show
+        // resolution below redistributes this across shows — it does not
+        // grow the total (design §B — Box office).
+        let total_potential_gross = (base_gross * era_modifier * market_modifier).max(0.0);
+
+        let era_genre_modifier = self
+            .data_files
+            .era_genre_modifier(self.timeline.get_current_year(), self.band.genre.aliases());
+
+        let synth_capacity = Self::synth_tour_venue_capacity(*population, *economic_strength);
+        let base_fill_ratio = ((self.band.fame as f32 + 10.0) / (*fame_req as f32 + 10.0)).min(1.0);
+
+        let shows_total = tour_weeks * SHOWS_PER_TOUR_WEEK;
+        let per_show_share = total_potential_gross / shows_total as f32;
+
+        let mut momentum = MOMENTUM_START;
+        let mut rows: Vec<ShowReport> = Vec::with_capacity(shows_total as usize);
+        let mut gross_sum: u32 = 0;
+
+        for show_idx in 0..shows_total {
+            let venue_name = self.synth_tour_venue_name(region_name, rng);
+
+            let reception = shows::compute_reception(
+                &self.band,
+                self.player.stress,
+                self.player.health,
+                era_genre_modifier,
+                self.player.creativity,
+                rng,
+            );
+            let verdict = ShowVerdict::from_reception(reception);
+            let attendance_factor = shows::reception_attendance_factor(reception);
+            // Word of mouth: momentum carries from show to show, so the
+            // same night's own reception affects only its own attendance
+            // fill, not its own take. Money is centered on the per-show
+            // share regardless of venue size (design §B).
+            let money_multiplier = attendance_factor * momentum;
+
+            let fill_ratio = (base_fill_ratio * money_multiplier).clamp(0.0, 1.0);
+            let attendance = (synth_capacity as f32 * fill_ratio).round() as u32;
+            let take = (per_show_share * money_multiplier).max(0.0).round() as u32;
+
+            self.apply_show_verdict_rewards(verdict);
+            momentum = shows::apply_momentum_delta(momentum, verdict);
+
+            gross_sum = gross_sum.saturating_add(take);
+
+            rows.push(ShowReport {
+                week: self.week + show_idx / SHOWS_PER_TOUR_WEEK,
+                venue_name,
+                verdict: verdict.label().to_string(),
+                reception,
+                attendance,
+                capacity: synth_capacity,
+                take,
+            });
+        }
+
+        let report = TourReport::from_rows(rows, fame_gain);
+        if report.went_very_well() {
+            self.player.happiness = (self.player.happiness + TOUR_WENT_WELL_HAPPINESS_GAIN)
+                .min(constants::MAX_HAPPINESS);
+            self.player.creativity = (self.player.creativity + TOUR_WENT_WELL_CREATIVITY_GAIN)
+                .min(constants::MAX_CREATIVITY);
+        }
+
+        // Touring wears harder than a night at home (§A): a flat cost per
+        // tour week, replacing the old 15%-chance-of-a-big-health-hit.
+        let tour_stress_cost = TOUR_STRESS_COST_PER_WEEK.saturating_mul(tour_weeks as u8);
+        let tour_health_cost = TOUR_HEALTH_COST_PER_WEEK.saturating_mul(tour_weeks as u8);
+        self.player.stress = (self.player.stress + tour_stress_cost).min(constants::MAX_STRESS);
+        self.player.health = self.player.health.saturating_sub(tour_health_cost);
 
         self.player.spend_money(tour_cost);
-        self.player.earn_money(final_earnings as u32);
-        self.player.energy -= 40;
-        self.player.stress = (self.player.stress + 30).min(constants::MAX_STRESS);
-        // Tours are live shows too: fame stalls at the catalog cap.
+        self.player.earn_money(gross_sum);
+
         let live_cap = self.live_fame_cap();
         let fame_gain = fame_gain.min(live_cap.saturating_sub(self.band.fame));
         self.band.gain_fame_capped(fame_gain, live_cap);
@@ -226,22 +388,27 @@ impl Game {
             .insert(regional_fame_key.clone(), new_regional_fame);
 
         self.week += tour_weeks;
-        self.log(format!(
-            "🚌 Tour of {} ({}): grossed ${} against ${} in costs, fame +{}, regional fame {}% (+{}).",
-            region_name, country_key.replace("_", " "), final_earnings, tour_cost, fame_gain, new_regional_fame, regional_fame_gain
-        ));
 
-        if rng.gen_bool(0.3) {
-            let live_cap = self.live_fame_cap();
-            let bonus = 2u8.min(live_cap.saturating_sub(self.band.fame));
-            if bonus > 0 {
-                self.band.gain_fame_capped(bonus, live_cap);
-                self.log("🗣️ Word of your live show spreads — extra fame on the way home.");
-            }
-        } else if rng.gen_bool(0.15) {
-            self.player.health = self.player.health.saturating_sub(10);
-            self.log("🤒 The road took its toll — you came home run down.");
+        let avg_verdict = ShowVerdict::from_reception(report.avg_reception);
+        self.log(format!(
+            "🚌 Tour of {} ({}): {} shows, avg reception {} ({}) — grossed ${} against ${} in costs, fame +{}, regional fame {}% (+{}). Press R for the tour report.",
+            region_name,
+            country_key.replace("_", " "),
+            shows_total,
+            report.avg_reception,
+            avg_verdict.label(),
+            gross_sum,
+            tour_cost,
+            fame_gain,
+            new_regional_fame,
+            regional_fame_gain
+        ));
+        if report.went_very_well() {
+            self.log("🌟 The tour went very well — spirits (and inspiration) are high.");
         }
+
+        self.last_tour_report = Some(report);
+
         Ok(())
     }
 }

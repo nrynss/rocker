@@ -12,6 +12,7 @@ use crate::game::events::EventManager;
 use crate::game::genre;
 use crate::game::music::{MarketingCampaignType, Release};
 use crate::game::player::Player;
+use crate::game::shows::TourReport;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{GameWorld, PotentialDealOffer};
 
@@ -82,6 +83,11 @@ pub struct Game {
     pub next_song_id: u32,
     pub next_release_id: u32,
     pub just_released_music: Vec<Release>, // Stores releases for their initial sales window
+    /// The most recent gig or tour's per-show report (design §B — the tour
+    /// report). A one-off gig produces the same single-row report a tour
+    /// would. Serde-defaulted so old saves load with no report on hand.
+    #[serde(default)]
+    pub last_tour_report: Option<TourReport>,
     /// Messages produced while processing the last turn, drained by the UI.
     #[serde(skip)]
     pub turn_log: Vec<String>,
@@ -126,6 +132,7 @@ impl Game {
             next_song_id: 0,
             next_release_id: 0,
             just_released_music: Vec::new(),
+            last_tour_report: None,
             turn_log,
             rockstar_achieved: false,
         })
