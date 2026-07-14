@@ -27,7 +27,7 @@
       "id": "gear_stolen",
       "category": "gear",
       "weight": 2,
-      "conditions": {},
+      "conditions": { "min_fame": 10 },
       "effects": {
         "money": [-500, -100],
         "stress": [5, 15],

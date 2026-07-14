@@ -37,7 +37,7 @@ impl ShowVerdict {
     /// The human word for the log and the report row.
     pub(super) fn label(self) -> &'static str {
         match self {
-            ShowVerdict::Rough => "rough night",
+            ShowVerdict::Rough => "rough",
             ShowVerdict::Solid => "solid",
             ShowVerdict::Great => "great",
             ShowVerdict::Transcendent => "transcendent",
