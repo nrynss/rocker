@@ -107,15 +107,16 @@ reception = band_base                    # dominant term
           + condition                    # stress/health penalties
           + era_fit                      # genre-era modifier, scaled ±10
           + variance                     # rng, −10..+10
-          + creativity_upside            # rng, 0..(creativity/5)
+          + creativity_upside            # rng, 0..=creativity/5 (inclusive; 0 at creativity 0)
 ```
 
 - `band_base` = **0.7 × average member skill + 0.3 ×
   reputation.live_performance** [tune]. This is the dominant term by
   design: **a band with 100 % rating and 0 creativity can still be
   exceptional.** Creativity is *never* a multiplier — it widens the upside
-  tail (0 to +20 at creativity 100), making transcendent nights more
-  likely. A tight, uninspired band is reliably excellent; an inspired one
+  tail (an inclusive roll of 0 to +20 at creativity 100; exactly 0 at
+  creativity 0, never an empty/panicking range), making transcendent
+  nights more likely. A tight, uninspired band is reliably excellent; an inspired one
   catches fire.
 - `condition`: stress > 70 → −10; health < 40 → −10 [tune].
 
@@ -136,9 +137,11 @@ transcendent also +2 happiness on the spot.
 
 ### Momentum: word of mouth inside a tour
 
-A rolling multiplier **0.85–1.15** [tune], starts at 1.0, nudged up by
-each great/transcendent night and down by each rough one. A hot streak
-sells the back half of the tour; a mid-tour disaster deflates it. This is
+A rolling multiplier, starts at 1.0. After each show, apply the delta
+for its verdict, *then* clamp to **0.85–1.15**. Deltas [tune]:
+transcendent **+0.05**, great **+0.03**, solid **0**, rough **−0.05**.
+A hot streak sells the back half of the tour; a mid-tour disaster
+deflates it. This is
 what makes the per-day report worth *reading* — the nights are a story,
 not independent rolls.
 
@@ -184,8 +187,8 @@ gains stay per-show, small, capped by the existing `live_fame_cap`.
 
 | Current fame | Grace |
 |---|---|
-| 0–14 | 2 weeks |
-| 15–29 | 4 weeks |
+| 0–15 | 2 weeks |
+| 16–29 | 4 weeks |
 | 30–49 | 8 weeks |
 | 50–74 | 13 weeks (3 months) |
 | 75–89 | 26 weeks (6 months) |
@@ -197,8 +200,9 @@ gains stay per-show, small, capped by the existing `live_fame_cap`.
 After grace expires: **−1 the first week, −2, −3, −4, then −5/week**
 flat from there. Evaluated weekly against *current* fame's tier. Stops
 dead at the floor. Any activity resets the idle streak (and thus the
-ramp) to zero. Worked check (decided example): fame 15, fully idle —
-nothing weeks 1–2, then 1+2+3+4+5 → fame 0 at week 7.
+ramp) to zero. Worked check (decided example — hence the 0–15 bottom
+tier, "till 15" inclusive): fame 15, fully idle — nothing weeks 1–2,
+then −1, −2, −3, −4, −5 on weeks 3–7 → fame 0 at week 7.
 
 ### Comeback
 
@@ -266,6 +270,16 @@ that's what §C's floors and comeback multiplier are for.
 **More random incidents, defined in JSON, outside the Rust source.**
 New file `data/incidents.json`, loaded through `data_loader.rs` like
 `markets.json` / `record_labels.json`.
+
+**Loader contract** (L8 implements; nothing exists in `data_loader.rs`
+yet): `GameDataFiles` gains an `incidents_data: IncidentsData` field,
+deserialized from `data/incidents.json` at startup alongside the other
+JSON files, with load-time validation — non-empty incident list, every
+`weight` ≥ 1, every effect range `[lo, hi]` with `lo ≤ hi`, unique `id`s
+— failing fast with a clear error like the existing loaders. Selection
+goes through an accessor (e.g. `eligible_incidents(&GameState) ->
+Vec<&Incident>`) that filters on `conditions`; the weighted pick itself
+rolls on the action stream in `events.rs`.
 
 ### Schema
 

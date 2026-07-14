@@ -190,6 +190,7 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 # contracts:
 cargo test same_seed_and_same_choices_replay_the_same_career
+cargo test seeded_worlds_are_reproducible_in_the_harness
 cargo test saves_from_v0_4_still_load
 cargo test worldgen_is_reproducible_per_seed
 # balance lab (ignored sweeps, run locally when tuning):
