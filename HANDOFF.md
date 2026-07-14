@@ -101,7 +101,7 @@ Commit prefix: `life(L#): <short description>`.
 | **L7** | Living sales tail (gentler divisor, marketing/fame-responsive, fix dead post-launch marketing) | S | — | `src/game/economy.rs` (catalog-tail section), tail consts in `constants.rs` | ✅ done | haiku-l7 | life/v0.6 | 5da6c79 |
 | **L8** | Incidents → `data/incidents.json`: schema, loader, weighted selection, migrate + new content, cadence up | M | L1 | **new** `data/incidents.json`, `src/data_loader.rs`, `src/game/events.rs`, `src/game/events_apply.rs` | ✅ done | opus-l8 | life/v0.6 | d5e1477 |
 | **L9** | Endless game: rockstar becomes milestone, not ending | S | L5 | `rockstar_achieved` in `core.rs`, milestone logic in `turn.rs` (game-over fn), `src/ui/render/game_over.rs` | ✅ done | haiku-l9 | life/v0.6 | 59240b0 |
-| **L10** | Sim-lab validation: sweeps for [tune] values, income/fame trajectory report, new-system bot coverage | M | L1–L3, L5–L8 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | 🔒 claimed | sonnet-l10 | life/v0.6 | |
+| **L10** | Sim-lab validation: sweeps for [tune] values, income/fame trajectory report, new-system bot coverage | M | L1–L3, L5–L8 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ✅ done | sonnet-l10 | life/v0.6 | ae399c4 |
 | **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | life/v0.6 | |
 
 ### Parallelism map (waves)
@@ -217,3 +217,15 @@ _Format:_ `YYYY-MM-DD L# <claimed|done|unclaimed> by <agent> — <one line>`
 - 2026-07-14 L3 done by sonnet-l3 — per-show engine per §B (5 shows/wk, reception/momentum/report, guards to stress/health, tour money redistributed not rescaled, old ad-hoc tour rolls folded into momentum + flat wear); coordinator follow-up: gear_stolen min_fame 10 (scripted-contract interaction, L8 precedent), rough-verdict label fix. Ballpark: new-band tour gross ~85% of old (skill-linked box office, by design) — L10 to sweep.
 - 2026-07-14 L8 done by opus-l8 — 30 incidents in data/incidents.json (19 migrated + 11 new, DrugOffer dropped), fail-fast loader, weighted pick at 35%/wk on the action stream; RandomEvent enum retired; 3 money incidents gated by min_fame (justified: broke unknowns don't face star-sized bills; also keeps the scripted determinism contract green); dead MAX_ENERGY/EQUIPMENT_REPAIR consts removed; 6 new tests; integrated as d5e1477. Gate: 79 passed / 2 ignored.
 - 2026-07-14 L4 done by sonnet-l4 — tour report modal (scrollable, summary footer, empty state, 'r' key), four-bar panel (energy gauge gone), 3 UI tests + render smoke; integrated as 6075c3c. Gate: 96 passed / 2 ignored. Flagged: broke_and_unknown_ending test can flake (unseeded test_game + incidents) — coordinator fixing.
+- 2026-07-14 L10 done by sonnet-l10 — full [tune] sweep, **zero retunes needed**; win-sweep "failure" was reporting instrumentation (weeks_to_rockstar now tracked since the milestone is non-terminal); studio-rat practice change measured as a regression and reverted with a documented dead-end; 4 new CI-safe invariants (laze-wear kills at wk ~105; verdict tiers by skill; incident cadence 34%≈35%; ramp containment). Coordinator follow-up: `decay_streak` on Game — ramp onset now gentle across tier boundaries, L10's diagnostic flipped to a regression test. Gate: 100 passed / 4 ignored; all release sweeps green (~46s).
+
+### L10 balance report (15-year sweeps, 60 seeds/bot)
+
+| Bot | Peak fame (med) | Money @ yr15 (med) | Rockstar rate | Died | Broke |
+|---|---|---|---|---|---|
+| gig-grinder | 82 | $1,143,069 | 0% (never records) | 0 | 0 |
+| studio-rat | 100 | −$124 | 65% (med. win yr 6) | 0 | 16 (27%) |
+| balanced-indie | 100 | $1,359,582 | 93% — 45/48 by yr 12, median milestone wk 115 (~yr 2.2) | 0 | 4 (7%) |
+| label-loyalist | 100 | $10,819,973 | 93% (med. win yr 2) | 0 | 4 (7%) |
+
+Sweep spot-checks: tour gross by skill tier $539/$724/$807 (reception drives box office, no runaway); sales-tail lifetime income $48/$260/$510/$928 by quality tier (monotonic); fame-95 vs fame-20 catalog 5.9× (bounded by pressed copies — not runaway). **Open design finding for the Musician cycle:** live reception can never improve over a career — `average_member_skill()` and `reputation.live_performance` are written nowhere in production code; `Practice` raises only the separate `band.skill` (recording). The Musician cycle's derived-skill rework (FUTURE §1–§2) is the natural home for the fix.
