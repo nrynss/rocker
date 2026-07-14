@@ -187,7 +187,7 @@ impl Band {
             .collect();
         target_genres
             .iter()
-            .any(|target| keys.iter().any(|key| *key == normalize(target)))
+            .any(|target| keys.contains(&normalize(target)))
     }
 
     pub fn current_deal(&self) -> Option<&RecordDeal> {
