@@ -33,6 +33,11 @@ pub(super) const UNITS_PER_SCORE_POINT: f32 = 10.0;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
+// Living sales tail: post-launch decay and influence [tune].
+pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 3;
+pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
+pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
+
 // Pressing runs. Independents choose a run and pay setup plus per-copy
 // costs; a label presses to the size of its network and your name.
 pub const PRESSING_TIERS: [(&str, u32); 4] = [

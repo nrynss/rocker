@@ -234,6 +234,7 @@ impl Game {
         };
         let royalty_rate = self.band.current_deal().map(|deal| deal.royalty_rate);
         let distribution = self.distribution_multiplier();
+        let fame = self.band.fame as f32;
         let mut catalog_income_this_week: u32 = 0;
 
         for release_list in [
@@ -256,9 +257,13 @@ impl Game {
                 {
                     let weeks_since_initial_window_end =
                         current_week - (release.week_released + INITIAL_SALES_WINDOW_WEEKS - 1);
-                    let ongoing_sales_score_divisor = 1 + weeks_since_initial_window_end;
-                    let ongoing_sales_score =
-                        release.initial_sales_score / ongoing_sales_score_divisor;
+                    let ongoing_sales_score_divisor =
+                        1 + weeks_since_initial_window_end / TAIL_DIVISOR_WEEKS_PER_STEP;
+                    let ongoing_sales_score = ((release.initial_sales_score as f32
+                        + release.marketing_level_achieved as f32 * TAIL_MARKETING_WEIGHT
+                        + fame * TAIL_FAME_WEIGHT)
+                        / ongoing_sales_score_divisor as f32)
+                        as u32;
 
                     if ongoing_sales_score > 10 {
                         // The long tail moves a trickle of copies — and only
