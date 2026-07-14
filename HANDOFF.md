@@ -102,7 +102,7 @@ Commit prefix: `life(L#): <short description>`.
 | **L8** | Incidents → `data/incidents.json`: schema, loader, weighted selection, migrate + new content, cadence up | M | L1 | **new** `data/incidents.json`, `src/data_loader.rs`, `src/game/events.rs`, `src/game/events_apply.rs` | ✅ done | opus-l8 | life/v0.6 | d5e1477 |
 | **L9** | Endless game: rockstar becomes milestone, not ending | S | L5 | `rockstar_achieved` in `core.rs`, milestone logic in `turn.rs` (game-over fn), `src/ui/render/game_over.rs` | ✅ done | haiku-l9 | life/v0.6 | 59240b0 |
 | **L10** | Sim-lab validation: sweeps for [tune] values, income/fame trajectory report, new-system bot coverage | M | L1–L3, L5–L8 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ✅ done | sonnet-l10 | life/v0.6 | ae399c4 |
-| **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | claude-l11 | life/v0.6 | HEAD |
+| **L11** | Cycle close: board audit, CHANGELOG, bump 0.6.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | claude-l11 | life/v0.6 | da70473 |
 
 ### Parallelism map (waves)
 
