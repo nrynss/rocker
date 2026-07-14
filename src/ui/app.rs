@@ -74,6 +74,9 @@ pub enum Screen {
         release_type: ReleaseType,
         selected: usize,
     },
+    TourReport {
+        scroll: usize,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -83,6 +86,7 @@ pub enum MenuKind {
     Deals,
     SupportTour,
     Charts,
+    TourReport,
     Marketing,
     Save,
     Load,
@@ -326,6 +330,21 @@ impl App {
                 kind: MenuKind::Charts,
             },
             MenuEntry {
+                hotkey: 'r',
+                label: "Tour Report…",
+                detail: match &game.last_tour_report {
+                    Some(report) => format!(
+                        "{} show{} · avg {}",
+                        report.rows.len(),
+                        if report.rows.len() == 1 { "" } else { "s" },
+                        report.avg_reception
+                    ),
+                    None => "no report yet".into(),
+                },
+                enabled: true,
+                kind: MenuKind::TourReport,
+            },
+            MenuEntry {
                 hotkey: 's',
                 label: "Save Game",
                 detail: String::new(),
@@ -433,6 +452,7 @@ impl App {
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
+            Screen::TourReport { .. } => self.handle_tour_report_key(key),
         }
     }
 }

@@ -64,6 +64,7 @@ impl App {
                 }
             }
             MenuKind::Charts => self.screen = Screen::Charts,
+            MenuKind::TourReport => self.screen = Screen::TourReport { scroll: 0 },
             MenuKind::Marketing => {
                 let signed = self.game.band.current_deal().is_some();
                 let targets = self.marketing_targets();
@@ -133,5 +134,105 @@ impl App {
         if key.code == KeyCode::Esc {
             self.screen = Screen::Main;
         }
+    }
+
+    pub(crate) fn handle_tour_report_key(&mut self, key: KeyEvent) {
+        let Screen::TourReport { scroll } = self.screen else {
+            return;
+        };
+        let count = self
+            .game
+            .last_tour_report
+            .as_ref()
+            .map_or(0, |report| report.rows.len());
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                let scroll = scroll.saturating_sub(1);
+                self.screen = Screen::TourReport { scroll };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let scroll = if count == 0 {
+                    0
+                } else {
+                    (scroll + 1).min(count - 1)
+                };
+                self.screen = Screen::TourReport { scroll };
+            }
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Game;
+    use ratatui::crossterm::event::KeyModifiers;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    #[test]
+    fn r_opens_the_tour_report_and_esc_returns_to_main() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.screen = Screen::Main;
+
+        app.handle_main_key(key(KeyCode::Char('r')));
+        assert!(
+            matches!(app.screen, Screen::TourReport { scroll: 0 }),
+            "'r' on Main should open the tour report at the top"
+        );
+
+        app.handle_tour_report_key(key(KeyCode::Esc));
+        assert!(
+            matches!(app.screen, Screen::Main),
+            "Esc from the tour report should return to Main"
+        );
+    }
+
+    #[test]
+    fn tour_report_scroll_is_bounded_by_row_count() {
+        use crate::game::{ShowReport, TourReport};
+
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.last_tour_report = Some(TourReport {
+            rows: vec![
+                ShowReport {
+                    week: 1,
+                    venue_name: "The Roxy (Springfield)".into(),
+                    verdict: "great".into(),
+                    reception: 80,
+                    attendance: 400,
+                    capacity: 500,
+                    take: 1200,
+                },
+                ShowReport {
+                    week: 1,
+                    venue_name: "The Bowl (Shelbyville)".into(),
+                    verdict: "solid".into(),
+                    reception: 55,
+                    attendance: 300,
+                    capacity: 600,
+                    take: 900,
+                },
+            ],
+            avg_reception: 67,
+            total_gross: 2100,
+            fame_gained: 2,
+        });
+        app.screen = Screen::TourReport { scroll: 0 };
+
+        // Scrolling down twice should clamp at the last row (index 1), not
+        // panic or run past the end.
+        app.handle_tour_report_key(key(KeyCode::Down));
+        app.handle_tour_report_key(key(KeyCode::Down));
+        assert!(matches!(app.screen, Screen::TourReport { scroll: 1 }));
+
+        // Scrolling up from 0 stays at 0.
+        app.screen = Screen::TourReport { scroll: 0 };
+        app.handle_tour_report_key(key(KeyCode::Up));
+        assert!(matches!(app.screen, Screen::TourReport { scroll: 0 }));
     }
 }
