@@ -169,7 +169,7 @@ impl App {
             MenuEntry {
                 hotkey: '1',
                 label: "Laze Around",
-                detail: "+energy, -stress".into(),
+                detail: "-stress, +creativity".into(),
                 enabled: true,
                 kind: MenuKind::Action(GameAction::LazeAround),
             },
