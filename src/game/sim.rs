@@ -632,13 +632,12 @@ fn no_bot_panics_or_stalls_inside_five_years() {
 /// that never records is fully deterministic: fame never exceeds
 /// `LIVE_FAME_BASE_CAP`, on every seed, every time.
 ///
-/// v0.6 (L1) note: this bot still gates on the dormant `energy` field
-/// (studio/live guards swap to stress in L2/L3). Since laze no longer
-/// refills energy (§A — "remove the energy gain"), the bot now lazes in
-/// long-enough streaks that idle fame decay (`IDLE_GRACE_WEEKS`) offsets
-/// most gig gains, so pure gig-grinding plateaus well short of the cap
-/// instead of saturating it. The plateau (4) is itself fully deterministic
-/// across seeds — re-tune once L2/L3 swap the bot/guards to stress (L10).
+/// v0.6 note: the bot still gates on the dormant `energy` field
+/// (studio/live guards swap to stress in L2/L3), and laze no longer
+/// refills energy (§A), so it rests in longer streaks — but under L5's
+/// fame gravity gigs count as public activity and low fame gets a
+/// 2-week grace, so the grind still saturates the base live cap.
+/// Re-check when L2/L3 swap the bot/guards to stress (L10).
 #[test]
 fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
     for seed in [3u64, 5, 8] {
@@ -665,8 +664,8 @@ fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
             );
         }
         assert_eq!(
-            game.band.fame, 4,
-            "gig-grinding now plateaus well under the cap once idle decay outpaces gig gains (seed {seed})"
+            game.band.fame, LIVE_FAME_BASE_CAP,
+            "gig-grinding should saturate the base live cap (seed {seed})"
         );
     }
 }
