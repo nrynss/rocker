@@ -234,6 +234,7 @@ impl Game {
             self.log(item);
         }
 
+        self.label_single_cut_check(rng);
         self.update_support_tour_offer(rng);
         Ok(())
     }

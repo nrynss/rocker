@@ -145,6 +145,26 @@ pub(super) const FAME_FLOOR_LEGEND: u8 = 75;
 pub(super) const GENRE_TREND_HOT: f32 = 1.15;
 pub(super) const GENRE_TREND_COLD: f32 = 0.85;
 
+// ============================================================================
+// Label single-cuts (v0.6 design §C — label releases a single on its own
+// volition when signed, the band is quiet, and they have un-singled tracks).
+// ============================================================================
+
+/// Probability per week (0.0–1.0) that a label releases a single from an
+/// eligible album. (§C — Label single-cuts) [tune]
+pub(super) const LABEL_CUT_CHANCE: f64 = 0.10;
+
+/// Weeks the band must be quiet (idle_streak) before the label cuts a single.
+/// (§C — Label single-cuts) [tune]
+pub(super) const LABEL_CUT_IDLE_WEEKS: u32 = 3;
+
+/// Weeks since any release before the label is allowed to cut a single.
+/// (§C — Label single-cuts) [tune]
+pub(super) const LABEL_CUT_RELEASE_COOLDOWN_WEEKS: u32 = 6;
+
+/// Maximum singles cut from any one album. (§C — Label single-cuts) [tune]
+pub(super) const LABEL_CUT_MAX_PER_ALBUM: u32 = 2;
+
 // --- L1: stat engine — the four bars (docs/DESIGN-v0.6-life-cycle.md §A) ---
 // Weekly lifestyle tick (`lifestyle.rs`): stress bleeds off on its own,
 // worse while broke; happiness and creativity sag once stress runs high;

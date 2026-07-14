@@ -108,4 +108,8 @@ pub struct Release {
     /// design §C). Serde default `None` so pre-0.6 saves load.
     #[serde(default)]
     pub peak_chart_position: Option<u8>,
+    /// Number of singles cut from this album by the label (design §C).
+    /// Meaningful for albums; stays 0 on singles.
+    #[serde(default)]
+    pub singles_cut: u32,
 }

@@ -15,6 +15,7 @@ mod deals;
 mod determinism;
 mod fame;
 mod history;
+mod label_moves;
 mod lifestyle;
 mod releases;
 mod save_compat;
@@ -41,6 +42,7 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         copies_pressed: 0,
         copies_sold: 0,
         peak_chart_position: None,
+        singles_cut: 0,
     }
 }
 

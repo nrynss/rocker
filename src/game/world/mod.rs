@@ -346,6 +346,7 @@ mod tests {
             copies_pressed: 0,
             copies_sold: 0,
             peak_chart_position: None,
+            singles_cut: 0,
         }
     }
 
