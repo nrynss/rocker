@@ -26,7 +26,9 @@ prerequisites are not ✅.
 
 ### One branch for the whole cycle
 
-**All work lands on `life/v0.6`.** No per-task branches.
+**All work lands on `life/v0.6`.** No per-task branches, no parallel task
+PRs — the cycle PR is **#18**, already open; it merges once, at cycle
+close, when the human says so. Only commits to the shared branch matter.
 
 ```text
 git fetch origin
@@ -162,7 +164,8 @@ Wave 3:
 - **L10:** every [tune] value either confirmed or adjusted with a Notes
   line; sweep comparing 0.5.1 vs 0.6 fame/income trajectories pasted below.
 - **L11:** board all ✅, CHANGELOG 0.6.0 written (player-facing notes this
-  time — it's a feature cycle), version bumped, PR opened to `main`.
+  time — it's a feature cycle), version bumped, cycle PR #18 marked
+  ready for the human to merge.
 
 ---
 
