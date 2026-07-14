@@ -185,6 +185,10 @@ fn death_ending_still_works() {
 fn broke_and_unknown_ending_still_works() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
+    // An unseeded game plus weekly incidents: a money-positive incident on
+    // the single turn below could lift the band out of "broke". Park the
+    // incident clock so the ending logic is what's under test.
+    game.events.last_event_week = u32::MAX;
 
     // Set up broke + unknown to trigger the broke-and-unknown ending
     game.player.money = -100;
