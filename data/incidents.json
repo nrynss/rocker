@@ -1,0 +1,345 @@
+{
+  "incidents": [
+    {
+      "id": "amp_blowout",
+      "category": "gear",
+      "weight": 4,
+      "conditions": {},
+      "effects": {
+        "money": [-200, -50],
+        "stress": [2, 8]
+      },
+      "message": "🔧 Your amp blew mid-set — repairs set you back."
+    },
+    {
+      "id": "pawnshop_find",
+      "category": "gear",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "money": [-80, -20],
+        "happiness": [3, 8],
+        "creativity": [2, 5]
+      },
+      "message": "🎸 A pawn-shop find! New gear tightens up your sound."
+    },
+    {
+      "id": "gear_stolen",
+      "category": "gear",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "money": [-500, -100],
+        "stress": [5, 15],
+        "happiness": [-5, -1]
+      },
+      "message": "🚨 Gear stolen from the van — a costly setback."
+    },
+    {
+      "id": "bandmate_woodshedding",
+      "category": "band",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "happiness": [3, 8],
+        "creativity": [3, 8]
+      },
+      "message": "🌟 A bandmate's been woodshedding — the whole group sounds sharper."
+    },
+    {
+      "id": "bandmate_unhappy",
+      "category": "band",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "stress": [5, 12],
+        "happiness": [-8, -3]
+      },
+      "message": "😠 A bandmate is unhappy with the band's direction — tension in rehearsals."
+    },
+    {
+      "id": "bandmate_threatens_quit",
+      "category": "band",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "stress": [8, 15],
+        "happiness": [-6, -2]
+      },
+      "message": "🚪 A bandmate is threatening to quit — the mood turns tense."
+    },
+    {
+      "id": "bandmate_wants_raise",
+      "category": "band",
+      "weight": 2,
+      "conditions": { "min_fame": 15 },
+      "effects": {
+        "money": [-300, -100],
+        "stress": [3, 8]
+      },
+      "message": "💸 A bandmate demands a bigger cut to keep the peace."
+    },
+    {
+      "id": "glowing_review",
+      "category": "press",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "fame": [1, 3],
+        "happiness": [3, 8]
+      },
+      "message": "📰 A glowing review in the music press — your profile rises."
+    },
+    {
+      "id": "harsh_review",
+      "category": "press",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "fame": [-6, -2],
+        "happiness": [-6, -2],
+        "stress": [2, 6]
+      },
+      "message": "📰 A critic tears your latest show apart. Ouch."
+    },
+    {
+      "id": "tabloid_scandal",
+      "category": "press",
+      "weight": 2,
+      "conditions": { "min_fame": 25 },
+      "effects": {
+        "fame": [-15, -5],
+        "stress": [10, 20],
+        "happiness": [-8, -3]
+      },
+      "message": "🔥 SCANDAL! The tabloids are all over you — fame takes a hit."
+    },
+    {
+      "id": "nasty_bug",
+      "category": "health",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "health": [-25, -10],
+        "stress": [3, 8]
+      },
+      "message": "🤒 You've caught something nasty — your health suffers."
+    },
+    {
+      "id": "stage_dive_injury",
+      "category": "health",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "health": [-15, -5],
+        "happiness": [-4, 0]
+      },
+      "message": "🤕 Stage dive gone wrong — you're hurt."
+    },
+    {
+      "id": "burnout_creeps_in",
+      "category": "health",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "stress": [15, 30],
+        "happiness": [-5, -1]
+      },
+      "message": "😰 The pressure is getting to you — stress climbs."
+    },
+    {
+      "id": "windfall",
+      "category": "money",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "money": [200, 1000],
+        "happiness": [2, 6]
+      },
+      "message": "💰 An unexpected windfall lands in your lap!"
+    },
+    {
+      "id": "surprise_bill",
+      "category": "money",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "money": [-500, -100],
+        "stress": [2, 6]
+      },
+      "message": "💸 A surprise bill lands on the doormat."
+    },
+    {
+      "id": "royalty_check",
+      "category": "money",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "money": [100, 600],
+        "happiness": [1, 4]
+      },
+      "message": "💵 A royalty check arrives in the mail."
+    },
+    {
+      "id": "legal_trouble",
+      "category": "money",
+      "weight": 2,
+      "conditions": { "min_fame": 30 },
+      "effects": {
+        "money": [-2000, -500],
+        "fame": [-5, -1],
+        "stress": [5, 12]
+      },
+      "message": "⚖️ Legal trouble costs you money and some reputation."
+    },
+    {
+      "id": "anr_scouts",
+      "category": "industry",
+      "weight": 3,
+      "conditions": { "min_fame": 30, "signed": false },
+      "effects": {
+        "fame": [2, 3],
+        "happiness": [2, 5]
+      },
+      "message": "👀 A&R scouts were spotted at your show — industry buzz grows."
+    },
+    {
+      "id": "festival_slot",
+      "category": "industry",
+      "weight": 3,
+      "conditions": { "min_fame": 20 },
+      "effects": {
+        "money": [500, 2000],
+        "fame": [1, 3],
+        "happiness": [3, 8],
+        "stress": [3, 8]
+      },
+      "message": "🎪 A festival slot opens up — a payday and more fans."
+    },
+    {
+      "id": "backstage_party",
+      "category": "social",
+      "weight": 3,
+      "conditions": { "min_fame": 10 },
+      "effects": {
+        "stress": [-15, -5],
+        "happiness": [5, 15],
+        "creativity": [0, 5],
+        "health": [-5, 0]
+      },
+      "message": "🎉 A legendary after-party — the whole scene was there."
+    },
+    {
+      "id": "inspiration_strike",
+      "category": "creative",
+      "weight": 3,
+      "conditions": {},
+      "effects": {
+        "creativity": [5, 15],
+        "happiness": [2, 6]
+      },
+      "message": "💡 Inspiration strikes at 3am — you scribble down something special."
+    },
+    {
+      "id": "creative_slump",
+      "category": "creative",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "creativity": [-10, -3],
+        "stress": [3, 8]
+      },
+      "message": "🌫️ A creative dry spell settles in — nothing you write feels right."
+    },
+    {
+      "id": "fan_letter",
+      "category": "fans",
+      "weight": 2,
+      "conditions": { "max_fame": 50 },
+      "effects": {
+        "happiness": [4, 10],
+        "creativity": [0, 3]
+      },
+      "message": "💌 A heartfelt fan letter reminds you why you started."
+    },
+    {
+      "id": "mobbed_by_fans",
+      "category": "fans",
+      "weight": 2,
+      "conditions": { "min_fame": 60 },
+      "effects": {
+        "happiness": [3, 10],
+        "stress": [4, 10]
+      },
+      "message": "📸 Mobbed by fans outside the venue — exhilarating and exhausting."
+    },
+    {
+      "id": "double_booked_venue",
+      "category": "venue",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "stress": [5, 12],
+        "happiness": [-5, -1],
+        "money": [-150, -20]
+      },
+      "message": "🎤 The venue double-booked the night — chaos before the set."
+    },
+    {
+      "id": "blackout_singalong",
+      "category": "venue",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "happiness": [4, 10],
+        "creativity": [2, 6]
+      },
+      "message": "🔌 A blackout mid-set — but the crowd sang every word. Pure magic."
+    },
+    {
+      "id": "label_buzz",
+      "category": "industry",
+      "weight": 2,
+      "conditions": { "signed": true },
+      "effects": {
+        "fame": [1, 2],
+        "happiness": [3, 8]
+      },
+      "message": "🗞️ Word is the label's high on your next record — nice to hear."
+    },
+    {
+      "id": "bad_reputation_rumor",
+      "category": "industry",
+      "weight": 2,
+      "conditions": {},
+      "effects": {
+        "stress": [4, 10],
+        "happiness": [-6, -2]
+      },
+      "message": "🗣️ Rumors swirl that you're 'difficult to work with.' Annoying."
+    },
+    {
+      "id": "rival_diss",
+      "category": "press",
+      "weight": 2,
+      "conditions": { "min_fame": 25 },
+      "effects": {
+        "fame": [0, 2],
+        "stress": [3, 8],
+        "happiness": [-4, 0]
+      },
+      "message": "🎤 A rival name-drops you in an interview — not kindly. Beef sells, though."
+    },
+    {
+      "id": "viral_clip",
+      "category": "press",
+      "weight": 2,
+      "conditions": { "min_fame": 15 },
+      "effects": {
+        "fame": [1, 3],
+        "happiness": [3, 8]
+      },
+      "message": "🌐 A clip of your set is making the rounds — strangers know your name."
+    }
+  ]
+}

@@ -105,7 +105,7 @@ fn suppress_story_events(game: &mut Game) {
         .flat_map(|era| era.major_events.iter().cloned())
         .collect();
     game.timeline.triggered_events.extend(every_event);
-    game.events.last_event_week = game.week;
+    game.events.last_event_week = u32::MAX;
 }
 
 // ---------------------------------------------------------------------------
@@ -658,7 +658,7 @@ fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
                 game.week <= week_before + 1,
                 "event suppression assumes one-week turns (seed {seed})"
             );
-            game.events.last_event_week = game.week;
+            game.events.last_event_week = u32::MAX;
             assert!(
                 game.band.fame <= LIVE_FAME_BASE_CAP,
                 "gigging pushed fame to {} past the live cap at week {} (seed {seed})",

@@ -209,9 +209,7 @@ impl Game {
         }
         self.update_genre_trend_news();
 
-        if let Some(event) = self.events.try_trigger_event(self.week, rng) {
-            self.apply_random_event(event, rng)?;
-        }
+        self.maybe_trigger_incident(rng)?;
 
         self.player.weekly_health_decay();
 

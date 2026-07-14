@@ -215,6 +215,12 @@ pub(super) const SONGWRITING_CREATIVITY_DIVISOR: u8 = 4;
 // Recording quality penalty when stress > RECORDING_STRESS_PENALTY_THRESHOLD [tune].
 pub(super) const RECORDING_STRESS_PENALTY: i8 = 10;
 
+// --- L8: data-driven incidents (docs/DESIGN-v0.6-life-cycle.md §F) ---
+// Incidents are eligible every week (was every other week); this is the
+// per-week chance one fires, rolled on the action stream in `events.rs`.
+// [tune] — §F raises cadence from 30% every-other-week to 35% weekly.
+pub(super) const INCIDENT_WEEKLY_CHANCE_PERCENT: u32 = 35;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

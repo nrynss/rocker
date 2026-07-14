@@ -15,6 +15,7 @@ mod deals;
 mod determinism;
 mod fame;
 mod history;
+mod incidents;
 mod label_moves;
 mod lifestyle;
 mod releases;

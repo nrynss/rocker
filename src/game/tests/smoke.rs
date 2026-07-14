@@ -96,6 +96,11 @@ fn rockstar_milestone_fires_once_and_game_continues() {
         test_release(5, ReleaseType::Album),
     ];
 
+    // Suppress random incidents (L8): they now fire weekly and could nudge
+    // fame off the exact 90 threshold this test pins. u32::MAX keeps the gate
+    // shut regardless of cadence.
+    game.events.last_event_week = u32::MAX;
+
     // Process a turn — should trigger the milestone
     let continue_playing = game
         .process_turn(GameAction::LazeAround)
@@ -145,6 +150,8 @@ fn rockstar_achieved_flag_survives_save_load() {
         test_release(4, ReleaseType::Album),
         test_release(5, ReleaseType::Album),
     ];
+    // Suppress random incidents (L8) so nothing nudges fame off 90 (see above).
+    game.events.last_event_week = u32::MAX;
     game.process_turn(GameAction::LazeAround)
         .expect("turn should succeed");
 
