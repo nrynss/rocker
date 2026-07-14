@@ -1,3 +1,8 @@
+> **Archived record (v0.6) — historical reference only.** This cycle is
+> complete (shipped as 0.6.0, including the L12 follow-up); do not claim
+> tasks or follow the branch/claim protocol below. Check the repo root
+> for whichever `HANDOFF.md` is active for the current cycle.
+
 # Rocker — Life Cycle Handoff (v0.6)
 
 > **Cycle closed 2026-07-14 — shipped as 0.6.0.** Feature cycle: the four bars (health/stress/happiness/

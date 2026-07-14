@@ -2,9 +2,11 @@
 
 > Bars, shows, fame gravity, and data-driven incidents. This document is the
 > **decided design** for the v0.6 feature cycle, agreed in discussion on
-> 2026-07-14. The task board lives in `HANDOFF.md`. FUTURE.md (Musician,
-> relationships, solo/band) stays the north star for the cycle *after* this
-> one; where this doc overlaps FUTURE §9 (happiness), this doc wins.
+> 2026-07-14 — now shipped as 0.6.0, including the L12 follow-up (derived
+> live skill growth). The cycle's task board is archived at
+> `docs/archive/HANDOFF-v0.6-cycle.md`. FUTURE.md (Musician, relationships,
+> solo/band) stays the north star for the next cycle; where this doc
+> overlapped FUTURE §9 (happiness), this doc won.
 >
 > **Deferred explicitly:** the drug/addiction system (FUTURE §9.1) is *not*
 > in this cycle. The `drug_addiction` / `alcohol_addiction` fields stay
