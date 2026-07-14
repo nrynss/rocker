@@ -145,6 +145,36 @@ pub(super) const FAME_FLOOR_LEGEND: u8 = 75;
 pub(super) const GENRE_TREND_HOT: f32 = 1.15;
 pub(super) const GENRE_TREND_COLD: f32 = 0.85;
 
+// --- L1: stat engine — the four bars (docs/DESIGN-v0.6-life-cycle.md §A) ---
+// Weekly lifestyle tick (`lifestyle.rs`): stress bleeds off on its own,
+// worse while broke; happiness and creativity sag once stress runs high;
+// excessive lazing wears on health, but far slower than anything else.
+pub(super) const STRESS_PASSIVE_RELEASE: u8 = 3;
+pub(super) const BROKE_STRESS_PER_WEEK: u8 = 5;
+pub(super) const HAPPINESS_STRESS_DIVISOR: u8 = 25;
+pub(super) const CREATIVITY_STRESS_THRESHOLD: u8 = 40;
+pub(super) const CREATIVITY_STRESS_DIVISOR: u8 = 20;
+pub(super) const LAZE_WEAR_THRESHOLD_WEEKS: u32 = 4;
+
+// Ceilings for the two new bars (health/stress already have MAX_HEALTH /
+// MAX_STRESS from `data::constants`).
+pub(super) const MAX_HAPPINESS: u8 = 100;
+pub(super) const MAX_CREATIVITY: u8 = 100;
+
+// Rest actions (`actions/rest.rs`): laze trades stress for a little
+// creativity; a real break resets stress and gives happiness/creativity/
+// health a proper boost.
+pub(super) const LAZE_STRESS_RELIEF: u8 = 15;
+pub(super) const LAZE_CREATIVITY_GAIN: u8 = 3;
+pub(super) const BREAK_HAPPINESS_GAIN: u8 = 10;
+pub(super) const BREAK_CREATIVITY_GAIN: u8 = 10;
+pub(super) const BREAK_HEALTH_GAIN: u8 = 30;
+
+// New-player defaults (`player.rs`) — the original 1989 game's starting
+// mood/imagination, not maxed like health/energy.
+pub(super) const DEFAULT_HAPPINESS: u8 = 60;
+pub(super) const DEFAULT_CREATIVITY: u8 = 50;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

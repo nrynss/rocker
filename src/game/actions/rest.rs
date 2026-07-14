@@ -5,16 +5,20 @@ use super::super::*;
 
 impl Game {
     pub(in crate::game) fn action_laze_around(&mut self) -> Result<(), String> {
-        self.player.energy = (self.player.energy + 20).min(constants::MAX_ENERGY);
-        self.player.stress = self.player.stress.saturating_sub(10);
-        self.log("😴 You took it easy this week — energy up, stress down.");
+        self.player.stress = self.player.stress.saturating_sub(LAZE_STRESS_RELIEF);
+        self.player.creativity =
+            (self.player.creativity + LAZE_CREATIVITY_GAIN).min(constants::MAX_CREATIVITY);
+        self.log("😴 You took it easy this week — stress down, mind wandering.");
         Ok(())
     }
 
     pub(in crate::game) fn action_take_break(&mut self) -> Result<(), String> {
-        self.player.energy = constants::MAX_ENERGY;
         self.player.stress = 0;
-        self.player.health = (self.player.health + 30).min(constants::MAX_HEALTH);
+        self.player.happiness =
+            (self.player.happiness + BREAK_HAPPINESS_GAIN).min(constants::MAX_HAPPINESS);
+        self.player.creativity =
+            (self.player.creativity + BREAK_CREATIVITY_GAIN).min(constants::MAX_CREATIVITY);
+        self.player.health = (self.player.health + BREAK_HEALTH_GAIN).min(constants::MAX_HEALTH);
         self.week += BREAK_WEEKS - 1;
         self.log(format!(
             "🏖️ You disappeared for {} weeks — fully recharged and healthier for it.",

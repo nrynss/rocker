@@ -11,6 +11,7 @@ mod economy;
 pub mod events;
 mod events_apply;
 pub mod genre;
+mod lifestyle;
 pub mod music;
 pub mod player;
 mod rng;

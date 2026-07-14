@@ -308,6 +308,7 @@ impl Game {
             self.week += 1; // Advance week only for turn-consuming actions
             self.advance_week_events(&mut rng)?; // Process standard weekly events
             self.update_public_visibility(&action, self.week - week_before);
+            self.update_lifestyle(&action);
         }
 
         // These happen after every action resolution, regardless of turn consumption

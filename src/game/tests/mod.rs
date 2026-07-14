@@ -15,6 +15,7 @@ mod deals;
 mod determinism;
 mod fame;
 mod history;
+mod lifestyle;
 mod releases;
 mod save_compat;
 mod smoke;

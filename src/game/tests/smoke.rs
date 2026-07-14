@@ -28,7 +28,9 @@ fn a_break_is_a_real_break() {
     let mut game = test_game();
     let week_before = game.week;
     game.player.health = 50;
-    game.player.energy = 5;
+    game.player.stress = 40;
+    let happiness_before = game.player.happiness;
+    let creativity_before = game.player.creativity;
 
     game.action_take_break().expect("a break always works");
 
@@ -38,7 +40,9 @@ fn a_break_is_a_real_break() {
         "the turn itself adds the final week"
     );
     assert_eq!(game.player.health, 80);
-    assert_eq!(game.player.energy, constants::MAX_ENERGY);
+    assert_eq!(game.player.stress, 0, "a break resets stress");
+    assert_eq!(game.player.happiness, happiness_before + 10);
+    assert_eq!(game.player.creativity, creativity_before + 10);
 }
 
 #[test]
