@@ -18,6 +18,7 @@
 use crate::data_loader::GameDataFiles;
 use crate::game::band::Band;
 use crate::game::events::EventManager;
+use crate::game::music;
 use crate::game::music::ReleaseType;
 use crate::game::player::Player;
 use crate::game::timeline::MusicTimeline;
@@ -26,6 +27,7 @@ use rand::SeedableRng;
 use rand::rngs::StdRng;
 
 use super::constants::{self, *};
+use super::shows;
 use super::*;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -225,6 +227,18 @@ fn studio_rat(game: &Game) -> GameAction {
                 pressing: Some(GARAGE_RUN),
             };
         }
+        // Blocked on money with nothing spare to single off either: keep
+        // writing. This is the bot's only bootstrap out of "broke, one
+        // album's worth of songs banked, can't afford to record any of
+        // them" — the next song written is what crosses the `> MIN_ALBUM_
+        // SONGS` line above and unlocks a cheap single sale. (Tried
+        // swapping this for `Practice` once stress allows, on the theory
+        // that it avoids the writing-streak fatigue penalty for "no new
+        // inventory" weeks — measured a *regression*: studio-rat's win
+        // rate dropped from 65% to 36% and bankruptcies rose from 16/60 to
+        // 34/60 in the 15-year sweep, because it cut off the only escape
+        // valve from this exact state. Reverted; left as a documented
+        // dead end rather than silently discarded.)
     }
     if game.player.stress < STUDIO_STRESS_BLOCK {
         GameAction::WriteSongs
@@ -332,6 +346,11 @@ struct Career {
     singles: usize,
     weeks_to_first_album: Option<u32>,
     weeks_to_fame_50: Option<u32>,
+    /// Week the rockstar milestone flag first flipped true (§E — since L9 the
+    /// milestone doesn't end the game, so `career.weeks` is the loop's exit
+    /// week, not the achievement week; this is the field that answers "when
+    /// did they actually make it").
+    weeks_to_rockstar: Option<u32>,
     first_deal_week: Option<u32>,
     deals_signed: u32,
     sell_outs: u32,
@@ -365,6 +384,7 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
         singles: 0,
         weeks_to_first_album: None,
         weeks_to_fame_50: None,
+        weeks_to_rockstar: None,
         first_deal_week: None,
         deals_signed: 0,
         sell_outs: 0,
@@ -419,6 +439,9 @@ fn observe(career: &mut Career, game: &Game, had_deal: &mut bool) {
     }
     if career.weeks_to_fame_50.is_none() && game.band.fame >= 50 {
         career.weeks_to_fame_50 = Some(game.week);
+    }
+    if career.weeks_to_rockstar.is_none() && game.rockstar_achieved {
+        career.weeks_to_rockstar = Some(game.week);
     }
     let signed = game.band.has_record_deal();
     if signed && !*had_deal {
@@ -475,10 +498,13 @@ fn print_report(careers: &[Career]) {
         }
         let n = runs.len();
         let wins = runs.iter().filter(|c| c.won()).count();
+        // `weeks_to_rockstar`, not `c.weeks` — since L9 the milestone doesn't
+        // end the run, so `c.weeks` is just the horizon's exit week, not when
+        // the band actually made it.
         let win_year = median(
             runs.iter()
-                .filter(|c| c.won())
-                .map(|c| c.weeks / constants::WEEKS_PER_YEAR)
+                .filter_map(|c| c.weeks_to_rockstar)
+                .map(|w| w / constants::WEEKS_PER_YEAR)
                 .collect(),
         );
         let died = runs.iter().filter(|c| c.ending == Ending::Died).count();
@@ -678,6 +704,247 @@ fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
     }
 }
 
+/// §A asks whether laze-wear ever actually kills anyone. It does — but only
+/// on a genuinely neglectful policy (never work, never break, never see a
+/// doctor), and only after a couple of years of it: stress stays pinned near
+/// 0 the whole time (lazing is the stress-relief action), so health decay is
+/// driven by `LAZE_WEAR_THRESHOLD_WEEKS` alone, not the stress-driven term.
+/// None of the four bots in the balance lab behave this way (`self_care`
+/// forces a break long before this), so this is a dedicated worst-case, not
+/// a bot career — it's the "is the death path real" half of the design's own
+/// question, the other half (do the four bots avoid it) being answered by
+/// `died == 0` across every bot/seed in the long sweep.
+#[test]
+fn sustained_lazing_alone_eventually_kills_a_healthy_player() {
+    let mut game = seeded_game(7);
+    suppress_story_events(&mut game);
+    let mut weeks_lazed = 0u32;
+    while !game.is_game_over() && weeks_lazed < 500 {
+        game.process_turn(GameAction::LazeAround)
+            .expect("lazing is always allowed");
+        game.take_turn_log();
+        game.events.last_event_week = u32::MAX;
+        weeks_lazed += 1;
+    }
+    assert!(
+        game.is_game_over(),
+        "500 straight weeks of lazing should eventually end the game"
+    );
+    assert_eq!(
+        game.player.health, 0,
+        "the ending should be health hitting zero from laze-wear, not going broke \
+         (lazing neither earns nor spends money)"
+    );
+    println!(
+        "pure lazing killed the player at week {} ({:.1} years) — confirms 'turtling is \
+         safe for months, not years' (design §A) rather than being unreachable",
+        game.week,
+        game.week as f32 / constants::WEEKS_PER_YEAR as f32
+    );
+}
+
+/// §B asks whether reception distributions land the designed tiers: a
+/// starting band mostly rough/solid, a 100-skill band reliably great or
+/// transcendent. `band_base` (0.7·skill + 0.3·live_performance) is the
+/// dominant, non-random term by design, so the tiers should be provable from
+/// the formula's own arithmetic, not just "usually" true over a sample — this
+/// pins both the arithmetic and the sampled distribution in one test.
+#[test]
+fn reception_lands_the_designed_verdict_tiers_by_skill() {
+    fn band_with(skill: u8, live_performance: u8) -> Band {
+        let mut band = Band {
+            skill,
+            ..Band::default()
+        };
+        for member in &mut band.members {
+            member.skill = skill;
+        }
+        band.reputation.live_performance = live_performance;
+        band
+    }
+
+    /// (rough, solid, great, transcendent) counts over `samples` rolls at a
+    /// steady mid-career condition (stress 30, health 80 — neither condition
+    /// penalty active) and average creativity (50).
+    fn verdict_counts(band: &Band, seed: u64, samples: u32) -> [u32; 4] {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let mut counts = [0u32; 4];
+        for _ in 0..samples {
+            let reception = shows::compute_reception(band, 30, 80, 1.0, 50, &mut rng);
+            let idx = match shows::ShowVerdict::from_reception(reception) {
+                shows::ShowVerdict::Rough => 0,
+                shows::ShowVerdict::Solid => 1,
+                shows::ShowVerdict::Great => 2,
+                shows::ShowVerdict::Transcendent => 3,
+            };
+            counts[idx] += 1;
+        }
+        counts
+    }
+
+    let samples = 2_000;
+    // Starting band (Band::default()'s own numbers: skill ~25, live_perf 15).
+    let starting = verdict_counts(&band_with(25, 15), 900, samples);
+    // A credible mid-career band.
+    let mid = verdict_counts(&band_with(60, 50), 901, samples);
+    // A maxed-out band.
+    let high = verdict_counts(&band_with(100, 90), 902, samples);
+
+    println!("reception verdict distribution by skill tier ({samples} samples each):");
+    println!(
+        "  starting (skill 25, live_perf 15): rough {} solid {} great {} transcendent {}",
+        starting[0], starting[1], starting[2], starting[3]
+    );
+    println!(
+        "  mid      (skill 60, live_perf 50): rough {} solid {} great {} transcendent {}",
+        mid[0], mid[1], mid[2], mid[3]
+    );
+    println!(
+        "  high     (skill 100, live_perf 90): rough {} solid {} great {} transcendent {}",
+        high[0], high[1], high[2], high[3]
+    );
+
+    // Starting band: band_base = 0.7*25 + 0.3*15 = 22; even the best-case
+    // roll (+10 variance, +10 creativity upside) tops out at 42 — great
+    // (>=70) and transcendent (>=85) are arithmetically unreachable.
+    assert_eq!(
+        starting[2] + starting[3],
+        0,
+        "a starting band's reception ceiling (42) is below the great threshold (70); \
+         got great {} transcendent {} out of {samples}",
+        starting[2],
+        starting[3]
+    );
+
+    // High band: band_base = 0.7*100 + 0.3*90 = 97; even the worst-case roll
+    // (-10 variance, 0 creativity upside, no condition bonus in play) is 87,
+    // still above the transcendent threshold (85) — every single night.
+    assert_eq!(
+        high[3], samples,
+        "a maxed-out band's reception floor (87) is above the transcendent threshold (85); \
+         every night should land transcendent, got {}/{samples}",
+        high[3]
+    );
+
+    // Mid band: band_base = 0.7*60 + 0.3*50 = 57; range is [47, 77] — always
+    // at least solid, sometimes great, never rough or transcendent.
+    assert_eq!(
+        mid[0], 0,
+        "a mid-tier band's reception floor (47) should never be rough"
+    );
+    assert_eq!(
+        mid[3], 0,
+        "a mid-tier band's reception ceiling (77) should never reach transcendent (85)"
+    );
+    assert!(
+        mid[2] > 0,
+        "a mid-tier band should occasionally catch a great night on a good roll"
+    );
+}
+
+/// §F asks what fraction of weeks actually fire an incident at the new 35%
+/// cadence. `try_trigger_event`'s roll is unconditional — eligibility only
+/// filters *which* incident gets picked afterward (`events_apply.rs`), so
+/// tracking `events.last_event_week` against the current week across a long,
+/// survivable career (gig-grinder: `self_care` keeps it alive the whole way)
+/// measures the cadence directly, independent of which incidents are
+/// eligible for this band.
+#[test]
+fn incident_cadence_matches_the_designed_weekly_chance() {
+    let mut game = seeded_game(31);
+    let weeks = 500;
+    let mut fired = 0u32;
+    let mut actual_weeks = 0u32;
+    for _ in 0..weeks {
+        if game.is_game_over() {
+            break;
+        }
+        let action = Bot::GigGrinder.decide(&game);
+        if game.process_turn(action).is_err() {
+            game.process_turn(GameAction::LazeAround)
+                .expect("lazing is always allowed");
+        }
+        game.take_turn_log();
+        actual_weeks += 1;
+        if game.events.last_event_week == game.week {
+            fired += 1;
+        }
+    }
+    let rate = fired * 100 / actual_weeks.max(1);
+    println!(
+        "incidents fired in {fired}/{actual_weeks} weeks ({rate}%); design target {INCIDENT_WEEKLY_CHANCE_PERCENT}%"
+    );
+    // A generous band around the designed rate — one seed's sample, not an
+    // exact-probability proof (that belongs to a unit test over raw rolls,
+    // not the sim lab).
+    assert!(
+        (25..=45).contains(&(rate as i32)),
+        "observed incident cadence {rate}% is far from the designed {INCIDENT_WEEKLY_CHANCE_PERCENT}%"
+    );
+}
+
+/// §C's known edge (HANDOFF Notes, deferred from L5): the ramp is keyed to
+/// *current* fame's grace tier every week, while `idle_streak` keeps counting
+/// against whatever grace applied when the idle spell started. When fame
+/// decays across a tier boundary mid-streak, the newly (smaller) grace can
+/// already be outrun by the streak, so the very next week's ramp can jump
+/// straight past the gentle -1,-2,-3,-4 onset to the flat -5 — a smoothness
+/// defect, not a magnitude one (the per-week rate is still capped at
+/// `FAME_RAMP_MAX_DECAY`). Assess-only per L10's brief: fixing it needs a
+/// serialized decay-onset counter on `Game`, outside `sim.rs`/`constants.rs`.
+#[test]
+fn fame_ramp_onset_can_skip_steps_across_a_grace_tier_boundary() {
+    let mut game = seeded_game(11);
+    suppress_story_events(&mut game);
+    game.band.fame = 92;
+    game.band.peak_fame = 92; // peak >= 90 -> floor 60, comfortably below 92.
+
+    let mut trace: Vec<(u32, u8, i16)> = Vec::new();
+    let mut previous_fame = game.band.fame;
+    for _ in 0..400 {
+        if game.is_game_over() || game.band.fame <= 60 {
+            break;
+        }
+        game.process_turn(GameAction::LazeAround)
+            .expect("lazing is always allowed");
+        game.take_turn_log();
+        game.events.last_event_week = u32::MAX;
+        let delta = previous_fame as i16 - game.band.fame as i16;
+        if delta != 0 {
+            trace.push((game.week, game.band.fame, delta));
+        }
+        previous_fame = game.band.fame;
+    }
+
+    println!("fame decay trace from a fame-92 band gone quiet (week, fame-after, weekly delta):");
+    for (week, fame, delta) in &trace {
+        println!("  week {week:>4}: fame {fame:>3} (-{delta})");
+    }
+
+    // Containment: whatever the onset looks like, no single week should ever
+    // drop fame faster than the designed flat rate.
+    for (week, fame, delta) in &trace {
+        assert!(
+            *delta <= FAME_RAMP_MAX_DECAY as i16,
+            "week {week} dropped fame to {fame} (-{delta}), faster than the flat rate {}",
+            FAME_RAMP_MAX_DECAY
+        );
+    }
+
+    // Quantify the onset: does decay open at -1 (the worked example's shape,
+    // fame 15 -> 0) or does it open somewhere past that because a tier
+    // boundary was already crossed by the time grace ran out?
+    if let Some((week, fame, delta)) = trace.first() {
+        println!("first observed decay: week {week}, fame {fame}, delta -{delta}");
+        if *delta > 1 {
+            println!(
+                "onset skipped steps: opened at -{delta} instead of -1 (grace shrank under \
+                 the streak crossing a tier boundary before decay ever started)"
+            );
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Long sweeps: run by hand, report the numbers.
 // ---------------------------------------------------------------------------
@@ -708,15 +975,166 @@ fn balanced_indie_reaches_the_win_screen_by_year_twelve_on_most_seeds() {
         let career = run_career(Bot::BalancedIndie, seed, WIN_TARGET);
         if career.won() {
             wins += 1;
-            win_weeks.push(career.weeks);
+            // `weeks_to_rockstar`, not `career.weeks`: since L9 the milestone
+            // doesn't end the run, `career.weeks` is just wherever the
+            // 12-year horizon cut the loop off, not the week the band
+            // actually reached fame 90 + 5 albums.
+            if let Some(w) = career.weeks_to_rockstar {
+                win_weeks.push(w);
+            }
         }
     }
     println!(
-        "balanced-indie won {wins}/{WIN_TARGET_SEEDS} careers by year 12 (median win week: {})",
+        "balanced-indie won {wins}/{WIN_TARGET_SEEDS} careers by year 12 (median week the milestone was actually reached: {})",
         show(median(win_weeks))
     );
     assert!(
         wins * 2 > WIN_TARGET_SEEDS,
         "balanced-indie won only {wins}/{WIN_TARGET_SEEDS} careers by year 12"
+    );
+}
+
+/// §B — tour box office by skill tier, holding fame (and so the tour-wide
+/// pot and cost) fixed and varying only member skill/live_performance, so
+/// any spread in total gross is attributable to reception (attendance
+/// factor + momentum), not to fame differences. L3 measured a new band's
+/// tour gross at ~85% of the pre-0.6 ballpark; this checks that ballpark
+/// holds — or at least stays sane — across tiers, not just for one band.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn tour_gross_by_skill_tier_sweep() {
+    const FIXED_FAME: u8 = 40; // "regional" tier: same tour_weeks/cost for every run below.
+
+    fn tour_at(seed: u64, skill: u8, live_performance: u8) -> (u8, u32, f32, f32) {
+        let mut game = seeded_game(seed);
+        suppress_story_events(&mut game);
+        game.band.fame = FIXED_FAME;
+        game.band.peak_fame = FIXED_FAME;
+        game.band.skill = skill;
+        for member in &mut game.band.members {
+            member.skill = skill;
+        }
+        game.band.reputation.live_performance = live_performance;
+        game.player.stress = 20;
+        game.player.health = 90;
+        game.player.money = 100_000; // never let the tour cost gate the run
+
+        let region_index = game
+            .get_sorted_regions()
+            .iter()
+            .position(|(_, _, _, _, _, fame_req)| *fame_req <= FIXED_FAME)
+            .expect("at least one region open at fame 40");
+
+        game.process_turn(GameAction::GoOnTour(region_index))
+            .expect("tour should be affordable and unblocked");
+        let report = game.last_tour_report.expect("tour produces a report");
+
+        // Momentum isn't stored on the report — replay it from each show's
+        // reception (§B — Momentum) to see how far a tour's word of mouth
+        // actually swings.
+        let mut momentum = MOMENTUM_START;
+        let mut momentum_min = MOMENTUM_START;
+        let mut momentum_max = MOMENTUM_START;
+        for row in &report.rows {
+            let verdict = shows::ShowVerdict::from_reception(row.reception);
+            momentum = shows::apply_momentum_delta(momentum, verdict);
+            momentum_min = momentum_min.min(momentum);
+            momentum_max = momentum_max.max(momentum);
+        }
+
+        (
+            report.avg_reception,
+            report.total_gross,
+            game.band.fame as f32 - FIXED_FAME as f32,
+            momentum_max - momentum_min,
+        )
+    }
+
+    println!("tour gross by skill tier, fame held at {FIXED_FAME} (avg over 20 seeds):");
+    for (label, skill, live_performance) in
+        [("starting", 25u8, 15u8), ("mid", 60, 50), ("high", 100, 90)]
+    {
+        let runs: Vec<(u8, u32, f32, f32)> = (1..=20)
+            .map(|seed| tour_at(seed, skill, live_performance))
+            .collect();
+        let n = runs.len() as f32;
+        let avg_reception = runs.iter().map(|r| r.0 as f32).sum::<f32>() / n;
+        let avg_gross = runs.iter().map(|r| r.1 as f32).sum::<f32>() / n;
+        let avg_momentum_spread = runs.iter().map(|r| r.3).sum::<f32>() / n;
+        println!(
+            "  {label:<9} (skill {skill:>3}, live_perf {live_performance:>3}): avg reception {avg_reception:.1}, avg total gross ${avg_gross:.0}, avg momentum spread {avg_momentum_spread:.3}"
+        );
+    }
+}
+
+/// §D — lifetime catalog income per release-quality tier, and whether the
+/// living tail (fame/marketing-responsive) can produce runaway income for
+/// an established star versus a modest release. Releases are hand-built
+/// (bypassing the quality RNG) so quality is the only thing that varies;
+/// each is aged 60 weeks past its launch window and the catalog tick run
+/// directly (`process_music_releases_and_marketing`, §D) every week.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn sales_tail_income_by_quality_tier_sweep() {
+    fn synthetic_release(initial_sales_score: u32, copies_pressed: u32) -> music::Release {
+        music::Release {
+            id: 1,
+            name: "Sim Release".to_string(),
+            release_type: ReleaseType::Album,
+            release_quality: 0,
+            week_released: 1,
+            songs_involved_quality_avg: 0,
+            active_marketing: Vec::new(),
+            marketing_level_achieved: 0,
+            initial_sales_score,
+            total_income_generated: 0,
+            genre: None,
+            copies_pressed,
+            copies_sold: 0,
+            peak_chart_position: None,
+            singles_cut: 0,
+        }
+    }
+
+    fn lifetime_income_after(fame: u8, initial_sales_score: u32, weeks: u32) -> u32 {
+        let mut game = seeded_game(21);
+        suppress_story_events(&mut game);
+        game.band.fame = fame;
+        game.band.peak_fame = fame;
+        game.band
+            .albums_released
+            .push(synthetic_release(initial_sales_score, 50_000));
+        // Clear the initial-sales window immediately so every tick below
+        // exercises the tail, not the launch-week resolution.
+        game.week = 1 + INITIAL_SALES_WINDOW_WEEKS + 1;
+        for _ in 0..weeks {
+            game.process_turn(GameAction::LazeAround)
+                .expect("lazing is always allowed");
+            game.take_turn_log();
+            game.events.last_event_week = u32::MAX;
+        }
+        game.band.albums_released[0].total_income_generated
+    }
+
+    println!("lifetime catalog income by release-quality tier (60 weeks of tail, fame 20):");
+    for (label, score) in [
+        ("rough", 20u32),
+        ("solid", 60),
+        ("great", 100),
+        ("transcendent", 160),
+    ] {
+        let income = lifetime_income_after(20, score, 60);
+        println!("  {label:<12} (initial_sales_score {score:>3}): lifetime income ${income}");
+    }
+
+    // Runaway-income check: does a famous act's catalog income scale
+    // unboundedly with fame, or is it still bounded (by the pressed-copies
+    // cap and the divisor's steady growth)? Same release, fame 20 vs fame 95.
+    let modest_star_income = lifetime_income_after(20, 80, 104);
+    let big_star_income = lifetime_income_after(95, 80, 104);
+    println!(
+        "same release (initial_sales_score 80) over 2 years: fame 20 -> ${modest_star_income}, fame 95 -> ${big_star_income} \
+         (ratio {:.2}x)",
+        big_star_income as f32 / modest_star_income.max(1) as f32
     );
 }
