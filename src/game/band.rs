@@ -168,12 +168,26 @@ impl Band {
         self.singles_released.len() + self.albums_released.len()
     }
 
+    /// Whether the band's genre answers to any of the given labels. Matching
+    /// is tolerant of surface form: "Hair Metal" and "hair_metal" both match
+    /// Metal (via [`MusicGenre::aliases`]), "Grunge" matches Alternative, and
+    /// so on — so historical events can name sub-genres the coarse enum folds
+    /// together. A label that maps to no genre (e.g. "Folk Rock") simply
+    /// matches nothing.
     pub fn dominant_genres_match(&self, target_genres: &[&str]) -> bool {
-        // This is a simplified check - in a full implementation,
-        // the band would have a genre field
-        // For now, we'll use a placeholder that returns true for any genre
-        // TODO: Add actual genre tracking to Band struct
-        !target_genres.is_empty() // Placeholder - always return true if genres provided
+        fn normalize(s: &str) -> String {
+            s.chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .map(|c| c.to_ascii_lowercase())
+                .collect()
+        }
+        let keys: Vec<String> = std::iter::once(self.genre.name())
+            .chain(self.genre.aliases().iter().copied())
+            .map(normalize)
+            .collect();
+        target_genres
+            .iter()
+            .any(|target| keys.iter().any(|key| *key == normalize(target)))
     }
 
     pub fn current_deal(&self) -> Option<&RecordDeal> {

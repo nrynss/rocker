@@ -14,6 +14,7 @@ use super::*;
 mod deals;
 mod determinism;
 mod fame;
+mod history;
 mod releases;
 mod save_compat;
 mod smoke;
