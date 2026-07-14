@@ -109,7 +109,8 @@ impl Game {
         let fame_gain = fame_gain.min(headroom);
 
         self.player.earn_money(earnings);
-        self.band.gain_fame(fame_gain);
+        self.band
+            .gain_fame_capped(fame_gain, venue_ceiling.min(live_cap));
         if fame_gain > 0 {
             self.log(format!(
                 "🎤 Played at '{}' — sold {}/{} tickets, earned ${}, fame +{}.",
@@ -215,8 +216,9 @@ impl Game {
         self.player.energy -= 40;
         self.player.stress = (self.player.stress + 30).min(constants::MAX_STRESS);
         // Tours are live shows too: fame stalls at the catalog cap.
-        let fame_gain = fame_gain.min(self.live_fame_cap().saturating_sub(self.band.fame));
-        self.band.gain_fame(fame_gain);
+        let live_cap = self.live_fame_cap();
+        let fame_gain = fame_gain.min(live_cap.saturating_sub(self.band.fame));
+        self.band.gain_fame_capped(fame_gain, live_cap);
 
         let regional_fame_gain = 10 + rng.gen_range(0..=5);
         let new_regional_fame = (regional_fame as u16 + regional_fame_gain as u16).min(100) as u8;
@@ -230,9 +232,10 @@ impl Game {
         ));
 
         if rng.gen_bool(0.3) {
-            let bonus = 2u8.min(self.live_fame_cap().saturating_sub(self.band.fame));
+            let live_cap = self.live_fame_cap();
+            let bonus = 2u8.min(live_cap.saturating_sub(self.band.fame));
             if bonus > 0 {
-                self.band.gain_fame(bonus);
+                self.band.gain_fame_capped(bonus, live_cap);
                 self.log("🗣️ Word of your live show spreads — extra fame on the way home.");
             }
         } else if rng.gen_bool(0.15) {
