@@ -185,10 +185,18 @@ fn death_ending_still_works() {
 fn broke_and_unknown_ending_still_works() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
-    // An unseeded game plus weekly incidents: a money-positive incident on
-    // the single turn below could lift the band out of "broke". Park the
-    // incident clock so the ending logic is what's under test.
+    // An unseeded game: an incident or a historical event on the single turn
+    // below can hand out money/fame and lift the band out of "broke and
+    // unknown". Park the incident clock and mark every era event told, so the
+    // ending logic is what's under test (same idiom as the sim harness).
     game.events.last_event_week = u32::MAX;
+    let every_event: Vec<String> = game
+        .timeline
+        .eras
+        .values()
+        .flat_map(|era| era.major_events.iter().cloned())
+        .collect();
+    game.timeline.triggered_events.extend(every_event);
 
     // Set up broke + unknown to trigger the broke-and-unknown ending
     game.player.money = -100;
