@@ -8,7 +8,13 @@ pub struct Band {
     /// The sound the band plays. Saves from before genres existed load as Rock.
     #[serde(default)]
     pub genre: MusicGenre,
-    pub fame: u8,  // 0-100
+    pub fame: u8, // 0-100
+    /// Highest fame the band has ever reached — the peak that its permanent
+    /// floors are earned against (see fame gravity, design §C). Old saves
+    /// default to 0; every read lifts it to current fame so a loaded career
+    /// never forgets a peak it already stood on.
+    #[serde(default)]
+    pub peak_fame: u8,
     pub skill: u8, // 0-100
     pub unreleased_songs: Vec<Song>,
     pub singles_released: Vec<Release>,
@@ -67,6 +73,7 @@ impl Default for Band {
             name: String::new(),
             genre: MusicGenre::Rock,
             fame: 0,
+            peak_fame: 0,
             skill: 20,
             unreleased_songs: Vec::new(),
             singles_released: Vec::new(),
@@ -112,6 +119,29 @@ impl Default for BandReputation {
 }
 
 impl Band {
+    /// The peak fame the band has stood on, robust against pre-0.6 saves that
+    /// default `peak_fame` to 0: it can never read lower than current fame.
+    pub fn effective_peak_fame(&self) -> u8 {
+        self.peak_fame.max(self.fame)
+    }
+
+    /// Add fame the one true way. While the band is climbing back toward a
+    /// peak it has already reached, the gain is doubled (the comeback rule,
+    /// design §C); the result is clamped to `MAX_FAME` and the peak updated.
+    /// Fame *losses* (idle decay, bad events) must not route through here.
+    pub fn gain_fame(&mut self, amount: u8) {
+        let peak = self.effective_peak_fame();
+        let multiplier = if self.fame < peak {
+            u16::from(crate::game::constants::FAME_COMEBACK_MULTIPLIER)
+        } else {
+            1
+        };
+        let gained = u16::from(amount) * multiplier;
+        self.fame =
+            (u16::from(self.fame) + gained).min(u16::from(crate::game::constants::MAX_FAME)) as u8;
+        self.peak_fame = peak.max(self.fame);
+    }
+
     pub fn get_fame_level(&self) -> &str {
         match self.fame {
             0..=10 => "Unknown",

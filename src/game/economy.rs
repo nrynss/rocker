@@ -170,7 +170,7 @@ impl Game {
                 } else {
                     (sales_score / 300).min(4) as u8
                 };
-                self.band.fame = (self.band.fame + fame_gain).min(constants::MAX_FAME);
+                self.band.gain_fame(fame_gain);
                 if fame_gain > 0 {
                     self.log(format!(
                         "💿 '{}' {} — moved {} copies, first-run earnings: ${}, fame +{}.",
@@ -189,6 +189,7 @@ impl Game {
                     ));
                 }
                 if let Some(position) = chart_position {
+                    release.peak_chart_position = Some(position as u8);
                     self.log(format!(
                         "📈 '{}' enters the charts at #{}.",
                         release.name, position

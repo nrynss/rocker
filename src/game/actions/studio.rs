@@ -183,6 +183,7 @@ impl Game {
             genre: Some(self.band.genre.clone()),
             copies_pressed: copies,
             copies_sold: 0,
+            peak_chart_position: None,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -251,6 +252,7 @@ impl Game {
             genre: Some(self.band.genre.clone()),
             copies_pressed: copies,
             copies_sold: 0,
+            peak_chart_position: None,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);

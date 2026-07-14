@@ -345,6 +345,7 @@ mod tests {
             genre: None,
             copies_pressed: 0,
             copies_sold: 0,
+            peak_chart_position: None,
         }
     }
 

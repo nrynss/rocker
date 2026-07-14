@@ -103,4 +103,9 @@ pub struct Release {
     /// Copies sold so far, across the first run and the catalog long tail.
     #[serde(default)]
     pub copies_sold: u32,
+    /// Best chart position this release ever reached (1 = #1); `None` means it
+    /// never charted. A release is a "hit" iff this is `Some` (fame gravity,
+    /// design §C). Serde default `None` so pre-0.6 saves load.
+    #[serde(default)]
+    pub peak_chart_position: Option<u8>,
 }

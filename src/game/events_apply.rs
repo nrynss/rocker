@@ -115,8 +115,7 @@ impl Game {
             }
             RandomEvent::MediaEvent => match rng.gen_range(0..3) {
                 0 => {
-                    self.band.fame =
-                        (self.band.fame + rng.gen_range(3..8)).min(constants::MAX_FAME);
+                    self.band.gain_fame(rng.gen_range(3..8));
                     self.band.reputation.media_presence =
                         (self.band.reputation.media_presence + 5).min(100);
                     self.log("📰 A glowing review in the music press — your profile rises.");
@@ -197,13 +196,13 @@ impl Game {
             }
             RandomEvent::IndustryEvent => match rng.gen_range(0..3) {
                 0 if !self.band.has_record_deal() && self.band.fame > 30 => {
-                    self.band.fame = (self.band.fame + 5).min(constants::MAX_FAME);
+                    self.band.gain_fame(5);
                     self.log("👀 A&R scouts were spotted at your show — industry buzz grows.");
                 }
                 1 if self.band.fame > 20 => {
                     let payment = rng.gen_range(500..2000);
                     self.player.earn_money(payment as u32);
-                    self.band.fame = (self.band.fame + 3).min(constants::MAX_FAME);
+                    self.band.gain_fame(3);
                     self.log(format!(
                         "🎪 A festival slot opens up — ${} and more fans.",
                         payment
@@ -224,14 +223,14 @@ impl Game {
         match event {
             event if event.contains("Beatles") => {
                 if self.band.dominant_genres_match(&["Rock", "Folk Rock"]) {
-                    self.band.fame = (self.band.fame + 5).min(constants::MAX_FAME);
+                    self.band.gain_fame(5);
                     self.player.money += 200;
                 }
             }
             event if event.contains("MTV") => {
                 if self.timeline.get_image_importance() > 80 {
                     if self.band.reputation.media_presence > 60 {
-                        self.band.fame = (self.band.fame + 10).min(constants::MAX_FAME);
+                        self.band.gain_fame(10);
                         let earnings = rng.gen_range(1000..3000);
                         self.player.money += earnings;
                     } else {
@@ -241,7 +240,7 @@ impl Game {
             }
             event if event.contains("Grunge emerges") => {
                 if self.band.dominant_genres_match(&["Grunge", "Alternative"]) {
-                    self.band.fame = (self.band.fame + 12).min(constants::MAX_FAME);
+                    self.band.gain_fame(12);
                     let major_earnings = rng.gen_range(2000..5000);
                     self.player.money += major_earnings;
                 } else if self
@@ -252,7 +251,7 @@ impl Game {
                 }
             }
             _ => match rng.gen_range(0..3) {
-                0 => self.band.fame = (self.band.fame + 1).min(constants::MAX_FAME),
+                0 => self.band.gain_fame(1),
                 1 => self.player.money += rng.gen_range(50..200),
                 _ => {
                     self.band.reputation.critical_acclaim =

@@ -81,11 +81,63 @@ pub(super) const LIVE_FAME_BASE_CAP: u8 = 35;
 pub(super) const LIVE_FAME_PER_SINGLE: u8 = 6;
 pub(super) const LIVE_FAME_PER_ALBUM: u8 = 12;
 
-// Fame fades when the band disappears from view: no shows, no tour, and
-// nothing new on the shelves. One quiet week is forgiven.
-pub(super) const IDLE_GRACE_WEEKS: u32 = 1;
-pub(super) const IDLE_FAME_DECAY_PER_WEEK: u8 = 1;
+// A break clears the calendar for this many weeks (a full reset action).
 pub const BREAK_WEEKS: u32 = 4;
+
+// ============================================================================
+// Fame gravity (v0.6 design §C — fully decided; only the comeback multiplier
+// is [tune]). Fame is earned slowly and defended by staying in the picture;
+// left alone it drifts back down toward a floor the band earned at its peak.
+// ============================================================================
+
+/// Comeback rule: while current fame is below the band's peak, every fame
+/// *gain* is multiplied by this. Reclaiming ground is easier than the first
+/// climb. Only this value is tune-able. (§C — Comeback)
+pub(super) const FAME_COMEBACK_MULTIPLIER: u8 = 2;
+
+/// The idle-decay ramp: −1 the first decay week, −2, −3, −4, then −5 every
+/// week after — this is where it flattens out. (§C — The ramp)
+pub(super) const FAME_RAMP_MAX_DECAY: u8 = 5;
+
+/// Establishment rule: at or above this fame, an album/single released in the
+/// recent window counts as staying in the picture. Below it, small acts must
+/// keep physically showing up. (§C — Activity, rule 3)
+pub(super) const ESTABLISHMENT_MIN_FAME: u8 = 60;
+/// How recent a release must be to satisfy the establishment rule. (§C)
+pub(super) const ESTABLISHMENT_RELEASE_WINDOW_WEEKS: u32 = 52;
+
+/// The top floor (75) also requires this many *hits* — albums/singles that
+/// charted at all (`peak_chart_position.is_some()`). (§C — Floors)
+pub(super) const FAME_FLOOR_HITS_THRESHOLD: usize = 10;
+
+/// Grace: consecutive quiet weeks before *any* decay begins, keyed by the
+/// band's *current* fame. Each row is `(inclusive-upper-fame, grace weeks)`;
+/// the first row whose bound the current fame falls under wins. (§C — Grace)
+pub(super) const FAME_GRACE_TIERS: [(u8, u32); 7] = [
+    (15, 2),       // 0–15   → 2 weeks
+    (29, 4),       // 16–29  → 4 weeks
+    (49, 8),       // 30–49  → 8 weeks
+    (74, 13),      // 50–74  → 13 weeks (3 months)
+    (89, 26),      // 75–89  → 26 weeks (6 months)
+    (94, 39),      // 90–94  → 39 weeks (9 months)
+    (u8::MAX, 52), // 95+    → 52 weeks (1 year)
+];
+
+/// Floors: fame never *decays* below these, keyed by the highest fame the band
+/// ever reached (its peak). Each row is `(minimum-peak, floor)`, checked from
+/// the top down so the highest matching peak wins. The 95+ row's 75 floor is
+/// gated on `FAME_FLOOR_HITS_THRESHOLD` hits and applied in code. (§C — Floors)
+pub(super) const FAME_FLOOR_TIERS: [(u8, u8); 7] = [
+    (95, 70), // 95+ (→ 75 with ≥ 10 hits)
+    (90, 60),
+    (75, 45),
+    (60, 30),
+    (45, 15),
+    (30, 10),
+    (0, 0), // under 30
+];
+/// The elevated top floor once the 95+ peak is paired with enough hits. (§C)
+pub(super) const FAME_FLOOR_LEGEND: u8 = 75;
 
 // Era-genre fit: past these bounds the era clearly loves or has abandoned
 // the band's sound, and the press says so — once per swing, not every week.

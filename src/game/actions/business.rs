@@ -138,7 +138,7 @@ impl Game {
         self.player.earn_money(offer.pay);
         self.player.energy = self.player.energy.saturating_sub(35);
         self.player.stress = (self.player.stress + 20).min(constants::MAX_STRESS);
-        self.band.fame = (self.band.fame + offer.fame_gain).min(constants::MAX_FAME);
+        self.band.gain_fame(offer.fame_gain);
         self.week += offer.weeks;
         self.log(format!(
             "🎟️ Opened for {} for {} weeks — ${} and a taste of the big stage (fame +{}).",
@@ -146,7 +146,7 @@ impl Game {
         ));
 
         if rng.gen_bool(0.25) {
-            self.band.fame = (self.band.fame + 2).min(constants::MAX_FAME);
+            self.band.gain_fame(2);
             self.log("🔥 Their crowd adopted you — encores every night (+2 fame).");
         }
         Ok(())

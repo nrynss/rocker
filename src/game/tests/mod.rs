@@ -39,6 +39,7 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         genre: None,
         copies_pressed: 0,
         copies_sold: 0,
+        peak_chart_position: None,
     }
 }
 

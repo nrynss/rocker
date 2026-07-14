@@ -9,32 +9,106 @@ use super::rng;
 use super::*;
 
 impl Game {
-    /// Track whether the band was in the public eye this turn. Fame starts
-    /// to fade after IDLE_GRACE_WEEKS consecutive quiet weeks.
+    /// Fame gravity (design §C). While the band stays in the public eye the
+    /// idle clock is held at zero; once it has been quiet past its grace
+    /// window, fame drifts down a ramp (−1, −2, −3, −4, then −5/week) toward a
+    /// permanent floor earned at the band's peak. Any activity resets the
+    /// streak — and thus the ramp — to zero.
     pub(super) fn update_public_visibility(&mut self, action: &GameAction, weeks_elapsed: u32) {
-        let publicly_active = matches!(
-            action,
-            GameAction::Gig(_) | GameAction::GoOnTour(_) | GameAction::AcceptSupportTour
-        ) || !self.just_released_music.is_empty();
-        if publicly_active {
+        // Old saves default `peak_fame` to 0; lift it to the fame reached so
+        // far before any floor reads it, so a loaded career keeps its peak.
+        self.band.peak_fame = self.band.effective_peak_fame();
+
+        if self.is_publicly_active(action) {
             self.idle_streak = 0;
             return;
         }
+
         let mut faded: u8 = 0;
         for _ in 0..weeks_elapsed {
             self.idle_streak += 1;
-            if self.idle_streak > IDLE_GRACE_WEEKS {
-                faded = faded.saturating_add(IDLE_FAME_DECAY_PER_WEEK);
+            let grace = Self::idle_grace_weeks(self.band.fame);
+            if self.idle_streak <= grace {
+                continue;
             }
+            let floor = self.fame_floor();
+            if self.band.fame <= floor {
+                continue; // decay stops dead at the floor
+            }
+            // Ramp keyed to how many weeks past grace we are, capped flat.
+            let ramp = (self.idle_streak - grace).min(u32::from(FAME_RAMP_MAX_DECAY)) as u8;
+            let after = self.band.fame.saturating_sub(ramp).max(floor);
+            faded = faded.saturating_add(self.band.fame - after);
+            self.band.fame = after;
         }
-        let faded = faded.min(self.band.fame);
         if faded > 0 {
-            self.band.fame -= faded;
             self.log(format!(
                 "🕰️ Out of the public eye — the buzz cools (fame -{}).",
                 faded
             ));
         }
+    }
+
+    /// The three ways to stay "in the picture" (design §C): a public action or
+    /// a release in its launch window; any player record currently charting;
+    /// or — once established (fame ≥ 60) — a release inside the recent window.
+    fn is_publicly_active(&self, action: &GameAction) -> bool {
+        let public_action = matches!(
+            action,
+            GameAction::Gig(_) | GameAction::GoOnTour(_) | GameAction::AcceptSupportTour
+        ) || !self.just_released_music.is_empty();
+        public_action
+            || self.world.charts.iter().any(|entry| entry.is_player)
+            || (self.band.fame >= ESTABLISHMENT_MIN_FAME && self.has_recent_release())
+    }
+
+    /// Whether any album or single (including one still in its launch window)
+    /// came out within the establishment window.
+    fn has_recent_release(&self) -> bool {
+        self.band
+            .albums_released
+            .iter()
+            .chain(self.band.singles_released.iter())
+            .chain(self.just_released_music.iter())
+            .any(|release| {
+                self.week.saturating_sub(release.week_released)
+                    <= ESTABLISHMENT_RELEASE_WINDOW_WEEKS
+            })
+    }
+
+    /// Consecutive quiet weeks forgiven before decay, keyed by current fame.
+    fn idle_grace_weeks(fame: u8) -> u32 {
+        FAME_GRACE_TIERS
+            .iter()
+            .find(|(upper_fame, _)| fame <= *upper_fame)
+            .map(|(_, grace)| *grace)
+            .unwrap_or(FAME_GRACE_TIERS[FAME_GRACE_TIERS.len() - 1].1)
+    }
+
+    /// The permanent floor fame can never decay below, earned at the band's
+    /// peak — with the top floor gated on a catalog of hits.
+    fn fame_floor(&self) -> u8 {
+        let peak = self.band.effective_peak_fame();
+        let base = FAME_FLOOR_TIERS
+            .iter()
+            .find(|(min_peak, _)| peak >= *min_peak)
+            .map(|(_, floor)| *floor)
+            .unwrap_or(0);
+        if peak >= 95 && self.hit_count() >= FAME_FLOOR_HITS_THRESHOLD {
+            base.max(FAME_FLOOR_LEGEND)
+        } else {
+            base
+        }
+    }
+
+    /// Released albums and singles that charted at all — the band's "hits".
+    fn hit_count(&self) -> usize {
+        self.band
+            .albums_released
+            .iter()
+            .chain(self.band.singles_released.iter())
+            .filter(|release| release.peak_chart_position.is_some())
+            .count()
     }
 
     /// Expire a stale support offer, or roll for a new one from a bigger
