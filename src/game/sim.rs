@@ -78,6 +78,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         pending_support_offer: None,
         regional_fame: std::collections::HashMap::new(),
         idle_streak: 0,
+        decay_streak: 0,
         genre_trend_reported: 0,
         writing_streak: 0,
         week: 1,
@@ -883,17 +884,12 @@ fn incident_cadence_matches_the_designed_weekly_chance() {
     );
 }
 
-/// §C's known edge (HANDOFF Notes, deferred from L5): the ramp is keyed to
-/// *current* fame's grace tier every week, while `idle_streak` keeps counting
-/// against whatever grace applied when the idle spell started. When fame
-/// decays across a tier boundary mid-streak, the newly (smaller) grace can
-/// already be outrun by the streak, so the very next week's ramp can jump
-/// straight past the gentle -1,-2,-3,-4 onset to the flat -5 — a smoothness
-/// defect, not a magnitude one (the per-week rate is still capped at
-/// `FAME_RAMP_MAX_DECAY`). Assess-only per L10's brief: fixing it needs a
-/// serialized decay-onset counter on `Game`, outside `sim.rs`/`constants.rs`.
+/// §C's ramp is its own clock (`Game::decay_streak`): decay always opens at
+/// -1 and steps gently to the flat -5, even when fame crosses into a
+/// shorter grace tier mid-decline (the edge L10 originally quantified —
+/// fixed by the coordinator with a serialized decay-onset counter).
 #[test]
-fn fame_ramp_onset_can_skip_steps_across_a_grace_tier_boundary() {
+fn fame_ramp_onset_is_gentle_even_across_grace_tier_boundaries() {
     let mut game = seeded_game(11);
     suppress_story_events(&mut game);
     game.band.fame = 92;
@@ -931,17 +927,20 @@ fn fame_ramp_onset_can_skip_steps_across_a_grace_tier_boundary() {
         );
     }
 
-    // Quantify the onset: does decay open at -1 (the worked example's shape,
-    // fame 15 -> 0) or does it open somewhere past that because a tier
-    // boundary was already crossed by the time grace ran out?
-    if let Some((week, fame, delta)) = trace.first() {
-        println!("first observed decay: week {week}, fame {fame}, delta -{delta}");
-        if *delta > 1 {
-            println!(
-                "onset skipped steps: opened at -{delta} instead of -1 (grace shrank under \
-                 the streak crossing a tier boundary before decay ever started)"
-            );
-        }
+    // The onset must be gentle everywhere: decay opens at -1 and never
+    // steps up by more than 1 per week, tier boundaries notwithstanding.
+    let (first_week, first_fame, first_delta) = trace.first().expect("the band must decay");
+    assert_eq!(
+        *first_delta, 1,
+        "decay must open at -1 (week {first_week}, fame {first_fame}, got -{first_delta})"
+    );
+    for pair in trace.windows(2) {
+        let (_, _, prev) = pair[0];
+        let (week, fame, next) = pair[1];
+        assert!(
+            next <= prev + 1,
+            "ramp jumped from -{prev} to -{next} at week {week} (fame {fame})"
+        );
     }
 }
 

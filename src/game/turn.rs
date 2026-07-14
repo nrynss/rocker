@@ -21,6 +21,7 @@ impl Game {
 
         if self.is_publicly_active(action) {
             self.idle_streak = 0;
+            self.decay_streak = 0;
             return;
         }
 
@@ -31,12 +32,15 @@ impl Game {
             if self.idle_streak <= grace {
                 continue;
             }
+            // The ramp is its own clock: it counts *decaying* weeks, not
+            // weeks-past-grace, so falling into a shorter grace tier
+            // mid-decline cannot skip the gentle −1..−4 onset (§C).
+            self.decay_streak += 1;
             let floor = self.fame_floor();
             if self.band.fame <= floor {
                 continue; // decay stops dead at the floor
             }
-            // Ramp keyed to how many weeks past grace we are, capped flat.
-            let ramp = (self.idle_streak - grace).min(u32::from(FAME_RAMP_MAX_DECAY)) as u8;
+            let ramp = self.decay_streak.min(u32::from(FAME_RAMP_MAX_DECAY)) as u8;
             let after = self.band.fame.saturating_sub(ramp).max(floor);
             faded = faded.saturating_add(self.band.fame - after);
             self.band.fame = after;

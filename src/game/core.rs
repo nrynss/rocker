@@ -71,6 +71,12 @@ pub struct Game {
     /// Consecutive weeks with no public activity (no shows, nothing on sale).
     #[serde(default)]
     pub idle_streak: u32,
+    /// Consecutive weeks fame has actually been decaying (past grace). The
+    /// ramp (−1, −2, −3, −4, then −5 flat) is keyed to this clock, not to
+    /// weeks-past-grace, so a shrinking grace tier mid-decline cannot skip
+    /// steps (§C — The ramp). Resets with `idle_streak`.
+    #[serde(default)]
+    pub decay_streak: u32,
     /// The last era-fit verdict the press reported on the band's genre
     /// (-1 cold, 0 unremarkable, +1 hot) — the news speaks only on change.
     #[serde(default)]
@@ -125,6 +131,7 @@ impl Game {
             pending_support_offer: None,
             regional_fame: std::collections::HashMap::new(),
             idle_streak: 0,
+            decay_streak: 0,
             genre_trend_reported: 0,
             writing_streak: 0,
             week: 1,
