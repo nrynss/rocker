@@ -53,7 +53,15 @@ pub(super) fn draw_player_panel(frame: &mut Frame, game: &Game, area: Rect) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let [money_area, health_area, energy_area, stress_area, warn_area] = Layout::vertical([
+    let [
+        money_area,
+        health_area,
+        stress_area,
+        happiness_area,
+        creativity_area,
+        warn_area,
+    ] = Layout::vertical([
+        Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
@@ -85,19 +93,27 @@ pub(super) fn draw_player_panel(frame: &mut Frame, game: &Game, area: Rect) {
     );
     frame.render_widget(
         gauge(
-            format!("Energy {}%", game.player.energy),
-            game.player.energy,
-            Color::Cyan,
-        ),
-        energy_area,
-    );
-    frame.render_widget(
-        gauge(
             format!("Stress {}%", game.player.stress),
             game.player.stress,
             scale_color(game.player.stress, false),
         ),
         stress_area,
+    );
+    frame.render_widget(
+        gauge(
+            format!("Happiness {}%", game.player.happiness),
+            game.player.happiness,
+            scale_color(game.player.happiness, true),
+        ),
+        happiness_area,
+    );
+    frame.render_widget(
+        gauge(
+            format!("Creativity {}%", game.player.creativity),
+            game.player.creativity,
+            scale_color(game.player.creativity, true),
+        ),
+        creativity_area,
     );
 
     let mut warnings: Vec<Line> = Vec::new();

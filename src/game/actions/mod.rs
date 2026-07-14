@@ -21,7 +21,7 @@ impl Game {
             GameAction::Practice => self.action_practice(),
             GameAction::RecordSingle { pressing } => self.action_record_single(pressing, rng),
             GameAction::RecordAlbum { pressing } => self.action_record_album(pressing, rng),
-            GameAction::Gig(venue_index) => self.action_play_gig(venue_index),
+            GameAction::Gig(venue_index) => self.action_play_gig(venue_index, rng),
             GameAction::GoOnTour(region_index) => self.action_go_on_tour(region_index, rng),
             GameAction::TakeBreak => self.action_take_break(),
             GameAction::VisitDoctor => self.action_visit_doctor(),

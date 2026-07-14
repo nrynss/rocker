@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Wrap},
 };
 
-use crate::data::{calculate_weeks_to_years_months, constants, format_money};
+use crate::data::{calculate_weeks_to_years_months, format_money};
 
 use crate::ui::app::App;
 
@@ -13,14 +13,11 @@ use super::{ACCENT, centered_rect};
 
 pub(super) fn draw_game_over(frame: &mut Frame, app: &App) {
     let game = &app.game;
-    let won = game.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
-        && game.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize;
 
-    let (title, color) = if won {
-        (" 🌟 YOU'RE A ROCKSTAR 🌟 ", Color::Green)
-    } else {
-        (" GAME OVER ", ACCENT)
-    };
+    // Game-over screen shows only death, broke, or walked-away endings.
+    // Rockstar status no longer ends the game; the milestone is logged in gameplay.
+    let title = " GAME OVER ";
+    let color = ACCENT;
 
     let area = centered_rect(64, 60, frame.area());
     let block = Block::bordered()

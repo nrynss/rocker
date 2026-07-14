@@ -3,7 +3,10 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::ReleaseType;
-use crate::game::{BREAK_WEEKS, Game, GameAction, PRESSING_TIERS};
+use crate::game::{
+    BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
+    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
+};
 
 use super::render;
 
@@ -71,6 +74,9 @@ pub enum Screen {
         release_type: ReleaseType,
         selected: usize,
     },
+    TourReport {
+        scroll: usize,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -80,6 +86,7 @@ pub enum MenuKind {
     Deals,
     SupportTour,
     Charts,
+    TourReport,
     Marketing,
     Save,
     Load,
@@ -169,67 +176,78 @@ impl App {
             MenuEntry {
                 hotkey: '1',
                 label: "Laze Around",
-                detail: "+energy, -stress".into(),
+                detail: "-stress, +creativity".into(),
                 enabled: true,
                 kind: MenuKind::Action(GameAction::LazeAround),
             },
             MenuEntry {
                 hotkey: '2',
                 label: "Write Songs",
-                detail: if game.player.energy < 20 {
-                    "too tired".into()
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
                 } else {
                     "1-3 new songs".into()
                 },
-                enabled: game.player.energy >= 20,
+                enabled: game.player.stress < 90,
                 kind: MenuKind::Action(GameAction::WriteSongs),
             },
             MenuEntry {
                 hotkey: '3',
                 label: "Practice",
-                detail: if game.player.energy < 15 {
-                    "too tired".into()
+                detail: if game.player.stress >= STUDIO_STRESS_BLOCK {
+                    "too stressed".into()
                 } else {
                     "+2 band skill".into()
                 },
-                enabled: game.player.energy >= 15,
+                enabled: game.player.stress < STUDIO_STRESS_BLOCK,
                 kind: MenuKind::Action(GameAction::Practice),
             },
             MenuEntry {
                 hotkey: '4',
                 label: "Record Single",
-                detail: if songs == 0 {
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
+                } else if songs == 0 {
                     "no songs written".into()
                 } else if signed {
                     format!("${} — label presses", single_cost)
                 } else {
                     format!("${} + pressing", single_cost)
                 },
-                enabled: game.band.can_record_single() && game.player.can_afford(single_min),
+                enabled: game.player.stress < 90
+                    && game.band.can_record_single()
+                    && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
             },
             MenuEntry {
                 hotkey: '5',
                 label: "Record Album",
-                detail: if songs < constants::MIN_ALBUM_SONGS as usize {
+                detail: if game.player.stress >= 90 {
+                    "too stressed".into()
+                } else if songs < constants::MIN_ALBUM_SONGS as usize {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
                 } else if signed {
                     format!("${} — label presses", album_cost)
                 } else {
                     format!("${} + pressing", album_cost)
                 },
-                enabled: game.band.can_record_album() && game.player.can_afford(album_min),
+                enabled: game.player.stress < 90
+                    && game.band.can_record_album()
+                    && game.player.can_afford(album_min),
                 kind: MenuKind::RecordAlbum,
             },
             MenuEntry {
                 hotkey: '6',
                 label: "Play a Gig",
-                detail: if game.player.energy < 30 {
-                    "too tired".into()
+                detail: if game.player.stress >= GIG_STRESS_GUARD {
+                    "too stressed out".into()
+                } else if game.player.health < GIG_HEALTH_GUARD {
+                    "too unwell".into()
                 } else {
                     "venue picker".into()
                 },
-                enabled: game.player.energy >= 30,
+                enabled: game.player.stress < GIG_STRESS_GUARD
+                    && game.player.health >= GIG_HEALTH_GUARD,
                 kind: MenuKind::Gig,
             },
             MenuEntry {
@@ -237,12 +255,16 @@ impl App {
                 label: "Go on Tour",
                 detail: if game.band.fame < 25 {
                     "needs 25 fame".into()
-                } else if game.player.energy < 40 {
-                    "too tired".into()
+                } else if game.player.stress >= TOUR_STRESS_GUARD {
+                    "too stressed out".into()
+                } else if game.player.health < TOUR_HEALTH_GUARD {
+                    "too unwell".into()
                 } else {
                     "region picker".into()
                 },
-                enabled: game.band.fame >= 25 && game.player.energy >= 40,
+                enabled: game.band.fame >= 25
+                    && game.player.stress < TOUR_STRESS_GUARD
+                    && game.player.health >= TOUR_HEALTH_GUARD,
                 kind: MenuKind::GoOnTour,
             },
             MenuEntry {
@@ -306,6 +328,21 @@ impl App {
                 },
                 enabled: true,
                 kind: MenuKind::Charts,
+            },
+            MenuEntry {
+                hotkey: 'r',
+                label: "Tour Report…",
+                detail: match &game.last_tour_report {
+                    Some(report) => format!(
+                        "{} show{} · avg {}",
+                        report.rows.len(),
+                        if report.rows.len() == 1 { "" } else { "s" },
+                        report.avg_reception
+                    ),
+                    None => "no report yet".into(),
+                },
+                enabled: true,
+                kind: MenuKind::TourReport,
             },
             MenuEntry {
                 hotkey: 's',
@@ -415,6 +452,7 @@ impl App {
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
+            Screen::TourReport { .. } => self.handle_tour_report_key(key),
         }
     }
 }

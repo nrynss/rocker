@@ -1,14 +1,30 @@
 use serde::{Deserialize, Serialize};
 
+use super::constants;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Player {
     pub name: String,
     pub money: i32,
-    pub health: u8,            // 0-100
-    pub energy: u8,            // 0-100
-    pub stress: u8,            // 0-100
-    pub drug_addiction: u8,    // 0-100
-    pub alcohol_addiction: u8, // 0-100
+    pub health: u8, // 0-100
+    pub energy: u8, // 0-100 (v0.6: dormant — mechanic removed, field kept for save compat)
+    pub stress: u8, // 0-100
+    #[serde(default = "default_happiness")]
+    pub happiness: u8, // 0-100 (v0.6 §A)
+    #[serde(default = "default_creativity")]
+    pub creativity: u8, // 0-100 (v0.6 §A)
+    #[serde(default)]
+    pub laze_streak: u32, // consecutive weeks spent lazing (v0.6 §A)
+    pub drug_addiction: u8, // 0-100 (dormant — deferred to a later cycle)
+    pub alcohol_addiction: u8, // 0-100 (dormant — deferred to a later cycle)
+}
+
+fn default_happiness() -> u8 {
+    constants::DEFAULT_HAPPINESS
+}
+
+fn default_creativity() -> u8 {
+    constants::DEFAULT_CREATIVITY
 }
 
 impl Default for Player {
@@ -19,6 +35,9 @@ impl Default for Player {
             health: 100,
             energy: 100,
             stress: 0,
+            happiness: constants::DEFAULT_HAPPINESS,
+            creativity: constants::DEFAULT_CREATIVITY,
+            laze_streak: 0,
             drug_addiction: 0,
             alcohol_addiction: 0,
         }

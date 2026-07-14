@@ -10,7 +10,6 @@ fn accepting_a_support_tour_pays_and_advances_time() {
     let mut game = test_game();
     game.band.fame = 10;
     game.player.money = 500;
-    game.player.energy = 100;
     game.pending_support_offer = Some(SupportTourOffer {
         host_band: "Big Stars".to_string(),
         host_fame: 60,
@@ -29,7 +28,9 @@ fn accepting_a_support_tour_pays_and_advances_time() {
     assert_eq!(game.player.money, 1500);
     assert_eq!(game.week, week_before + 3);
     assert!(game.band.fame >= 16, "fame should include the offered gain");
-    assert_eq!(game.player.energy, 65);
+    // A support run is touring: per-week stress and health wear (§A).
+    assert_eq!(game.player.stress, 36, "3 weeks on the road at +12/week");
+    assert_eq!(game.player.health, 88, "3 weeks on the road at -4/week");
 }
 
 #[test]

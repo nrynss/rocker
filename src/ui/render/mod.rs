@@ -27,6 +27,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::Deals { .. } => modals::draw_deals_modal(frame, app),
                 Screen::SupportOffer => modals::draw_support_modal(frame, app),
                 Screen::Charts => modals::draw_charts_modal(frame, app),
+                Screen::TourReport { .. } => modals::draw_tour_report_modal(frame, app),
                 Screen::MarketingRelease { .. } | Screen::MarketingCampaign { .. } => {
                     modals::draw_marketing_modal(frame, app)
                 }
@@ -80,5 +81,61 @@ pub(crate) fn format_population(pop: u32) -> String {
         format!("{:.1}M", pop as f32 / 1_000_000.0)
     } else {
         format!("{}k", pop / 1000)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::{Game, ShowReport, TourReport};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    fn app_on_main() -> App {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Main;
+        app
+    }
+
+    /// The main screen (four bars, energy gone) and the tour report modal
+    /// (empty and populated) should render without panicking on an 80x24
+    /// terminal — the panel/modal smoke test called for by L4.
+    #[test]
+    fn main_screen_and_tour_report_render_without_panicking() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+
+        let mut app = app_on_main();
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // Empty state: no report yet.
+        app.screen = Screen::TourReport { scroll: 0 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // Populated state: a 20-show tour, scrolled to the last row.
+        let rows: Vec<ShowReport> = (0..20)
+            .map(|i| ShowReport {
+                week: 1 + i / 5,
+                venue_name: format!("Venue {i} (City {i})"),
+                verdict: ["rough", "solid", "great", "transcendent"][i as usize % 4].to_string(),
+                reception: 40 + (i as u8 * 3) % 60,
+                attendance: 300 + i * 10,
+                capacity: 500,
+                take: 1000 + i * 50,
+            })
+            .collect();
+        app.game.last_tour_report = Some(TourReport {
+            avg_reception: 65,
+            total_gross: rows.iter().map(|r| r.take).sum(),
+            fame_gained: 5,
+            rows,
+        });
+        app.screen = Screen::TourReport { scroll: 19 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 }

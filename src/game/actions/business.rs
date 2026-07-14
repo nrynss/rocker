@@ -130,15 +130,25 @@ impl Game {
         let Some(offer) = self.pending_support_offer.clone() else {
             return Err("Nobody has offered you a support slot.".to_string());
         };
-        if self.player.energy < 30 {
-            return Err("You're too exhausted to head out on the road!".to_string());
+        if self.player.stress >= TOUR_STRESS_GUARD {
+            return Err("You're too stressed to head out on the road!".to_string());
+        }
+        if self.player.health < TOUR_HEALTH_GUARD {
+            return Err("You're too unwell to head out on the road!".to_string());
         }
         self.pending_support_offer = None;
 
         self.player.earn_money(offer.pay);
-        self.player.energy = self.player.energy.saturating_sub(35);
-        self.player.stress = (self.player.stress + 20).min(constants::MAX_STRESS);
-        self.band.fame = (self.band.fame + offer.fame_gain).min(constants::MAX_FAME);
+        // A support run is touring: same weekly stress and wear as a headline tour.
+        let weeks = offer.weeks as u8;
+        self.player.stress = (self.player.stress
+            + constants::TOUR_STRESS_COST_PER_WEEK.saturating_mul(weeks))
+        .min(constants::MAX_STRESS);
+        self.player.health = self
+            .player
+            .health
+            .saturating_sub(constants::TOUR_HEALTH_COST_PER_WEEK.saturating_mul(weeks));
+        self.band.gain_fame(offer.fame_gain);
         self.week += offer.weeks;
         self.log(format!(
             "🎟️ Opened for {} for {} weeks — ${} and a taste of the big stage (fame +{}).",
@@ -146,7 +156,7 @@ impl Game {
         ));
 
         if rng.gen_bool(0.25) {
-            self.band.fame = (self.band.fame + 2).min(constants::MAX_FAME);
+            self.band.gain_fame(2);
             self.log("🔥 Their crowd adopted you — encores every night (+2 fame).");
         }
         Ok(())

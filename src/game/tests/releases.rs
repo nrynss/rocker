@@ -214,3 +214,55 @@ fn a_release_riding_the_era_outsells_one_against_it() {
         "identical records should sell by the era's tastes"
     );
 }
+
+#[test]
+fn post_launch_marketing_increases_catalog_tail_sales() {
+    let mut game = test_game();
+    game.band.fame = 30;
+    game.band.record_deal = None; // indie, so we can see raw income
+
+    // Create a release that has passed its launch window.
+    let mut release = test_release(1, ReleaseType::Single);
+    release.week_released = 0;
+    release.release_quality = 80;
+    release.copies_pressed = 10_000;
+    game.band.singles_released.push(release);
+
+    // Manually set the initial sales score (simulating post-launch window calculation).
+    // This needs to be high enough that the tail calculation produces > 10 score.
+    game.band.singles_released[0].initial_sales_score = 500;
+
+    // Advance to week 10 (well past the 4-week initial window).
+    game.week = 10;
+
+    // First pass: catalog income without marketing campaign.
+    game.process_music_releases_and_marketing();
+    let income_without_marketing = game.band.singles_released[0].total_income_generated;
+
+    // Reset income and copies sold for second test.
+    game.band.singles_released[0].total_income_generated = 0;
+    game.band.singles_released[0].copies_sold = 0;
+
+    // Now add an active marketing campaign and run week 11.
+    game.week = 11;
+    let campaign = music::ActiveMarketingCampaign {
+        campaign_type: music::MarketingCampaignType::BasicPress,
+        start_week: 11,
+        end_week: 15,
+        effectiveness_bonus: 10,
+    };
+    game.band.singles_released[0]
+        .active_marketing
+        .push(campaign);
+
+    game.process_music_releases_and_marketing();
+    let income_with_marketing = game.band.singles_released[0].total_income_generated;
+
+    // With the living tail model, post-launch marketing should increase catalog sales.
+    assert!(
+        income_with_marketing > income_without_marketing,
+        "catalog income should be higher with active marketing: {} vs {}",
+        income_with_marketing,
+        income_without_marketing
+    );
+}

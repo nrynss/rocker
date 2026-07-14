@@ -1,5 +1,19 @@
 # Future Plan — Musician Identity, Relationships & Solo/Band Architecture
 
+> **Since this plan was written, the v0.6 Life Cycle shipped independently**
+> (`CHANGELOG.md` 0.6.0, `docs/DESIGN-v0.6-life-cycle.md`) and already
+> covers some ground this document anticipated, in a different final shape:
+> the four-bar stat model (health/stress/happiness/creativity — §9.2's
+> quality multiplier, `0.8 + happiness/500`, shipped exactly as drafted
+> there), per-show reception/box-office/momentum, fame gravity, and
+> `average_member_skill()` / `reputation.live_performance` now growing
+> through Practice and playing shows (a stopgap precursor to this
+> document's ability-picker Practice rework in §2/§6 — current Practice
+> still does a flat, uniform bump per member, not per-ability training).
+> Addiction (§9.1), vacations (§9.3), and the manager (§9.4) remain fully
+> unbuilt and are next in line. The Musician struct itself (§1–§8) is
+> untouched — this remains the plan for that cycle.
+
 This document describes three interlocking systems that must be designed and
 built together. They replace HANDOFF task #5 (the flat `genre_ratings`
 HashMap approach) with a richer model where genre proficiency is **derived**
@@ -201,12 +215,12 @@ it has personality consequences (see §4).
 ```
 songwriter_skill = best songwriter in (player_musician + members)
 genre_score = band_genre_score(active_genre, player_musician, members)
-energy_bonus = existing energy/stress logic (unchanged)
+creativity_bonus = existing creativity/happiness logic from v0.6 §A (unchanged)
 chemistry_mult = see §4
 
 base = (songwriter_skill.songwriting * 0.6
       + genre_score * 0.3
-      + energy_bonus) * chemistry_mult
+      + creativity_bonus) * chemistry_mult
 quality = base + random_variation
 ```
 
@@ -422,18 +436,12 @@ feud mechanic. This avoids scope creep.
 
 ## §5 — Chart Hardening
 
-### No special eviction
+### No special eviction — ✅ already shipped
 
-Charts use **pure score-based lifecycle**:
-- `CHART_DECAY = 0.85` → 15% weekly score decay.
-- `CHART_FLOOR_SCORE = 25` → entries below this are dropped.
-- `CHART_SIZE = 10` → only top 10 kept.
-- Entries that never make the top 10 don't chart.
-- Entries of dead/disbanded bands decay normally — songs don't vanish
-  because the band broke up.
-
-No `is_player_bankrupt` check. No "evict if band not in active list."
-Everything exits by scoring below the floor.
+`src/game/world/charts.rs` already matches this exactly: `CHART_DECAY =
+0.85`, `CHART_FLOOR_SCORE = 25`, `CHART_SIZE = 10`, pure score-based
+lifecycle, no `is_player_bankrupt` or active-list eviction. Nothing to do
+here — noted for the next two subsections, which are NOT yet done.
 
 ### Player identity changes and charts
 
@@ -580,21 +588,23 @@ drain health weekly — and nothing else. In the original, drugs were a
 
 ### §9.2 — Happiness
 
-Stress is the week's pressure; happiness is the career's mood. Stored
-`happiness: u8` on `Player` (serde default 60), 0–100.
+**Partially shipped in v0.6** (`docs/DESIGN-v0.6-life-cycle.md` §A):
+`happiness: u8` on `Player` (serde default 60) exists, drains with
+stress, and the quality multiplier — `0.8 + happiness/500`, range
+0.8–1.0 — is already wired into songwriting and recording (`chemistry_mult`
+from §4 below is still a Musician-cycle addition on top of it). What v0.6
+did NOT build, still open:
 
-- **Drains:** the same action 3+ weeks running (−3/week — the grind), a
-  flop −10, broke −5/week, each idle-decay week −2.
-- **Gains:** charting (+12 at #1 down to +3 at #10), one-shot firsts
-  (first single / album / tour, +10 each), vacations (§9.3).
-- **Effects:** songwriting/recording quality multiplier
-  `0.8 + happiness/500` (range 0.8–1.0) — wire in during the §2 quality
-  rewrite alongside `chemistry_mult`. **Low happiness feeds addiction:**
-  below 30, craving costs double and DrugOffer's accept option reads as
-  self-medication. Together the two systems form the original's death
-  spiral: unhappy → using → no-shows → flops → unhappier.
+- **Charting happiness bonus** (+12 at #1 down to +3 at #10) and one-shot
+  firsts (first single / album / tour, +10 each) — v0.6's happiness gains
+  are only from great/transcendent shows and vacations-equivalent
+  (Take a Break); charting itself doesn't move happiness yet.
+- **Low happiness feeding addiction** (below 30, craving costs double,
+  DrugOffer reads as self-medication) — blocked on §9.1, which is
+  entirely unbuilt.
 - **Floor:** 4 consecutive weeks at 0 → a forced, unpaid month off
-  (auto-vacation). Not a game over — the game over is the overdose.
+  (auto-vacation) — not implemented; nothing currently reacts to
+  happiness bottoming out.
 
 ### §9.3 — Vacations
 
@@ -654,21 +664,6 @@ offer and never rests — must reliably die; and a `wellness` bot that
 vacations optimally — must survive but chart worse than the grinders.
 All new rolls draw from the existing action stream; all new fields take
 `#[serde(default)]`, with the save-compat test extended to cover them.
-
----
-
-## Relationship to HANDOFF tasks
-
-| HANDOFF Task | Status |
-|---|---|
-| #1 Seeded worldgen | ✅ DONE |
-| #3 Scene integration | ✅ DONE |
-| #5 Multi-genre | **SUPERSEDED** by this document (§1–§2). Do not implement the old `genre_ratings` HashMap. |
-| #6 Venue gigs | **SAFE to build now.** Venue infrastructure (picker, fame gates, earnings formula) doesn't conflict. Attendance formula will later multiply by `stage_presence` but the venue data model is stable. |
-| #7 Region tours | **SAFE to build now.** Same reasoning — tour infrastructure, regional fame, markets.json parsing are all stable. Earnings formula gets a `stage_presence` multiplier later, trivial to add. |
-| #8 Rejected deal poach | **SAFE to build now.** Pure wiring, zero conflict. |
-| #9 UI pickers/charts | **PARTIALLY SAFE.** Charts modal, venue picker, region picker, terminology sweep: safe. Setup flow and genre picker: deferred to §6 above. |
-| #10 Tests/balance/README | **DEFERRED** until after this refactor. |
 
 ---
 

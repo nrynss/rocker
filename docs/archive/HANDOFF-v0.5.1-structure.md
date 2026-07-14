@@ -1,6 +1,11 @@
+> **Archived record (v0.5.1) — historical reference only.** This cycle is
+> complete; do not claim tasks or follow the branch/claim protocol below.
+> The active coordination surface is `HANDOFF.md` at the repo root
+> (v0.6 Life Cycle).
+
 # Rocker — Structure Hardening Handoff (v0.5.1)
 
-> **Active cycle.** Pure structural refactor so the next feature cycle
+> **Cycle status at close.** Pure structural refactor so the next feature cycle
 > (Musician / FUTURE.md §1–§6) lands in small, owned files. **No gameplay
 > behavior changes.** No formula tuning. No Musician implementation yet.
 >
@@ -550,7 +555,7 @@ _Example:_
 - 2026-07-13 T2 done by pier-t2 (extract) + grok-t2-polish (land): 40 game tuning consts → `src/game/constants.rs`; data constants re-exported; `pub use constants::{PRESSING_TIERS, BREAK_WEEKS}`; uniform `use …constants::{self, *}` (or `use …constants` where only path form); clippy clean; committed to `struct/t4-genre`.
 - 2026-07-13 T3 done by antigravity on `struct/t4-genre`: `Game`, `GameAction`, `SupportTourOffer`, and core lifecycle/save/load logic moved to `core.rs`; `mod.rs` reduced to submodule definitions and re-exports; clippy clean.
 - 2026-07-13 T8 done by grok-struct-t8 on `struct/t4-genre`: `rng.rs` holds splitmix64 mixer + `world_rng_for_week` / `action_rng_for_week` + `Game::action_rng*`; salts stay in `constants.rs`; turn uses world builder. Determinism tests green.
-- 2026-07-14 T11 done by claude-t11 on `struct/t4-genre`. **Cycle close, cut as 0.5.1.** Board audit: T1–T10 + T12 all ✅ with real commit SHAs (verified via `git cat-file`); T8 (optional) done. Full suite green: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` → 42 passed / 2 ignored (same names as the 0.5.0 baseline). CHANGELOG 0.5.1 Internal added; `Cargo.toml`/`Cargo.lock` bumped 0.5.0 → 0.5.1. Archive of this file deferred to the human Musician-cycle trigger (step 4).
+- 2026-07-14 T11 done by claude-t11 on `struct/t4-genre`. **Cycle close, cut as 0.5.1.** Board audit: T1–T10 + T12 all ✅ with real commit SHAs (verified via `git cat-file`); T8 (optional) done. Full suite green: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` → 42 passed / 2 ignored (same names as the 0.5.0 baseline). CHANGELOG 0.5.1 Internal added; `Cargo.toml`/`Cargo.lock` bumped 0.5.0 → 0.5.1. At the time of this note, archiving was deferred to the human next-cycle trigger (step 4) — since done; this file is that archive.
 
 ### T11 line-count report (production `.rs`; `tests/` and `sim.rs` excluded)
 

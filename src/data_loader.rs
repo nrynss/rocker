@@ -142,6 +142,142 @@ pub struct TouringCosts {
     pub equipment_cost_modifier: f32,
 }
 
+// ============================================================================
+// Data-driven incidents (docs/DESIGN-v0.6-life-cycle.md §F). The pool lives in
+// `data/incidents.json`; nothing here is hardcoded in Rust. Selection (weighted
+// pick on the action stream) is in `game/events.rs`; application in
+// `game/events_apply.rs`.
+// ============================================================================
+
+/// One random incident: a weighted, condition-gated bundle of effect ranges
+/// plus its log line. Deserialized straight from `data/incidents.json`.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Incident {
+    pub id: String,
+    pub category: String,
+    pub weight: u32,
+    #[serde(default)]
+    pub conditions: IncidentConditions,
+    pub effects: IncidentEffects,
+    pub message: String,
+}
+
+/// When an incident is eligible. Every field is optional (omit or `null` = no
+/// constraint). `on_tour` is deliberately absent — there is no persistent
+/// on-tour state this cycle (§F).
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct IncidentConditions {
+    #[serde(default)]
+    pub min_fame: Option<u8>,
+    #[serde(default)]
+    pub max_fame: Option<u8>,
+    #[serde(default)]
+    pub signed: Option<bool>,
+}
+
+/// Inclusive `[lo, hi]` effect ranges, one per movable stat. An omitted field
+/// is a no-op (rolls 0, consuming no rng). Bars clamp 0–100; money is i32 and
+/// may go negative; fame gains are small and route through the comeback-aware
+/// path, losses saturate (see `events_apply.rs`).
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct IncidentEffects {
+    #[serde(default)]
+    pub stress: Option<[i32; 2]>,
+    #[serde(default)]
+    pub happiness: Option<[i32; 2]>,
+    #[serde(default)]
+    pub creativity: Option<[i32; 2]>,
+    #[serde(default)]
+    pub health: Option<[i32; 2]>,
+    #[serde(default)]
+    pub money: Option<[i32; 2]>,
+    #[serde(default)]
+    pub fame: Option<[i32; 2]>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct IncidentsData {
+    pub incidents: Vec<Incident>,
+}
+
+impl IncidentEffects {
+    /// The six effect channels in the fixed roll order, paired with their name
+    /// for validation and iteration.
+    pub fn ranges(&self) -> [(&'static str, Option<[i32; 2]>); 6] {
+        [
+            ("stress", self.stress),
+            ("happiness", self.happiness),
+            ("creativity", self.creativity),
+            ("health", self.health),
+            ("money", self.money),
+            ("fame", self.fame),
+        ]
+    }
+}
+
+impl Incident {
+    /// Whether this incident is eligible given the band's current fame and
+    /// whether it is signed to a label.
+    pub fn matches(&self, fame: u8, signed: bool) -> bool {
+        let c = &self.conditions;
+        if c.min_fame.is_some_and(|min| fame < min) {
+            return false;
+        }
+        if c.max_fame.is_some_and(|max| fame > max) {
+            return false;
+        }
+        if c.signed.is_some_and(|required| signed != required) {
+            return false;
+        }
+        true
+    }
+}
+
+impl IncidentsData {
+    /// Fail-fast structural validation (§F loader contract): a non-empty pool,
+    /// every `weight` ≥ 1, every effect range `lo ≤ hi`, and unique ids.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.incidents.is_empty() {
+            return Err("incidents.json: the incident list is empty".to_string());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for inc in &self.incidents {
+            if !seen.insert(inc.id.as_str()) {
+                return Err(format!(
+                    "incidents.json: duplicate incident id '{}'",
+                    inc.id
+                ));
+            }
+            if inc.weight < 1 {
+                return Err(format!(
+                    "incidents.json: incident '{}' has weight {} (must be ≥ 1)",
+                    inc.id, inc.weight
+                ));
+            }
+            for (name, range) in inc.effects.ranges() {
+                if let Some([lo, hi]) = range
+                    && lo > hi
+                {
+                    return Err(format!(
+                        "incidents.json: incident '{}' effect '{}' has lo {} > hi {}",
+                        inc.id, name, lo, hi
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The incidents eligible for the current game state, in file order. The
+    /// weighted pick among these rolls on the action stream in `events.rs`.
+    pub fn eligible_incidents(&self, fame: u8, signed: bool) -> Vec<&Incident> {
+        self.incidents
+            .iter()
+            .filter(|inc| inc.matches(fame, signed))
+            .collect()
+    }
+}
+
 #[derive(Default)]
 pub struct GameDataFiles {
     pub song_adjectives: Vec<String>,
@@ -157,6 +293,7 @@ pub struct GameDataFiles {
     pub timeline_data: TimelineData,
     pub record_labels_data: RecordLabelsData,
     pub markets_data: MarketsData,
+    pub incidents_data: IncidentsData,
     /// Tracery grammars assembled from the word lists plus the editable
     /// pattern files. None only if grammar construction failed.
     pub band_name_grammar: Option<tracery::Grammar>,
@@ -212,9 +349,16 @@ impl GameDataFiles {
             timeline_data: Self::load_json_file("data/timeline.json")?,
             record_labels_data: Self::load_json_file("data/record_labels.json")?,
             markets_data: Self::load_json_file("data/markets.json")?,
+            incidents_data: Self::load_json_file("data/incidents.json")?,
             band_name_grammar: None,
             song_title_grammar: None,
         };
+
+        // Fail fast on a malformed incident pool, in the style of the other
+        // loaders (§F): non-empty, weights ≥ 1, sane ranges, unique ids.
+        if let Err(msg) = files.incidents_data.validate() {
+            return Err(msg.into());
+        }
 
         let band_patterns =
             Self::load_pattern_file(BAND_NAME_PATTERNS_PATH, DEFAULT_BAND_NAME_PATTERNS)?;
@@ -377,6 +521,7 @@ impl GameDataFiles {
             "data/timeline.json",
             "data/record_labels.json",
             "data/markets.json",
+            "data/incidents.json",
         ];
 
         for file in &required_files {

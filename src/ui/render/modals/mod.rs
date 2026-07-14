@@ -5,6 +5,7 @@ mod deals;
 mod file;
 mod marketing;
 mod pickers;
+mod tour;
 
 pub(super) use charts::draw_charts_modal;
 pub(super) use deals::{draw_deals_modal, draw_support_modal};
@@ -13,3 +14,4 @@ pub(super) use marketing::draw_marketing_modal;
 pub(super) use pickers::{
     draw_pressing_picker_modal, draw_region_picker_modal, draw_venue_picker_modal,
 };
+pub(super) use tour::draw_tour_report_modal;

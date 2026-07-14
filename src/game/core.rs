@@ -12,6 +12,7 @@ use crate::game::events::EventManager;
 use crate::game::genre;
 use crate::game::music::{MarketingCampaignType, Release};
 use crate::game::player::Player;
+use crate::game::shows::TourReport;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{GameWorld, PotentialDealOffer};
 
@@ -70,18 +71,36 @@ pub struct Game {
     /// Consecutive weeks with no public activity (no shows, nothing on sale).
     #[serde(default)]
     pub idle_streak: u32,
+    /// Consecutive weeks fame has actually been decaying (past grace). The
+    /// ramp (−1, −2, −3, −4, then −5 flat) is keyed to this clock, not to
+    /// weeks-past-grace, so a shrinking grace tier mid-decline cannot skip
+    /// steps (§C — The ramp). Resets with `idle_streak`.
+    #[serde(default)]
+    pub decay_streak: u32,
     /// The last era-fit verdict the press reported on the band's genre
     /// (-1 cold, 0 unremarkable, +1 hot) — the news speaks only on change.
     #[serde(default)]
     pub genre_trend_reported: i8,
+    /// Consecutive weeks spent writing songs (v0.6 §A).
+    #[serde(default)]
+    pub writing_streak: u32,
     pub week: u32,
     pub game_over: bool,
     pub next_song_id: u32,
     pub next_release_id: u32,
     pub just_released_music: Vec<Release>, // Stores releases for their initial sales window
+    /// The most recent gig or tour's per-show report (design §B — the tour
+    /// report). A one-off gig produces the same single-row report a tour
+    /// would. Serde-defaulted so old saves load with no report on hand.
+    #[serde(default)]
+    pub last_tour_report: Option<TourReport>,
     /// Messages produced while processing the last turn, drained by the UI.
     #[serde(skip)]
     pub turn_log: Vec<String>,
+    /// Whether the band has reached rockstar status. Set once when thresholds
+    /// are met; the game continues indefinitely after.
+    #[serde(default)]
+    pub rockstar_achieved: bool,
 }
 
 impl Game {
@@ -112,13 +131,17 @@ impl Game {
             pending_support_offer: None,
             regional_fame: std::collections::HashMap::new(),
             idle_streak: 0,
+            decay_streak: 0,
             genre_trend_reported: 0,
+            writing_streak: 0,
             week: 1,
             game_over: false,
             next_song_id: 0,
             next_release_id: 0,
             just_released_music: Vec::new(),
+            last_tour_report: None,
             turn_log,
+            rockstar_achieved: false,
         })
     }
 
