@@ -27,8 +27,8 @@ pub mod world;
 mod tests;
 
 pub use constants::{
-    BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, PRESSING_TIERS, TOUR_HEALTH_GUARD,
-    TOUR_STRESS_GUARD,
+    BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, PRESSING_TIERS, STUDIO_STRESS_BLOCK,
+    TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
 };
 pub use core::{Game, GameAction, SupportTourOffer};
 pub use shows::{ShowReport, TourReport};

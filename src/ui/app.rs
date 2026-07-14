@@ -5,7 +5,7 @@ use crate::data::constants;
 use crate::game::music::ReleaseType;
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
-    TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
+    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
 };
 
 use super::render;
@@ -190,12 +190,12 @@ impl App {
             MenuEntry {
                 hotkey: '3',
                 label: "Practice",
-                detail: if game.player.energy < 15 {
-                    "too tired".into()
+                detail: if game.player.stress >= STUDIO_STRESS_BLOCK {
+                    "too stressed".into()
                 } else {
                     "+2 band skill".into()
                 },
-                enabled: game.player.energy >= 15,
+                enabled: game.player.stress < STUDIO_STRESS_BLOCK,
                 kind: MenuKind::Action(GameAction::Practice),
             },
             MenuEntry {

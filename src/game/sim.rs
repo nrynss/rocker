@@ -39,9 +39,6 @@ const WIN_TARGET: u32 = 12 * constants::WEEKS_PER_YEAR;
 const SWEEP_SEEDS: u64 = 60;
 const WIN_TARGET_SEEDS: u64 = 48;
 
-/// Energy the bots require before attempting the matching action.
-const GIG_ENERGY: u8 = 30;
-const WRITE_ENERGY: u8 = 20;
 /// Below this health a bot drops everything and looks after itself.
 const HEALTH_FLOOR: u8 = 40;
 /// At this stress a bot takes a real break.
@@ -229,7 +226,7 @@ fn studio_rat(game: &Game) -> GameAction {
             };
         }
     }
-    if game.player.energy >= WRITE_ENERGY {
+    if game.player.stress < STUDIO_STRESS_BLOCK {
         GameAction::WriteSongs
     } else {
         GameAction::LazeAround
@@ -241,7 +238,10 @@ fn studio_rat(game: &Game) -> GameAction {
 /// deal first), so `None` is fine there.
 fn indie_loop(game: &Game, pressing: Option<usize>) -> GameAction {
     // A support slot is exposure money can't buy — and it pays.
-    if game.pending_support_offer.is_some() && game.player.energy >= GIG_ENERGY {
+    if game.pending_support_offer.is_some()
+        && game.player.stress < TOUR_STRESS_GUARD
+        && game.player.health >= TOUR_HEALTH_GUARD
+    {
         return GameAction::AcceptSupportTour;
     }
     // Work the room while there's a record on the shelves.
@@ -267,7 +267,7 @@ fn indie_loop(game: &Game, pressing: Option<usize>) -> GameAction {
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
-        return if game.player.energy >= WRITE_ENERGY {
+        return if game.player.stress < STUDIO_STRESS_BLOCK {
             GameAction::WriteSongs
         } else {
             GameAction::LazeAround

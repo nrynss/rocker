@@ -145,10 +145,10 @@ impl Game {
     }
 
     pub(in crate::game) fn action_practice(&mut self) -> Result<(), String> {
-        if self.player.energy < 15 {
-            return Err("You're too tired to practice!".to_string());
+        if self.player.stress >= STUDIO_STRESS_BLOCK {
+            return Err("You're too stressed to focus on rehearsal!".to_string());
         }
-        self.player.energy -= 15;
+        self.player.stress = (self.player.stress + PRACTICE_STRESS_COST).min(constants::MAX_STRESS);
         self.band.skill = (self.band.skill + 2).min(constants::MAX_SKILL);
         let skill = self.band.skill;
         self.log(format!(

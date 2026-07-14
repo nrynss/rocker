@@ -197,7 +197,10 @@ pub(super) const DEFAULT_CREATIVITY: u8 = 50;
 // Writing and recording stress costs [tune], and the guard threshold.
 pub(super) const WRITE_STRESS_COST: u8 = 5;
 pub(super) const RECORD_STRESS_COST: u8 = 8;
-pub(super) const STUDIO_STRESS_BLOCK: u8 = 90;
+// Rehearsal is light studio work: cheapest stress cost of the week jobs [tune].
+pub(super) const PRACTICE_STRESS_COST: u8 = 4;
+// `pub` (not `pub(super)`): the practice menu entry in `ui/app.rs` reads it.
+pub const STUDIO_STRESS_BLOCK: u8 = 90;
 // Recording quality penalty threshold [tune].
 pub(super) const RECORDING_STRESS_PENALTY_THRESHOLD: u8 = 70;
 // Writing streak: fatigue kicks in on the 3rd+ consecutive week [tune].

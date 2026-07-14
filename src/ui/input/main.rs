@@ -82,17 +82,27 @@ impl App {
                 }
             }
             MenuKind::Gig => {
-                if self.game.player.energy < 30 {
-                    self.push_log(crate::ui::app::LogKind::Ui, "You're too tired to perform!");
+                if self.game.player.stress >= crate::game::GIG_STRESS_GUARD {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "You're too stressed out to perform!",
+                    );
+                } else if self.game.player.health < crate::game::GIG_HEALTH_GUARD {
+                    self.push_log(crate::ui::app::LogKind::Ui, "You're too unwell to perform!");
                 } else {
                     self.screen = Screen::VenuePicker { selected: 0 };
                 }
             }
             MenuKind::GoOnTour => {
-                if self.game.player.energy < 40 {
+                if self.game.player.stress >= crate::game::TOUR_STRESS_GUARD {
                     self.push_log(
                         crate::ui::app::LogKind::Ui,
-                        "You're too tired to go on tour!",
+                        "You're too stressed to go on tour!",
+                    );
+                } else if self.game.player.health < crate::game::TOUR_HEALTH_GUARD {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "You're too unwell to go on tour!",
                     );
                 } else if self.game.band.fame < 25 {
                     self.push_log(
