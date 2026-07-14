@@ -80,3 +80,118 @@ fn the_press_notices_a_genre_the_era_left_behind() {
         "an off-trend band should hear about it"
     );
 }
+
+#[test]
+fn rockstar_milestone_fires_once_and_game_continues() {
+    let mut game = test_game();
+    game.initialize_player("Test", "The Legends", genre::MusicGenre::Rock);
+
+    // Manually set up rockstar condition: fame >= 90, albums >= 5
+    game.band.fame = 90;
+    game.band.albums_released = vec![
+        test_release(1, ReleaseType::Album),
+        test_release(2, ReleaseType::Album),
+        test_release(3, ReleaseType::Album),
+        test_release(4, ReleaseType::Album),
+        test_release(5, ReleaseType::Album),
+    ];
+
+    // Process a turn — should trigger the milestone
+    let continue_playing = game
+        .process_turn(GameAction::LazeAround)
+        .expect("turn should succeed");
+
+    // Game should continue, not end
+    assert!(
+        continue_playing,
+        "game should continue after reaching rockstar"
+    );
+    assert!(!game.is_game_over(), "game_over should be false");
+    assert!(game.rockstar_achieved, "rockstar_achieved should be set");
+
+    // Check that the milestone log fired
+    let milestone_logs = game
+        .turn_log
+        .iter()
+        .filter(|line| line.contains("bona fide ROCKSTAR"))
+        .count();
+    assert_eq!(milestone_logs, 1, "milestone should log exactly once");
+
+    // Process another turn — milestone should NOT fire again
+    game.turn_log.clear();
+    let _ = game
+        .process_turn(GameAction::LazeAround)
+        .expect("second turn should succeed");
+
+    let second_milestone_logs = game
+        .turn_log
+        .iter()
+        .filter(|line| line.contains("bona fide ROCKSTAR"))
+        .count();
+    assert_eq!(second_milestone_logs, 0, "milestone should only fire once");
+}
+
+#[test]
+fn rockstar_achieved_flag_survives_save_load() {
+    let mut game = test_game();
+    game.initialize_player("Test", "The Legends", genre::MusicGenre::Rock);
+
+    // Set rockstar achieved
+    game.band.fame = 90;
+    game.band.albums_released = vec![
+        test_release(1, ReleaseType::Album),
+        test_release(2, ReleaseType::Album),
+        test_release(3, ReleaseType::Album),
+        test_release(4, ReleaseType::Album),
+        test_release(5, ReleaseType::Album),
+    ];
+    game.process_turn(GameAction::LazeAround)
+        .expect("turn should succeed");
+
+    assert!(game.rockstar_achieved, "flag should be set");
+
+    // Save to JSON
+    let json = serde_json::to_string(&game).expect("should serialize");
+
+    // Load from JSON
+    let loaded: Game = serde_json::from_str(&json).expect("should deserialize");
+
+    assert!(loaded.rockstar_achieved, "flag should survive save/load");
+}
+
+#[test]
+fn death_ending_still_works() {
+    let mut game = test_game();
+    game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
+
+    // Set up health = 0 to trigger death ending
+    game.player.health = 0;
+    game.process_turn(GameAction::LazeAround)
+        .expect("turn should succeed");
+
+    assert!(game.is_game_over(), "game should end at health 0");
+    let status = game.get_status_message();
+    assert!(status.contains("died"), "status should mention death");
+}
+
+#[test]
+fn broke_and_unknown_ending_still_works() {
+    let mut game = test_game();
+    game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
+
+    // Set up broke + unknown to trigger the broke-and-unknown ending
+    game.player.money = -100;
+    game.band.fame = 5; // Below 10
+    game.process_turn(GameAction::LazeAround)
+        .expect("turn should succeed");
+
+    assert!(
+        game.is_game_over(),
+        "game should end when broke and unknown"
+    );
+    let status = game.get_status_message();
+    assert!(
+        status.contains("broke"),
+        "status should mention being broke"
+    );
+}

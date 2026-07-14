@@ -86,6 +86,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         next_release_id: 0,
         just_released_music: Vec::new(),
         turn_log: Vec::new(),
+        rockstar_achieved: false,
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
@@ -294,7 +295,8 @@ fn label_loyalist(game: &Game) -> GameAction {
 /// How a simulated career ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Ending {
-    /// Fame >= 90 with five albums out: the win screen.
+    /// Rockstar achieved flag was set (fame >= 90 with ≥5 albums).
+    /// Game continues after this milestone; it's not an ending, but a tracking flag.
     Rockstar,
     Died,
     WentBroke,
@@ -302,17 +304,17 @@ enum Ending {
     StillGoing,
 }
 
-/// Mirrors `check_game_over` / `get_status_message` priority.
+/// Categorize the outcome: death/broke (hard endings), rockstar milestone (played to that point),
+/// or still going (neither ended nor achieved rockstar by horizon).
 fn ending_of(game: &Game) -> Ending {
-    if !game.is_game_over() {
-        return Ending::StillGoing;
-    }
     if game.player.health == 0 {
         Ending::Died
     } else if game.player.money < 0 && game.band.fame < 10 {
         Ending::WentBroke
-    } else {
+    } else if game.rockstar_achieved {
         Ending::Rockstar
+    } else {
+        Ending::StillGoing
     }
 }
 

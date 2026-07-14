@@ -82,6 +82,10 @@ pub struct Game {
     /// Messages produced while processing the last turn, drained by the UI.
     #[serde(skip)]
     pub turn_log: Vec<String>,
+    /// Whether the band has reached rockstar status. Set once when thresholds
+    /// are met; the game continues indefinitely after.
+    #[serde(default)]
+    pub rockstar_achieved: bool,
 }
 
 impl Game {
@@ -119,6 +123,7 @@ impl Game {
             next_release_id: 0,
             just_released_music: Vec::new(),
             turn_log,
+            rockstar_achieved: false,
         })
     }
 

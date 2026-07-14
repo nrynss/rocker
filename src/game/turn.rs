@@ -327,11 +327,17 @@ impl Game {
         if self.player.money < 0 && self.band.fame < 10 {
             self.game_over = true;
         }
-        if self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
+
+        // Rockstar milestone: one-time event when thresholds are reached
+        if !self.rockstar_achieved
+            && self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
             && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize
-        // Updated to check Vec length
         {
-            self.game_over = true;
+            self.rockstar_achieved = true;
+            self.log(format!(
+                "🌟 You've made it — {} is a bona fide ROCKSTAR. The game doesn't end here: legends are made in the second act.",
+                self.band.name
+            ));
         }
     }
 
@@ -344,10 +350,6 @@ impl Game {
             "You died from poor health!".to_string()
         } else if self.player.money < 0 && self.band.fame < 10 {
             "You went broke and nobody knows who you are!".to_string()
-        } else if self.band.fame >= constants::ROCKSTAR_FAME_THRESHOLD
-            && self.band.albums_released.len() >= constants::ROCKSTAR_ALBUM_THRESHOLD as usize
-        {
-            "Congratulations! You're now a ROCKSTAR!".to_string()
         } else if self.game_over {
             "You walked away from the rock life on your own terms.".to_string()
         } else {
