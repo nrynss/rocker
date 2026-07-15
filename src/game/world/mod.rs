@@ -384,6 +384,7 @@ mod tests {
             peak_chart_position: None,
             singles_cut: 0,
             certified: 0,
+            distribution_channel: None,
         }
     }
 

@@ -89,6 +89,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         last_tour_report: None,
         turn_log: Vec::new(),
         rockstar_achieved: false,
+        current_distribution_channel: music::DistributionChannel::default(),
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
@@ -1095,6 +1096,7 @@ fn sales_tail_income_by_quality_tier_sweep() {
             peak_chart_position: None,
             singles_cut: 0,
             certified: 0,
+            distribution_channel: None,
         }
     }
 

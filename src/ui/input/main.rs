@@ -138,6 +138,21 @@ impl App {
                     .unwrap_or(0);
                 self.screen = Screen::LifestylePicker { selected };
             }
+            MenuKind::RePress => {
+                if self.game.band.current_deal().is_some() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "Your label restocks the catalog automatically.",
+                    );
+                } else if self.game.repressable_releases().is_empty() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "Nothing is sold out or low on stock right now.",
+                    );
+                } else {
+                    self.screen = Screen::RePressPicker { selected: 0 };
+                }
+            }
             MenuKind::Quit => self.dispatch(GameAction::Quit),
         }
     }

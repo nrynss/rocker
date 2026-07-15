@@ -490,6 +490,30 @@ pub(super) const DEAL_MEMO_IDLE_WEEKS: u32 = 4;
 pub(super) const DEAL_MEMO_DEADLINE_WINDOW_WEEKS: u32 = 12;
 pub(super) const DEAL_MEMO_DEADLINE_STRESS_PER_WEEK: u8 = 3;
 
+// ============================================================================
+// M6: indie re-press + indie distribution tiers
+// (docs/DESIGN-v0.7-money-cycle.md §E-1 indie half, §E-3). Distribution
+// channel tables are index-aligned with `DistributionChannel::ALL`
+// (`music.rs`): Mail order & gigs, Regional distributor, National
+// distributor. Re-pressing itself reuses `PRESSING_TIERS` and
+// `pressing_cost` (M1/pre-existing) — nothing new to tune there.
+// ============================================================================
+
+/// Fame required to select each channel (design §E-3 table). Only the
+/// National gate is meaningfully tunable; Mail order/Regional are ungated
+/// by design (`0`). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FAME_GATE: [u8; 3] = [0, 0, 35];
+/// Fee charged at each release under this channel (design §E-3 table). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 400, 1_500];
+/// Reach floor: effective indie reach is `max(floor, current fame formula)`
+/// (design §E-3 table). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50];
+
+/// A release counts as eligible for an indie re-press once cumulative sales
+/// reach this fraction of the pressed run — "sold out (or low on stock)"
+/// (design §E-1). [tune]
+pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

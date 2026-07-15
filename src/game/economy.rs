@@ -1,7 +1,7 @@
 //! The money pipeline: recording and pressing costs, sales scoring,
 //! and the weekly release/catalog payout.
 
-use crate::game::music::{Release, ReleaseType};
+use crate::game::music::{DistributionChannel, Release, ReleaseType};
 
 use super::constants::{self, *};
 use super::*;
@@ -40,14 +40,33 @@ impl Game {
         (base_score * era_sales_modifier * genre_modifier * era_genre_modifier).max(0.0) as u32
     }
 
-    /// How much of a release's potential audience the band can actually reach.
-    /// A label brings its distribution network; an independent act is capped
-    /// by its own fame — a nobody pressing records sells them locally at best.
-    fn distribution_multiplier(&self) -> f32 {
-        match self.band.current_deal() {
-            Some(deal) => 0.5 + f32::from(deal.market_reach) / 100.0,
+    /// How much of a release's potential audience the band can actually
+    /// reach. A label brings its distribution network; an independent act is
+    /// capped by its own fame, floored by whatever channel it bought for
+    /// this release (design §E-3, M6: `max(channel floor, fame formula)`).
+    /// `channel` is ignored once signed — a label deal's `market_reach`
+    /// always wins.
+    fn distribution_multiplier(&self, channel: Option<DistributionChannel>) -> f32 {
+        Self::reach_for(
+            self.band.fame,
+            self.band.current_deal().map(|deal| deal.market_reach),
+            channel,
+        )
+    }
+
+    /// The pure math behind [`Game::distribution_multiplier`], taking
+    /// already-captured state instead of `&self` (M6): the sales-tail loop
+    /// in [`Game::process_music_releases_and_marketing`] holds a mutable
+    /// borrow of `self.band` per release and cannot call back into `&self`
+    /// methods, so it captures `fame`/`market_reach` once up front and calls
+    /// this directly for each release's own `distribution_channel`.
+    fn reach_for(fame: u8, market_reach: Option<u8>, channel: Option<DistributionChannel>) -> f32 {
+        match market_reach {
+            Some(reach) => 0.5 + f32::from(reach) / 100.0,
             None => {
-                INDIE_REACH_FLOOR + (f32::from(self.band.fame) / 100.0) * (1.0 - INDIE_REACH_FLOOR)
+                let indie_formula =
+                    INDIE_REACH_FLOOR + (f32::from(fame) / 100.0) * (1.0 - INDIE_REACH_FLOOR);
+                indie_formula.max(channel.unwrap_or_default().reach_floor())
             }
         }
     }
@@ -208,8 +227,9 @@ impl Game {
         sales_score: u32,
         release: &Release,
     ) -> (u32, u32, bool) {
-        let demand =
-            (sales_score as f32 * self.distribution_multiplier() * UNITS_PER_SCORE_POINT) as u32;
+        let demand = (sales_score as f32
+            * self.distribution_multiplier(release.distribution_channel)
+            * UNITS_PER_SCORE_POINT) as u32;
         let sold_out = release.copies_pressed > 0 && demand > release.copies_pressed;
         let units_sold = if sold_out {
             release.copies_pressed
@@ -506,7 +526,11 @@ impl Game {
             INDIE_INCOME_PER_COPY
         };
         let royalty_rate = self.band.current_deal().map(|deal| deal.royalty_rate);
-        let distribution = self.distribution_multiplier();
+        // M6: reach depends on each release's own distribution channel, so
+        // the scalar `distribution` this loop used to hoist is now computed
+        // per release via `Self::reach_for` — same reason `market_reach` (not
+        // a ready multiplier) is captured here rather than above.
+        let market_reach = self.band.current_deal().map(|deal| deal.market_reach);
         let fame = self.band.fame as f32;
         // Gross catalog royalty this week, pooled across the whole back
         // catalog. It cannot be paid out inside the loop below (which holds a
@@ -556,7 +580,12 @@ impl Game {
 
                     if ongoing_sales_score > 10 {
                         // The long tail moves a trickle of copies — and only
-                        // copies that still exist in the pressing.
+                        // copies that still exist in the pressing. Reach is
+                        // this release's own channel (M6), not a global
+                        // scalar — a Regional/National upgrade never
+                        // retroactively boosts older stock's tail.
+                        let distribution =
+                            Self::reach_for(fame as u8, market_reach, release.distribution_channel);
                         let wanted = (ongoing_sales_score as f32
                             * distribution
                             * UNITS_PER_SCORE_POINT) as u32

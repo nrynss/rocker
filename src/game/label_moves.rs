@@ -114,6 +114,9 @@ impl Game {
             peak_chart_position: None,
             singles_cut: 0,
             certified: 0,
+            // A label single-cut is always a signed act's release — channel
+            // is meaningless (reach is `market_reach`, M6 §E-3).
+            distribution_channel: None,
         };
 
         self.just_released_music.push(new_release);

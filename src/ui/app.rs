@@ -2,7 +2,7 @@ use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::data::constants;
-use crate::game::music::ReleaseType;
+use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
     STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD, TourRig,
@@ -83,11 +83,26 @@ pub enum Screen {
     PressingPicker {
         release_type: ReleaseType,
         selected: usize,
+        /// Distribution channel choice alongside the pressing run (design
+        /// §E-3, M6) — meaningful only while unsigned; signed releases never
+        /// reach this screen (`open_pressing_picker` dispatches straight
+        /// through).
+        channel: DistributionChannel,
     },
     TourReport {
         scroll: usize,
     },
     LifestylePicker {
+        selected: usize,
+    },
+    /// Which sold-out/low-stock release to re-press (design §E-1 indie
+    /// half, M6).
+    RePressPicker {
+        selected: usize,
+    },
+    /// The pressing-tier choice for a re-press, once the release is picked.
+    RePressTierPicker {
+        release_id: u32,
         selected: usize,
     },
 }
@@ -109,6 +124,8 @@ pub enum MenuKind {
     RecordSingle,
     RecordAlbum,
     Lifestyle,
+    /// Open the re-press picker (design §E-1 indie half, M6).
+    RePress,
 }
 
 pub struct MenuEntry {
@@ -173,18 +190,28 @@ impl App {
         let signed = game.band.current_deal().is_some();
         let single_cost = game.recording_cost(&ReleaseType::Single);
         let album_cost = game.recording_cost(&ReleaseType::Album);
-        // The cheapest pressing run, for affordability checks.
+        // The cheapest pressing run, for affordability checks. M6: also the
+        // currently-selected distribution channel's fee (§E-3) — Ok(0) while
+        // signed, and `plan_distribution` folds the fame-gate check in too,
+        // but here we just want the floor cost, not the error.
         let (single_min, album_min) = if signed {
             (single_cost, album_cost)
         } else {
+            let fee = game
+                .plan_distribution(game.current_distribution_channel)
+                .unwrap_or(0);
             (
-                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1),
-                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1),
+                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1) + fee,
+                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1) + fee,
             )
         };
         let songs = game.band.unreleased_songs.len();
         let offers = game.pending_deal_offers.len();
         let releases = game.just_released_music.len() + game.band.total_releases();
+        // M6 (§E-1 indie half): releases eligible for a player-initiated
+        // re-press right now — empty for a signed act (its label restocks
+        // on its own).
+        let repress_count = game.repressable_releases().len();
 
         let mut entries = vec![
             MenuEntry {
@@ -375,6 +402,23 @@ impl App {
                 kind: MenuKind::Lifestyle,
             },
             MenuEntry {
+                hotkey: 'p',
+                label: "Re-press…",
+                detail: if signed {
+                    "your label restocks automatically".into()
+                } else if repress_count == 0 {
+                    "nothing low on stock".into()
+                } else {
+                    format!(
+                        "{} release{} ready",
+                        repress_count,
+                        if repress_count == 1 { "" } else { "s" }
+                    )
+                },
+                enabled: !signed && repress_count > 0,
+                kind: MenuKind::RePress,
+            },
+            MenuEntry {
                 hotkey: 's',
                 label: "Save Game",
                 detail: String::new(),
@@ -505,6 +549,8 @@ impl App {
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
             Screen::TourReport { .. } => self.handle_tour_report_key(key),
             Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),
+            Screen::RePressPicker { .. } => self.handle_repress_picker_key(key),
+            Screen::RePressTierPicker { .. } => self.handle_repress_tier_picker_key(key),
         }
     }
 }

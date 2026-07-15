@@ -1,12 +1,13 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::data::format_money;
-use crate::game::music::ReleaseType;
+use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::game::{GameAction, PRESSING_TIERS, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
 
 impl App {
-    /// A signed band's label decides the run; an indie band picks one.
+    /// A signed band's label decides the run; an indie band picks one — and,
+    /// while unsigned, a distribution channel alongside it (design §E-3, M6).
     pub(crate) fn open_pressing_picker(&mut self, release_type: ReleaseType) {
         if self.game.band.current_deal().is_some() {
             let action = match release_type {
@@ -18,6 +19,7 @@ impl App {
             self.screen = Screen::PressingPicker {
                 release_type,
                 selected: 0,
+                channel: self.game.current_distribution_channel,
             };
         }
     }
@@ -26,6 +28,7 @@ impl App {
         let Screen::PressingPicker {
             release_type,
             selected,
+            channel,
         } = self.screen
         else {
             return;
@@ -38,15 +41,55 @@ impl App {
                 self.screen = Screen::PressingPicker {
                     release_type,
                     selected,
+                    channel,
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::PressingPicker {
                     release_type,
                     selected: (selected + 1) % count,
+                    channel,
+                };
+            }
+            // M6 (§E-3): cycle the distribution channel independently of the
+            // pressing tier, same left/right-for-the-second-axis convention
+            // as the tour booking picker's rig/length split.
+            KeyCode::Left | KeyCode::Char('h') => {
+                let idx = channel
+                    .ordinal()
+                    .checked_sub(1)
+                    .unwrap_or(DistributionChannel::ALL.len() - 1);
+                self.screen = Screen::PressingPicker {
+                    release_type,
+                    selected,
+                    channel: DistributionChannel::ALL[idx],
+                };
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                let idx = (channel.ordinal() + 1) % DistributionChannel::ALL.len();
+                self.screen = Screen::PressingPicker {
+                    release_type,
+                    selected,
+                    channel: DistributionChannel::ALL[idx],
                 };
             }
             KeyCode::Enter => {
+                if !channel.is_available(self.game.band.fame) {
+                    self.push_log(
+                        LogKind::Error,
+                        format!(
+                            "❌ {} needs {} fame — you're not there yet.",
+                            channel.label(),
+                            channel.fame_gate()
+                        ),
+                    );
+                    return;
+                }
+                // Persist the choice (M6): read by `action_record_single`/
+                // `action_record_album` to charge this release's fee and
+                // stamp it onto the new `Release`, and remembered as the
+                // default next time this picker opens.
+                self.game.current_distribution_channel = channel;
                 self.screen = Screen::Main;
                 let action = match release_type {
                     ReleaseType::Single => GameAction::RecordSingle {
@@ -57,6 +100,76 @@ impl App {
                     },
                 };
                 self.dispatch(action);
+            }
+            _ => {}
+        }
+    }
+
+    /// Which sold-out/low-stock release to re-press (design §E-1 indie
+    /// half, M6). Enter drills into the tier picker for that one release.
+    pub(crate) fn handle_repress_picker_key(&mut self, key: KeyEvent) {
+        let Screen::RePressPicker { selected } = self.screen else {
+            return;
+        };
+        let releases = self.game.repressable_releases();
+        let count = releases.len();
+        if count == 0 {
+            self.screen = Screen::Main;
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                let selected = selected.checked_sub(1).unwrap_or(count - 1);
+                self.screen = Screen::RePressPicker { selected };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.screen = Screen::RePressPicker {
+                    selected: (selected + 1) % count,
+                };
+            }
+            KeyCode::Enter => {
+                let release_id = releases[selected.min(count - 1)].id;
+                self.screen = Screen::RePressTierPicker {
+                    release_id,
+                    selected: 0,
+                };
+            }
+            _ => {}
+        }
+    }
+
+    /// The pressing tier for a re-press, once the release is chosen.
+    pub(crate) fn handle_repress_tier_picker_key(&mut self, key: KeyEvent) {
+        let Screen::RePressTierPicker {
+            release_id,
+            selected,
+        } = self.screen
+        else {
+            return;
+        };
+        let count = PRESSING_TIERS.len();
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::RePressPicker { selected: 0 },
+            KeyCode::Up | KeyCode::Char('k') => {
+                let selected = selected.checked_sub(1).unwrap_or(count - 1);
+                self.screen = Screen::RePressTierPicker {
+                    release_id,
+                    selected,
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.screen = Screen::RePressTierPicker {
+                    release_id,
+                    selected: (selected + 1) % count,
+                };
+            }
+            KeyCode::Enter => {
+                self.screen = Screen::Main;
+                self.dispatch(GameAction::RePress {
+                    release_id,
+                    pressing: Some(selected),
+                });
             }
             _ => {}
         }

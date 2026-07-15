@@ -12,7 +12,7 @@ use ratatui::{
 use crate::data::format_money;
 use crate::game::PRESSING_TIERS;
 use crate::game::TourRig;
-use crate::game::music::ReleaseType;
+use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::ui::app::{App, Screen};
 
 use super::super::{centered_rect, format_population};
@@ -68,23 +68,45 @@ pub(crate) fn draw_venue_picker_modal(frame: &mut Frame, app: &App) {
     frame.render_stateful_widget(list, area, &mut state);
 }
 
+/// The pressing-run picker, extended (design §E-3, M6) with a distribution
+/// channel choice alongside it — mirrors the tour booking picker's
+/// rig-on-↑↓/length-on-←→ split (`draw_tour_booking_picker_modal`). The
+/// channel row is only shown while unsigned; the label decides both pressing
+/// and reach for a signed act, and never reaches this screen.
 pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     let Screen::PressingPicker {
         release_type,
         selected,
+        channel,
     } = app.screen
     else {
         return;
     };
-    let area = centered_rect(72, 40, frame.area());
+    let signed = app.game.band.current_deal().is_some();
+    let fee = if signed { 0 } else { channel.fee() };
+
+    let kind = match release_type {
+        ReleaseType::Single => "Single",
+        ReleaseType::Album => "Album",
+    };
+    let area = centered_rect(78, 56, frame.area());
     frame.render_widget(Clear, area);
+    let block = Block::bordered()
+        .title(format!(" 📀 Press the {} ", kind))
+        .title_bottom(" ↑↓ pressing run · ←→ distribution · Enter record · Esc cancel ");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let [tiers_area, channel_area] =
+        Layout::vertical([Constraint::Min(6), Constraint::Length(6)]).areas(inner);
 
     let recording = app.game.recording_cost(&release_type);
     let items: Vec<ListItem> = PRESSING_TIERS
         .iter()
         .map(|(name, copies)| {
             let pressing = app.game.pressing_cost(&release_type, *copies);
-            let affordable = app.game.player.can_afford(recording + pressing);
+            let total = recording + pressing + fee;
+            let affordable = app.game.player.can_afford(total);
             let style = if affordable {
                 Style::new().fg(Color::White)
             } else {
@@ -94,26 +116,156 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
                 Span::styled(format!("{:<14}", name), style.bold()),
                 Span::styled(format!("  {:>6} copies", copies), style),
                 Span::styled(format!("  Pressing: {:<8}", format_money(pressing)), style),
+                Span::styled(format!("  Total: {:<8}", format_money(total)), style),
+            ]))
+        })
+        .collect();
+    let list = List::new(items)
+        .block(Block::default().title("Pressing run"))
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(list, tiers_area, &mut state);
+
+    if signed {
+        frame.render_widget(
+            Paragraph::new(vec![
+                Line::from("Distribution"),
+                Line::styled(
+                    "  Your label's network handles reach — no channel to choose.",
+                    Style::new().fg(Color::DarkGray),
+                ),
+            ]),
+            channel_area,
+        );
+        return;
+    }
+
+    let fame = app.game.band.fame;
+    let channel_lines: Vec<Line> = DistributionChannel::ALL
+        .iter()
+        .map(|&c| {
+            let locked = !c.is_available(fame);
+            let is_selected = c == channel;
+            let mut style = if locked {
+                Style::new().fg(Color::DarkGray)
+            } else {
+                Style::new().fg(Color::White)
+            };
+            if is_selected {
+                style = style.add_modifier(Modifier::REVERSED);
+            }
+            let gate = if locked {
+                format!(" 🔒 needs fame {}", c.fame_gate())
+            } else {
+                String::new()
+            };
+            Line::styled(
+                format!(
+                    " {:<22} fee {:<7} reach floor {:<5.2}{}",
+                    c.label(),
+                    format_money(c.fee()),
+                    c.reach_floor(),
+                    gate
+                ),
+                style,
+            )
+        })
+        .collect();
+    frame.render_widget(
+        Paragraph::new(
+            std::iter::once(Line::from("Distribution"))
+                .chain(channel_lines)
+                .collect::<Vec<_>>(),
+        ),
+        channel_area,
+    );
+}
+
+/// Which sold-out/low-stock release to re-press (design §E-1 indie half,
+/// M6).
+pub(crate) fn draw_repress_picker_modal(frame: &mut Frame, app: &App) {
+    let Screen::RePressPicker { selected } = app.screen else {
+        return;
+    };
+    let area = centered_rect(74, 50, frame.area());
+    frame.render_widget(Clear, area);
+
+    let releases = app.game.repressable_releases();
+    let items: Vec<ListItem> = releases
+        .iter()
+        .map(|release| {
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<28}", release.name), Style::new().bold()),
                 Span::styled(
                     format!(
-                        "  Total with studio: {:<8}",
-                        format_money(recording + pressing)
+                        "  {:>7} / {:<7} sold",
+                        release.copies_sold, release.copies_pressed
                     ),
-                    style,
+                    Style::new(),
                 ),
             ]))
         })
         .collect();
 
-    let kind = match release_type {
-        ReleaseType::Single => "Single",
-        ReleaseType::Album => "Album",
-    };
     let list = List::new(items)
         .block(
             Block::bordered()
-                .title(format!(" 📀 Press the {} — choose your run ", kind))
-                .title_bottom(" Enter record · Esc cancel "),
+                .title(" 🏭 Re-press — choose a release ")
+                .title_bottom(" Enter choose run · Esc close "),
+        )
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+/// The pressing tier for a re-press, once the release is chosen (design
+/// §E-1 indie half, M6) — the same tiers/costs as the initial pressing
+/// picker, minus the recording cost (there's no re-recording to top up a
+/// run).
+pub(crate) fn draw_repress_tier_picker_modal(frame: &mut Frame, app: &App) {
+    let Screen::RePressTierPicker {
+        release_id,
+        selected,
+    } = app.screen
+    else {
+        return;
+    };
+    let release_type = app
+        .game
+        .band
+        .singles_released
+        .iter()
+        .chain(app.game.band.albums_released.iter())
+        .find(|r| r.id == release_id)
+        .map(|r| r.release_type)
+        .unwrap_or(ReleaseType::Single);
+
+    let area = centered_rect(72, 40, frame.area());
+    frame.render_widget(Clear, area);
+
+    let items: Vec<ListItem> = PRESSING_TIERS
+        .iter()
+        .map(|(name, copies)| {
+            let pressing = app.game.pressing_cost(&release_type, *copies);
+            let affordable = app.game.player.can_afford(pressing);
+            let style = if affordable {
+                Style::new().fg(Color::White)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<14}", name), style.bold()),
+                Span::styled(format!("  {:>6} copies", copies), style),
+                Span::styled(format!("  Cost: {:<8}", format_money(pressing)), style),
+            ]))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::bordered()
+                .title(" 🏭 Choose a fresh pressing run ")
+                .title_bottom(" Enter press · Esc back "),
         )
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
     let mut state = ListState::default().with_selected(Some(selected));

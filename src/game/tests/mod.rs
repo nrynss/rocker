@@ -22,6 +22,7 @@ mod label_moves;
 mod lifestyle;
 mod recoupment;
 mod releases;
+mod repress;
 mod save_compat;
 mod shows;
 mod smoke;
@@ -50,6 +51,7 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         peak_chart_position: None,
         singles_cut: 0,
         certified: 0,
+        distribution_channel: None,
     }
 }
 

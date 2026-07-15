@@ -302,6 +302,7 @@ impl Game {
                 | GameAction::DeclineSupportTour
                 | GameAction::StartMarketingCampaign(_, _)
                 | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
+                | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
                 | GameAction::Quit
         );
 

@@ -11,7 +11,7 @@ use crate::game::band::{self, Band};
 use crate::game::constants;
 use crate::game::events::EventManager;
 use crate::game::genre;
-use crate::game::music::{MarketingCampaignType, Release};
+use crate::game::music::{DistributionChannel, MarketingCampaignType, Release};
 use crate::game::player::{LifestyleTier, Player};
 use crate::game::shows::TourReport;
 use crate::game::timeline::MusicTimeline;
@@ -43,6 +43,14 @@ pub enum GameAction {
     /// Move to a different lifestyle tier — always the player's call,
     /// instant, no week consumed (v0.7 design §B).
     ChangeLifestyle(LifestyleTier),
+    /// Re-press an already-released, sold-out (or low-stock) record — the
+    /// indie half of §E-1 (M6). Instant, no week consumed (`turn.rs`);
+    /// unavailable to a signed act, whose label restocks on its own
+    /// (`economy::label_auto_repress`, M5).
+    RePress {
+        release_id: u32,
+        pressing: Option<usize>,
+    },
     Quit,
 }
 
@@ -112,6 +120,17 @@ pub struct Game {
     /// are met; the game continues indefinitely after.
     #[serde(default)]
     pub rockstar_achieved: bool,
+    /// The player's currently chosen indie distribution channel (design
+    /// §E-3, M6). Not itself sales-authoritative — it's read at the moment
+    /// an unsigned release goes out, to charge that release's fee and stamp
+    /// its own frozen `Release::distribution_channel`, which is what sales
+    /// math actually reads. Exists so the picker can remember a choice
+    /// across sessions without adding a field to `GameAction::RecordSingle`/
+    /// `RecordAlbum` (both exercised verbatim by the determinism tests).
+    /// `#[serde(default)]` so pre-M6 saves start at Mail order & gigs —
+    /// the exact reach the old, single indie formula already gave.
+    #[serde(default)]
+    pub current_distribution_channel: DistributionChannel,
 }
 
 impl Game {
@@ -153,6 +172,7 @@ impl Game {
             last_tour_report: None,
             turn_log,
             rockstar_achieved: false,
+            current_distribution_channel: DistributionChannel::default(),
         })
     }
 
