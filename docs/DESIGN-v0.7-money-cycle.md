@@ -188,7 +188,8 @@ legend material.
 ## §E — Pressing & distribution with real costs
 
 Indie pressing already costs money (`PRESSING_TIERS`, `pressing_cost`).
-Three gaps remain:
+Five gaps remain — three in the money pipeline, two in the contract
+itself:
 
 ### E-1. Re-pressing (sold out is not a dead end)
 
@@ -201,16 +202,21 @@ release sells out or certifies (news line; cost recouped, see E-2).
 
 ### E-2. Label recoupment (the machine bills you first)
 
-The label's pressing and promo are currently free money. New:
-`RecordDeal` gains `unrecouped: i32` (`#[serde(default)]`). At each
-release the label's outlay — pressing (`label_pressing_size` ×
-per-copy cost [tune: $0.30/copy]) plus promo (promo push × $15 [tune])
-— is added to `unrecouped`. Royalty income pays it down **before**
-reaching the player; while `unrecouped > 0` the weekly log shows
-"⚖️ Label recouping: $X remaining." The classic hit-record-still-broke
-story, and the honest price of `market_reach`. Sim lab (M7) validates a
-signed mid-tier act still nets more than indie on equivalent records —
-the deal must stay worth signing, just no longer free.
+The label's pressing and promo are currently free money — and so is the
+**advance**: `action_sign_deal` (`business.rs:94`) banks it at signing
+and nothing ever claws it back. New: `RecordDeal` gains
+`unrecouped: i32` (`#[serde(default)]`). The **advance joins
+`unrecouped` at signing**; at each release the label's outlay —
+pressing (`label_pressing_size` × per-copy cost [tune: $0.30/copy])
+plus promo (promo push × $15 [tune]) — is added on top. Royalty income
+pays it down **before** reaching the player; while `unrecouped > 0` the
+weekly log shows "⚖️ Label recouping: $X remaining." Recoupment
+survives the deal: catalog released under the deal keeps paying at deal
+terms, and keeps paying the balance down, until it's cleared — the
+classic hit-record-still-broke story, and the honest price of the
+advance and `market_reach`. Sim lab (M7) validates a signed mid-tier
+act still nets more than indie on equivalent records over a full deal —
+worth signing, just no longer free.
 
 ### E-3. Indie distribution tiers (reach you can buy)
 
@@ -227,6 +233,64 @@ choice alongside the pressing picker:
 Effective reach = `max(channel floor, current indie formula)`. Fee due
 at release. A label deal still beats all of it on reach — but the indie
 path now has purchasable rungs.
+
+### E-4. The contract has a clock
+
+Today `fulfill_album_obligation` (`band.rs:240`) clears the deal the
+instant `albums_delivered >= albums_required` — and Independent and
+Boutique deals can require **one album**, so a band can sign, bank the
+advance, ship a single album, and walk free the same week. No real
+contract works like that.
+
+New fields on `RecordDeal` (all `#[serde(default)]`): `signed_week: u32`
+and `term_weeks: u16`, stamped at signing. Term by tier [tune]:
+
+| Tier | Albums (unchanged) | Term |
+|------|--------------------|------|
+| Boutique | 1–2 | 52–78 weeks |
+| Independent | 1–3 | 78–104 weeks |
+| Major | 2–4 | 104–156 weeks |
+
+- **Free agency comes at whichever is later**: all albums delivered
+  **and** the term served. Deliver early and you stay on the roster —
+  releases still go through the label at deal terms, single-cuts and
+  recoupment continue — with a news line: "🤝 Obligation delivered —
+  under contract with {label} until {date}."
+- **Breach**: term expires with albums still owed → the label drops
+  you. `reputation.commercial_success` −10 [tune], any `unrecouped`
+  balance is written off with a second news line (they remember), and
+  `deal_cooldown: u16` on `Band` (`#[serde(default)]`, 26 weeks [tune])
+  blocks new offers — same field name FUTURE §3 plans around, so the
+  Musician cycle inherits it.
+- **Renewal**: term ends fulfilled and recouped, with a decent sales
+  record → the label's re-sign offer arrives through the existing offer
+  stream with +2–4pp royalty [tune]. Loyalty pays; it's still an offer,
+  not an auto-sign.
+
+### E-5. The label's active hand
+
+The label spent money on you (E-2) and holds your time (E-4) — it acts
+like it. All rolls on the existing action stream; the v0.6 single-cut
+machinery (`label_moves.rs`) is the enforcement arm.
+
+- **Recoup pressure**: while `unrecouped > 0`, the single-cut chance
+  doubles [tune] and its idle-weeks gate drops 3 → 2 — a label in the
+  red gets antsy about product.
+- **Label memos** — the label *asks* before it *takes*. Weekly checks
+  while signed, each a news-log line, ~25% roll when its condition
+  holds [tune], one memo max per week:
+  - No unreleased songs and no album progress for 4+ weeks:
+    "📠 {label}: 'We need songs on tape. Write.'"
+  - Unreleased songs sitting idle 4+ weeks: "📠 {label}: 'Cut a single
+    from that material — this week, ideally.'" Ignored for 4 more weeks
+    with a cuttable album available → the existing single-cut fires at
+    boosted odds (they stop asking).
+  - Inside the final 12 weeks of the term with albums still owed:
+    "📠 {label}: 'The contract says {n} more album{s}. The clock says
+    {weeks} weeks.'" — and stress +3/week [tune] while this holds. The
+    deadline is real pressure, not flavor.
+- Memos are information, not compulsion: the player can ignore
+  everything and eat the breach. The game never forces the action.
 
 ---
 
@@ -250,7 +314,11 @@ Measured targets [tune until they hold]:
 - Van tour profitable at fame 15–35; full production profitable only
   at fame 75+.
 - Matched lifestyle upkeep: 10–25% of weekly income.
-- Recouped label act nets ≥ indie equivalent within 20 weeks of release.
+- Recouped label act nets ≥ indie equivalent over a full deal term.
+- A steadily-releasing bot never breaches; a bot that signs and then
+  only tours breaches and eats the penalty (the clock must have teeth,
+  but only for the negligent).
+- Median signed act recoups the advance before the term's halfway mark.
 
 Save-compat: every new field `#[serde(default)]`; the v0.4 fixture and
 `saves_from_v0_4_still_load` stay sacred; the three determinism tests
@@ -267,6 +335,10 @@ pass **unmodified**.
 - **Charts are pure score lifecycle at depth 40.** No special eviction,
   no player favoritism, determinism tests unmodified.
 - **Certifications derive from `copies_sold` only.**
+- **A contract binds both directions: albums owed AND a term served.**
+  Free agency at whichever comes later, never on the release beat.
+- **The label asks before it takes.** Memos precede single-cuts;
+  nothing the label does is ever hidden from the news log.
 - **Serde:** every new field `#[serde(default)]`; never rename
   serialized fields (`energy`, addiction fields stay dormant).
 - **World RNG is injected, not ambient.**

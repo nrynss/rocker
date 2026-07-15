@@ -3,7 +3,8 @@
 > Feature cycle: tour economics that quote instead of ambush, the
 > lifestyle ladder, charts with depth-40 stability and climbers, record
 > certifications (silver/gold/platinum), label recoupment, re-pressing,
-> and purchasable indie distribution.
+> purchasable indie distribution, and contracts with a real clock —
+> terms, breach, renewals, and a label that actively chases its money.
 > **Design is decided** — read `docs/DESIGN-v0.7-money-cycle.md` before
 > claiming anything. Numbers marked [tune] there are sim-lab candidates
 > validated in M7, not invented per-agent.
@@ -87,16 +88,19 @@ Commit prefix: `money(M#): <short description>`.
 | **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, move modal, broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ⬜ open | | money/v0.7 | |
 | **M3** | Charts that breathe: depth 40, ramp-in climbers, decay 0.92, peak tracking, calmer scene odds, movement news (design §C) | M | — | `src/game/world/charts.rs`, release-odds consts in `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + scroll input | ⬜ open | | money/v0.7 | |
 | **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ⬜ open | | money/v0.7 | |
-| **M5** | Label recoupment + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ⬜ open | | money/v0.7 | |
+| **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ⬜ open | | money/v0.7 | |
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ⬜ open | | money/v0.7 | |
-| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
+| **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, renewal offers, label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ⬜ open | | money/v0.7 | |
+| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
 | **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | money/v0.7 | |
 
 ### Known overlaps
 
 | Pair | Issue |
 |------|-------|
-| M4 → M5 → M6 | All touch `economy.rs` — serialized by prereqs. M4 owns only its new certification section; M5 the release-resolution/royalty paths; M6 the distribution/pressing helpers. |
+| M4 → M5 → M6/M9 | All touch `economy.rs` — serialized by prereqs. M4 owns only its new certification section; M5 the release-resolution/royalty paths; M6 the distribution/pressing helpers; M9 only the deal-completion call-site. |
+| M6 ∥ M9 | Both unblock on M5 and both touch `business.rs` — M6 owns RePress/distribution, M9 only the sign-action term-stamping lines. Rebase, keep diffs section-scoped. |
+| M5 ∥ M9 | M5 lands first (prereq). M9 extends the same `RecordDeal` struct — take fields, don't reshape M5's. |
 | M1 ∥ M6 | Both touch `pickers.rs` — M1 owns the tour/rig picker, M6 the pressing/distribution picker. Rebase, keep diffs picker-scoped. |
 | M1 ∥ M2 | Both add consts to `constants.rs` — separate sections, rebase. |
 | M2 ∥ M3 | Both add a modal/input wiring — `mod`/`pub use` lines minimum-diff, rebase. |
@@ -106,3 +110,8 @@ Commit prefix: `money(M#): <short description>`.
 
 - (cycle start) Board created from `docs/DESIGN-v0.7-money-cycle.md`;
   baseline verified green on `main` @ ad4563f.
+- (cycle start, same day) Scope amended before any claims: design §E
+  grew §E-4 (contract term) and §E-5 (active label), the advance now
+  joins M5's recoupment ledger, and M9 was added. Rationale: deals
+  cleared instantly on the release beat (`fulfill_album_obligation`),
+  1-album deals + unrecouped advances made sign-and-run free money.
