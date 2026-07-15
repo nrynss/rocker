@@ -1,5 +1,11 @@
 # Rocker — Money Cycle Handoff (v0.7)
 
+> **✅ CYCLE COMPLETE — all tasks M1–M10 done, closed by M8 as 0.7.0.**
+> Bumped in `Cargo.toml`, changelog written, board audited. The cycle PR
+> (#19, branch `money/v0.7`) is ready for the human's review and merge to
+> `main`; archive this board to `docs/archive/` after the merge (as prior
+> cycles did). Do not claim tasks below — the protocol is historical now.
+>
 > Feature cycle: tour economics that quote instead of ambush (rig ×
 > length × region), the lifestyle ladder (player-only moves), regional
 > Top 100 charts (UK/Europe/America/Japan territories, a Local scene
@@ -20,7 +26,9 @@
 > (§9.4) — do not implement, do not remove the dormant fields.
 
 Baseline at cycle start: **0.6.0**, `cargo test` → **102 passed,
-4 ignored**, clippy clean, fmt clean. Cycle closes as **0.7.0**.
+4 ignored**, clippy clean, fmt clean. **Closed as 0.7.0**, `cargo test`
+→ **182 passed, 4 ignored** (+ 5 ignored balance sweeps green), clippy
+`-D warnings` clean, fmt clean, determinism trio unmodified.
 
 ---
 
@@ -95,8 +103,8 @@ Commit prefix: `money(M#): <short description>`.
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ✅ done | sonnet-m6 | money/v0.7 | 6f9e58b |
 | **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ✅ done | sonnet-m9 | money/v0.7 | 196a17a |
 | **M10** | Regional sales wiring: player chart submissions via presence, demand as sum-over-regions in `calculate_release_outcome`, region-named news (design §C — presence + regional sales) | M | M3, M6 | player-side submission + demand sections of `src/game/economy.rs`, presence-related consts in `constants.rs` | ✅ done | opus-m10 | money/v0.7 | 3388e89 |
-| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9, M10 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
-| **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | money/v0.7 | |
+| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9, M10 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ✅ done | claude-m7 | money/v0.7 | 482f9b1 |
+| **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | claude-m8 | money/v0.7 | cycle close |
 
 ### Known overlaps
 
@@ -128,6 +136,20 @@ Commit prefix: `money(M#): <short description>`.
   gained a length picker (M1 now L), and lifestyle moves became
   strictly player-initiated with one-shot happiness swings
   (+10 up / −15 down / −20 eviction).
+- **M7 landed (`482f9b1`), done by the coordinator.** Added the three §F
+  bots + certification/breach/lifestyle metrics + a rig-profitability sweep,
+  then tuned to the §F targets over several sweep passes. Two [tune]
+  calibrations the sweeps forced (both surfaced to the human, who chose the
+  direction): (1) certifications were unreachable (records sold hundreds,
+  Silver is 50k) → UNITS_PER_SCORE_POINT 10→30 + SALES_INCOME_DIVISOR 3
+  (holds uncapped income) + Garage run 500→1500 (= 500×divisor, holds
+  capped income, so studio-rat bankruptcy went back to its 13/60 baseline);
+  signed acts now certify median 5/max 11. (2) Big rigs never profited
+  (full −$40k) → rig costs compressed + TOUR_GROSS_COEFFICIENT 0.06→0.15;
+  van profits at every fame, bigger rigs pay off for an established act.
+  Cert thresholds stayed 50k/150k/400k (human's call). balanced-indie still
+  wins 45/48; zero breaches; determinism trio unmodified. **182 passed, 4
+  ignored; 5 sweeps green; clippy/fmt clean.**
 - **M10 landed (`3388e89` + integration `9d5e8ad`).** Opus, cherry-picked
   clean. Review surfaced a design decision (escalated to the human): M10
   shipped `presence = reach × regional_fame` for all four territories with a
