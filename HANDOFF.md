@@ -94,7 +94,7 @@ Commit prefix: `money(M#): <short description>`.
 | **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ✅ done | opus-m5 | money/v0.7 | 494c302 |
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ✅ done | sonnet-m6 | money/v0.7 | 6f9e58b |
 | **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ✅ done | sonnet-m9 | money/v0.7 | 196a17a |
-| **M10** | Regional sales wiring: player chart submissions via presence, demand as sum-over-regions in `calculate_release_outcome`, region-named news (design §C — presence + regional sales) | M | M3, M6 | player-side submission + demand sections of `src/game/economy.rs`, presence-related consts in `constants.rs` | ⬜ open | | money/v0.7 | |
+| **M10** | Regional sales wiring: player chart submissions via presence, demand as sum-over-regions in `calculate_release_outcome`, region-named news (design §C — presence + regional sales) | M | M3, M6 | player-side submission + demand sections of `src/game/economy.rs`, presence-related consts in `constants.rs` | ✅ done | opus-m10 | money/v0.7 | 3388e89 |
 | **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9, M10 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
 | **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | money/v0.7 | |
 
@@ -128,6 +128,20 @@ Commit prefix: `money(M#): <short description>`.
   gained a length picker (M1 now L), and lifestyle moves became
   strictly player-initiated with one-shot happiness swings
   (+10 up / −15 down / −20 eviction).
+- **M10 landed (`3388e89` + integration `9d5e8ad`).** Opus, cherry-picked
+  clean. Review surfaced a design decision (escalated to the human): M10
+  shipped `presence = reach × regional_fame` for all four territories with a
+  0.1 UK home floor, which gated even home sales on touring. **Human chose
+  "reach carries home"** — the UK home market now rides distribution reach
+  directly; only Europe/America/Japan scale by regional fame (touring).
+  Applied in both first-run and catalog-tail presence; `UK_HOME_FLOOR`
+  removed. Net: a non-touring act sells at home ≈ pre-regional-charts,
+  touring adds the three foreign territories (the ~3–4× M4's thresholds
+  assume). **182 passed, 4 ignored**; all 4 sweeps green (balanced_indie
+  still wins by year 12); clippy/fmt clean; determinism trio unmodified.
+  **For M7:** M10's remaining [tune] knobs are `LOCAL_PRESENCE` (1.0) and
+  `REGIONAL_FAME_PRESENCE_DIVISOR` (100.0); sales are now tour-driven abroad,
+  and only `action_tour` (not gigs) writes `regional_fame`.
 - **M6 + M9 landed together (integration commit `839d8c2`).** Both Sonnet,
   parallel isolated worktrees, cherry-picked M9 then M6. Only `constants.rs`
   conflicted (both appended a section) plus one M6 test-literal needed M9's
