@@ -133,6 +133,111 @@ impl Game {
         (income, units_sold, sold_out)
     }
 
+    // ========================================================================
+    // Certifications (design §D): records certify off cumulative copies_sold.
+    // One-shot per level when crossing a new threshold. Awards fame, happiness,
+    // and commercial_success reputation.
+    // ========================================================================
+
+    /// Compute the certification level (0 = none, 1 = silver, 2 = gold,
+    /// 3 = platinum, 4+ = multi-platinum count) from copies_sold.
+    pub(crate) fn compute_certification_level(copies_sold: u32) -> u8 {
+        if copies_sold < CERT_SILVER_THRESHOLD {
+            0
+        } else if copies_sold < CERT_GOLD_THRESHOLD {
+            1
+        } else if copies_sold < CERT_PLATINUM_THRESHOLD {
+            2
+        } else {
+            // Platinum or multi-platinum: 3 + (additional 400k tiers)
+            let multiplatinum_count =
+                (copies_sold - CERT_PLATINUM_THRESHOLD) / CERT_MULTIPLATINUM_STEP;
+            3 + multiplatinum_count as u8
+        }
+    }
+
+    /// Compute certification awards for a release that has crossed a threshold.
+    /// Returns a tuple of (old_level, new_level) if a new level was crossed, or None.
+    pub(crate) fn compute_certification_awards(release: &Release) -> Option<(u8, u8)> {
+        let new_level = Self::compute_certification_level(release.copies_sold);
+        if new_level > release.certified {
+            Some((release.certified, new_level))
+        } else {
+            None
+        }
+    }
+
+    /// Apply the certification awards to the game state for a given level transition.
+    pub(crate) fn apply_certification_awards(
+        &mut self,
+        old_level: u8,
+        new_level: u8,
+        release_name: &str,
+        copies_sold: u32,
+    ) {
+        // Award bumps for each level from the old to the new (shouldn't normally skip).
+        // Index into the bumps arrays (silver=0, gold=1, platinum=2).
+        for level in (old_level + 1)..=new_level.min(3) {
+            let idx = (level - 1) as usize;
+            let level_name = match level {
+                1 => "SILVER",
+                2 => "GOLD",
+                3 => "PLATINUM",
+                _ => unreachable!(),
+            };
+
+            // Log the achievement.
+            self.log(format!(
+                "🏆 '{}' is certified {} — {} copies sold.",
+                release_name, level_name, copies_sold
+            ));
+
+            // Award bumps (capped fame, capped happiness [0-100], capped reputation).
+            if idx < CERT_FAME_BUMP.len() {
+                self.band.gain_fame(CERT_FAME_BUMP[idx]);
+            }
+            if idx < CERT_HAPPINESS_BUMP.len() {
+                self.player.happiness = self
+                    .player
+                    .happiness
+                    .saturating_add(CERT_HAPPINESS_BUMP[idx])
+                    .min(100);
+            }
+            if idx < CERT_COMMERCIAL_SUCCESS_BUMP.len() {
+                self.band.reputation.commercial_success = self
+                    .band
+                    .reputation
+                    .commercial_success
+                    .saturating_add(CERT_COMMERCIAL_SUCCESS_BUMP[idx])
+                    .min(100);
+            }
+        }
+
+        // If multi-platinum (level > 3), award platinum bumps for each additional tier.
+        if new_level > 3 {
+            let multiplatinum_count = new_level - 3;
+            for _ in 0..multiplatinum_count {
+                // Award platinum bumps again for each multi-platinum tier.
+                self.log(format!(
+                    "🏆 '{}' is certified PLATINUM — {} copies sold.",
+                    release_name, copies_sold
+                ));
+                self.band.gain_fame(CERT_FAME_BUMP[2]);
+                self.player.happiness = self
+                    .player
+                    .happiness
+                    .saturating_add(CERT_HAPPINESS_BUMP[2])
+                    .min(100);
+                self.band.reputation.commercial_success = self
+                    .band
+                    .reputation
+                    .commercial_success
+                    .saturating_add(CERT_COMMERCIAL_SUCCESS_BUMP[2])
+                    .min(100);
+            }
+        }
+    }
+
     pub(super) fn process_music_releases_and_marketing(&mut self) {
         let current_week = self.week;
 
@@ -171,6 +276,19 @@ impl Game {
                 release.total_income_generated += income;
                 release.copies_sold = units_sold;
                 self.player.earn_money(income);
+
+                // Check for certification milestones (§D).
+                if let Some((old_level, new_level)) = Self::compute_certification_awards(&release) {
+                    let release_name = release.name.clone();
+                    let copies_sold = release.copies_sold;
+                    release.certified = new_level;
+                    self.apply_certification_awards(
+                        old_level,
+                        new_level,
+                        &release_name,
+                        copies_sold,
+                    );
+                }
 
                 let verdict = match sales_score {
                     0..=99 => "flopped",
@@ -253,6 +371,9 @@ impl Game {
         let fame = self.band.fame as f32;
         let mut catalog_income_this_week: u32 = 0;
 
+        // Collect certifications to apply after the loop (to avoid borrow checker issues).
+        let mut certifications_to_award: Vec<(String, u8, u8, u32)> = Vec::new();
+
         for release_list in [
             &mut self.band.albums_released,
             &mut self.band.singles_released,
@@ -304,9 +425,28 @@ impl Game {
                         release.total_income_generated += ongoing_income;
                         self.player.earn_money(ongoing_income);
                         catalog_income_this_week += ongoing_income;
+
+                        // Check for certification milestones after each tail sale (§D).
+                        // We collect these and apply them after the loop to avoid borrow checker issues.
+                        if let Some((old_level, new_level)) =
+                            Self::compute_certification_awards(release)
+                        {
+                            certifications_to_award.push((
+                                release.name.clone(),
+                                old_level,
+                                new_level,
+                                release.copies_sold,
+                            ));
+                            release.certified = new_level;
+                        }
                     }
                 }
             }
+        }
+
+        // Apply all collected certifications.
+        for (release_name, old_level, new_level, copies_sold) in certifications_to_award {
+            self.apply_certification_awards(old_level, new_level, &release_name, copies_sold);
         }
 
         if catalog_income_this_week > 0 {

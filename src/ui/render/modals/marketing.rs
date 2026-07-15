@@ -11,6 +11,17 @@ use crate::game::music::MarketingCampaignType;
 use crate::ui::app::{App, Screen};
 
 use super::super::centered_rect;
+
+/// Format a certification badge for display. Returns empty string if no certification (level 0).
+fn format_cert_badge(certified: u8) -> String {
+    match certified {
+        0 => String::new(),
+        1 => "🥈".to_string(),
+        2 => "🥇".to_string(),
+        3 => "💠".to_string(),
+        n => format!("💠×{}", n - 3), // Multi-platinum: ×2, ×3, etc.
+    }
+}
 pub(crate) fn draw_marketing_modal(frame: &mut Frame, app: &App) {
     let area = centered_rect(72, 60, frame.area());
     frame.render_widget(Clear, area);
@@ -21,16 +32,38 @@ pub(crate) fn draw_marketing_modal(frame: &mut Frame, app: &App) {
             let items: Vec<ListItem> = targets
                 .iter()
                 .map(|t| {
+                    // Find the release to get its certification badge.
+                    let cert_badge = if let Some(release) =
+                        app.game.just_released_music.iter().find(|r| r.id == t.id)
+                    {
+                        format_cert_badge(release.certified)
+                    } else if let Some(release) =
+                        app.game.band.singles_released.iter().find(|r| r.id == t.id)
+                    {
+                        format_cert_badge(release.certified)
+                    } else if let Some(release) =
+                        app.game.band.albums_released.iter().find(|r| r.id == t.id)
+                    {
+                        format_cert_badge(release.certified)
+                    } else {
+                        String::new()
+                    };
+
                     let status = if t.pending {
                         Span::styled("upcoming ", Style::new().fg(Color::Yellow))
                     } else {
                         Span::styled("in stores", Style::new().fg(Color::Green))
                     };
-                    ListItem::new(Line::from(vec![
+
+                    let mut spans = vec![
                         Span::styled(format!("{:<30}", t.name), Style::new().bold()),
                         status,
                         Span::raw(format!("  buzz {}%", t.buzz)),
-                    ]))
+                    ];
+                    if !cert_badge.is_empty() {
+                        spans.push(Span::raw(format!("  {}", cert_badge)));
+                    }
+                    ListItem::new(Line::from(spans))
                 })
                 .collect();
             let list = List::new(items)

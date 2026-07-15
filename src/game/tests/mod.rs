@@ -11,6 +11,7 @@ use crate::game::world::PotentialDealOffer;
 use super::constants::{self, *};
 use super::*;
 
+mod certifications;
 mod deals;
 mod determinism;
 mod fame;
@@ -46,6 +47,7 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         copies_sold: 0,
         peak_chart_position: None,
         singles_cut: 0,
+        certified: 0,
     }
 }
 

@@ -56,6 +56,21 @@ pub(super) const LABEL_PRESSING_PER_FAME: u32 = 50;
 // by their own fame.
 pub(super) const INDIE_REACH_FLOOR: f32 = 0.15;
 
+// ============================================================================
+// Certifications (design §D): records certify off cumulative copies_sold.
+// Thresholds scaled for the regional sales model (§C).
+// ============================================================================
+
+pub(super) const CERT_SILVER_THRESHOLD: u32 = 50_000;
+pub(super) const CERT_GOLD_THRESHOLD: u32 = 150_000;
+pub(super) const CERT_PLATINUM_THRESHOLD: u32 = 400_000;
+pub(super) const CERT_MULTIPLATINUM_STEP: u32 = 400_000;
+
+// Award bumps for each certification level (silver/gold/platinum; multi-platinum repeats platinum).
+pub(super) const CERT_FAME_BUMP: &[u8] = &[2, 4, 6]; // Silver, Gold, Platinum
+pub(super) const CERT_HAPPINESS_BUMP: &[u8] = &[5, 8, 12]; // Silver, Gold, Platinum
+pub(super) const CERT_COMMERCIAL_SUCCESS_BUMP: &[u8] = &[3, 5, 8]; // Silver, Gold, Platinum
+
 // Support tours: bigger acts occasionally want you as their opener.
 pub(super) const SUPPORT_OFFER_MIN_FAME: u8 = 5;
 pub(super) const SUPPORT_OFFER_FAME_GAP: u8 = 10;

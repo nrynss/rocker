@@ -112,4 +112,8 @@ pub struct Release {
     /// Meaningful for albums; stays 0 on singles.
     #[serde(default)]
     pub singles_cut: u32,
+    /// Certification level (§D): 0 = none, 1 = silver, 2 = gold, 3 = platinum, 4+ = multi-platinum count.
+    /// Derived from cumulative copies_sold at certification thresholds.
+    #[serde(default)]
+    pub certified: u8,
 }

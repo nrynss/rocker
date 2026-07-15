@@ -216,6 +216,7 @@ impl Game {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -295,6 +296,7 @@ impl Game {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);

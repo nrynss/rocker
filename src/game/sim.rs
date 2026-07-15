@@ -1094,6 +1094,7 @@ fn sales_tail_income_by_quality_tier_sweep() {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
         }
     }
 
