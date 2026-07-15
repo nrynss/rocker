@@ -92,8 +92,8 @@ Commit prefix: `money(M#): <short description>`.
 | **M3** | Regional Top 100 charts: UK/Europe/America/Japan territories + Local scene board (UK subset, no double-count) + Worldwide aggregation of the four territories, `regions.rs`, presence-gated entry, territory filler (chart-only ambient releases), ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene territory spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ✅ done | sonnet-m3 | money/v0.7 | c52cca8 |
 | **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ✅ done | haiku-m4 | money/v0.7 | 64d9b0a |
 | **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ✅ done | opus-m5 | money/v0.7 | 494c302 |
-| **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ⬜ open | | money/v0.7 | |
-| **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ⬜ open | | money/v0.7 | |
+| **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ✅ done | sonnet-m6 | money/v0.7 | 6f9e58b |
+| **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ✅ done | sonnet-m9 | money/v0.7 | 196a17a |
 | **M10** | Regional sales wiring: player chart submissions via presence, demand as sum-over-regions in `calculate_release_outcome`, region-named news (design §C — presence + regional sales) | M | M3, M6 | player-side submission + demand sections of `src/game/economy.rs`, presence-related consts in `constants.rs` | ⬜ open | | money/v0.7 | |
 | **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9, M10 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
 | **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | money/v0.7 | |
@@ -128,6 +128,20 @@ Commit prefix: `money(M#): <short description>`.
   gained a length picker (M1 now L), and lifestyle moves became
   strictly player-initiated with one-shot happiness swings
   (+10 up / −15 down / −20 eviction).
+- **M6 + M9 landed together (integration commit `839d8c2`).** Both Sonnet,
+  parallel isolated worktrees, cherry-picked M9 then M6. Only `constants.rs`
+  conflicted (both appended a section) plus one M6 test-literal needed M9's
+  new `RecordDeal` fields. Review caught one M9 bug: legacy deals
+  (`term_weeks == 0`) took phantom deadline stress because `weeks_left`
+  saturated to 0 — gated on a real term, regression test added. **182
+  passed, 4 ignored**; all 4 balance sweeps green; clippy/fmt clean;
+  determinism trio unmodified. M6 review clean (its `current_distribution_channel`
+  side-channel deliberately keeps `GameAction::RecordSingle` unchanged so
+  the verbatim determinism test still compiles). **Downstream for M10:**
+  `distribution_multiplier` now takes the release's own channel and the tail
+  loop reaches per-release via `Self::reach_for(fame, market_reach, channel)` —
+  preserve that per-release floor in the sum-over-regions rewrite; reuse
+  `plan_distribution(channel)` for the fee/gate at any new submission site.
 - **M5 landed (`494c302`).** Opus, isolated worktree, cherry-picked clean.
   Review caught one structural bug and sent it back before integrating:
   `label_auto_repress` was wired only into the first-run block, but a label
