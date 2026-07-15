@@ -19,6 +19,7 @@ mod history;
 mod incidents;
 mod label_moves;
 mod lifestyle;
+mod recoupment;
 mod releases;
 mod save_compat;
 mod shows;
@@ -68,6 +69,10 @@ fn test_deal(market_reach: u8, royalty_rate: f32) -> band::RecordDeal {
         albums_required: 2,
         albums_delivered: 0,
         market_reach,
+        // M5: default helper deals owe nothing; recoupment tests set this
+        // explicitly (or sign through `action_accept_deal`, which seeds it
+        // from the advance).
+        unrecouped: 0,
     }
 }
 

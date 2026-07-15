@@ -89,6 +89,10 @@ impl Game {
             albums_required: offer.albums_required,
             albums_delivered: 0,
             market_reach: offer.original_label_data.market_reach,
+            // M5 (§E-2): the advance is not a gift. The player banks it now
+            // (below), but the same amount joins the recoupment ledger — every
+            // royalty dollar pays it back before the band sees a cent.
+            unrecouped: advance as i32,
         };
         self.band.sign_deal(new_deal);
         self.player.earn_money(advance);

@@ -100,6 +100,13 @@ impl Game {
         };
         let push = (deal.market_reach / 2).clamp(10, 45);
         let label_name = deal.label_name.clone();
+        // M5 (§E-2): the label's outlay on this release joins the recoupment
+        // ledger — the pressing run (the same run `plan_pressing` hands a
+        // signed release) at $/copy, plus the promo push at $/point. This is
+        // the accrual point for "at each release the label's outlay is added".
+        let pressing_copies = self.label_pressing_size(deal);
+        let outlay = (pressing_copies as f32 * LABEL_RECOUP_PRESSING_PER_COPY) as i32
+            + i32::from(push) * LABEL_RECOUP_PROMO_PER_PUSH;
         if let Some(release) = self.just_released_music.last_mut() {
             release.marketing_level_achieved = push;
             let release_name = release.name.clone();
@@ -108,6 +115,90 @@ impl Game {
                 label_name, release_name, push
             ));
         }
+        if let Some(deal) = self.band.record_deal.as_mut() {
+            deal.unrecouped = deal.unrecouped.saturating_add(outlay);
+        }
+    }
+
+    /// M5 (§E-2): route a signed act's royalty through the label's recoupment
+    /// ledger. While `unrecouped > 0` the royalty pays that balance down first
+    /// and only the remainder reaches the player; an unsigned act — or a
+    /// cleared ledger — passes the full amount straight through. Returns the
+    /// dollars that actually reach the player.
+    fn apply_recoupment(&mut self, royalty: u32) -> u32 {
+        let Some(deal) = self.band.record_deal.as_mut() else {
+            return royalty;
+        };
+        if deal.unrecouped <= 0 {
+            return royalty;
+        }
+        let applied = (royalty as i32).min(deal.unrecouped);
+        deal.unrecouped -= applied;
+        royalty - applied as u32
+    }
+
+    /// M5 (§E-1, label half): a signed act's release that sold out or crossed
+    /// a certification level makes the label press a fresh run — the same size
+    /// `plan_pressing` would hand it — restocking the catalog tail. The new
+    /// pressing cost joins the recoupment ledger (§E-2). The indie,
+    /// player-initiated re-press is M6's job, not this.
+    fn label_auto_repress(&mut self, release: &mut Release, reason: &str) {
+        let Some(deal) = self.band.current_deal() else {
+            return;
+        };
+        let fresh_run = self.label_pressing_size(deal);
+        if fresh_run == 0 {
+            return;
+        }
+        let label_name = deal.label_name.clone();
+        release.copies_pressed = release.copies_pressed.saturating_add(fresh_run);
+        let outlay = (fresh_run as f32 * LABEL_RECOUP_PRESSING_PER_COPY) as i32;
+        if let Some(deal) = self.band.record_deal.as_mut() {
+            deal.unrecouped = deal.unrecouped.saturating_add(outlay);
+        }
+        let release_name = release.name.clone();
+        self.log(format!(
+            "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
+            label_name, release_name, reason, fresh_run
+        ));
+    }
+
+    /// M5 (§E-1, label half — tail path): [`Game::label_auto_repress`] for a
+    /// release that already lives inside `self.band` (the catalog tail), so it
+    /// is addressed by id and each step takes a fresh, non-overlapping borrow
+    /// rather than a `&mut Release` that would conflict with `&mut self`.
+    fn label_auto_repress_by_id(&mut self, release_id: u32, reason: &str) {
+        let Some(deal) = self.band.current_deal() else {
+            return;
+        };
+        let fresh_run = self.label_pressing_size(deal);
+        let label_name = deal.label_name.clone();
+        if fresh_run == 0 {
+            return;
+        }
+        // Bump the release's pressing in place (albums first, then singles).
+        let mut release_name = None;
+        for list in [
+            &mut self.band.albums_released,
+            &mut self.band.singles_released,
+        ] {
+            if let Some(release) = list.iter_mut().find(|r| r.id == release_id) {
+                release.copies_pressed = release.copies_pressed.saturating_add(fresh_run);
+                release_name = Some(release.name.clone());
+                break;
+            }
+        }
+        let Some(release_name) = release_name else {
+            return;
+        };
+        let outlay = (fresh_run as f32 * LABEL_RECOUP_PRESSING_PER_COPY) as i32;
+        if let Some(deal) = self.band.record_deal.as_mut() {
+            deal.unrecouped = deal.unrecouped.saturating_add(outlay);
+        }
+        self.log(format!(
+            "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
+            label_name, release_name, reason, fresh_run
+        ));
     }
 
     /// Convert a sales score into copies moved and money in hand. Demand is
@@ -245,6 +336,14 @@ impl Game {
     pub(super) fn process_music_releases_and_marketing(&mut self) {
         let current_week = self.week;
 
+        // M5 (§E-2): snapshot the recoupment ledger so the weekly status line
+        // at the end can tell "still in the red" from "cleared this week".
+        let unrecouped_at_start = self
+            .band
+            .current_deal()
+            .map(|deal| deal.unrecouped)
+            .unwrap_or(0);
+
         let mut still_pending_release = Vec::new();
         for mut release in std::mem::take(&mut self.just_released_music) {
             if current_week >= release.week_released + INITIAL_SALES_WINDOW_WEEKS {
@@ -279,9 +378,14 @@ impl Game {
                     self.calculate_release_outcome(sales_score, &release);
                 release.total_income_generated += income;
                 release.copies_sold = units_sold;
-                self.player.earn_money(income);
+                // M5 (§E-2): royalties recoup the label's ledger before the
+                // player is paid. `total_income_generated` stays the record's
+                // gross earning; only what reaches the bank is netted here.
+                let to_player = self.apply_recoupment(income);
+                self.player.earn_money(to_player);
 
                 // Check for certification milestones (§D).
+                let mut certified_this_pass = false;
                 if let Some((old_level, new_level)) = Self::compute_certification_awards(&release) {
                     let release_name = release.name.clone();
                     let copies_sold = release.copies_sold;
@@ -292,6 +396,20 @@ impl Game {
                         &release_name,
                         copies_sold,
                     );
+                    certified_this_pass = true;
+                }
+
+                // M5 (§E-1, label half): a signed act's sold-out or freshly
+                // certified release makes the label press a fresh run (its
+                // cost joins the ledger, §E-2). Sold-out takes priority — a
+                // sold-out record can't also have certified this same pass
+                // without more stock, and a single fresh run answers both.
+                if self.band.current_deal().is_some() {
+                    if sold_out {
+                        self.label_auto_repress(&mut release, "sold out");
+                    } else if certified_this_pass {
+                        self.label_auto_repress(&mut release, "certified");
+                    }
                 }
 
                 let verdict = match sales_score {
@@ -373,10 +491,23 @@ impl Game {
         let royalty_rate = self.band.current_deal().map(|deal| deal.royalty_rate);
         let distribution = self.distribution_multiplier();
         let fame = self.band.fame as f32;
-        let mut catalog_income_this_week: u32 = 0;
+        // Gross catalog royalty this week, pooled across the whole back
+        // catalog. It cannot be paid out inside the loop below (which holds a
+        // mutable borrow of `self.band`), so M5's recoupment paydown and the
+        // player payout both happen once, after the loop.
+        let mut catalog_gross_this_week: u32 = 0;
 
         // Collect certifications to apply after the loop (to avoid borrow checker issues).
         let mut certifications_to_award: Vec<(String, u8, u8, u32)> = Vec::new();
+
+        // M5 (§E-1, label half — tail path): a signed release runs its stock
+        // down over months, and certification (§D) lands here on the tail, not
+        // on the first run. Record the ids that need a fresh label run — stock
+        // depleted, or a certification level crossed — and re-press them after
+        // the loop (which holds a mutable borrow of `self.band`). Without this
+        // a signed act caps out at one ~12k label run and can never certify.
+        let mut tail_stock_capped: Vec<u32> = Vec::new();
+        let mut tail_certified: Vec<u32> = Vec::new();
 
         for release_list in [
             &mut self.band.albums_released,
@@ -409,13 +540,28 @@ impl Game {
                     if ongoing_sales_score > 10 {
                         // The long tail moves a trickle of copies — and only
                         // copies that still exist in the pressing.
-                        let mut units = (ongoing_sales_score as f32
+                        let wanted = (ongoing_sales_score as f32
                             * distribution
                             * UNITS_PER_SCORE_POINT) as u32
                             / 5;
+                        let mut units = wanted;
+                        let mut stock_capped = false;
                         if release.copies_pressed > 0 {
-                            units = units
-                                .min(release.copies_pressed.saturating_sub(release.copies_sold));
+                            let remaining =
+                                release.copies_pressed.saturating_sub(release.copies_sold);
+                            if wanted >= remaining {
+                                // Demand met or outran the shelf: the record is
+                                // selling out. It sells what's left this week.
+                                units = remaining;
+                                stock_capped = true;
+                            }
+                        }
+                        // M5 (§E-1): a signed release whose tail demand is
+                        // throttled by depleted stock needs a fresh label run.
+                        // Indies never auto-repress — that's the player's M6
+                        // RePress. Deferred to after the loop (borrow).
+                        if royalty_rate.is_some() && stock_capped {
+                            tail_stock_capped.push(release.id);
                         }
                         if units == 0 {
                             continue;
@@ -427,8 +573,7 @@ impl Game {
                             None => gross,
                         };
                         release.total_income_generated += ongoing_income;
-                        self.player.earn_money(ongoing_income);
-                        catalog_income_this_week += ongoing_income;
+                        catalog_gross_this_week += ongoing_income;
 
                         // Check for certification milestones after each tail sale (§D).
                         // We collect these and apply them after the loop to avoid borrow checker issues.
@@ -442,6 +587,11 @@ impl Game {
                                 release.copies_sold,
                             ));
                             release.certified = new_level;
+                            // M5 (§E-1): a signed release that certifies on the
+                            // tail also triggers a fresh run (kept in stores).
+                            if royalty_rate.is_some() {
+                                tail_certified.push(release.id);
+                            }
                         }
                     }
                 }
@@ -453,11 +603,56 @@ impl Game {
             self.apply_certification_awards(old_level, new_level, &release_name, copies_sold);
         }
 
-        if catalog_income_this_week > 0 {
+        // M5 (§E-1, label half — tail path): re-press the signed releases that
+        // ran their stock down or certified this week, so a live hit stays in
+        // stores and can keep selling toward the next certification. Dedup so a
+        // release that did both gets one fresh run; certification carries the
+        // more informative reason. Certifications are applied first (above), so
+        // their fame bump sizes the fresh run — same ordering as the first-run
+        // path.
+        let mut planned_repress: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for id in tail_certified {
+            if planned_repress.insert(id) {
+                self.label_auto_repress_by_id(id, "certified");
+            }
+        }
+        for id in tail_stock_capped {
+            if planned_repress.insert(id) {
+                self.label_auto_repress_by_id(id, "sold out");
+            }
+        }
+
+        // M5 (§E-2): the week's catalog royalty recoups the label's ledger
+        // before it reaches the player. For an indie (or a cleared ledger) the
+        // whole pool passes through, so the trickle line reads as it always
+        // did; while in the red, $0 reaches the bank and the recoup line below
+        // carries the news instead.
+        let catalog_to_player = self.apply_recoupment(catalog_gross_this_week);
+        if catalog_to_player > 0 {
+            self.player.earn_money(catalog_to_player);
             self.log(format!(
                 "💵 Catalog royalties trickle in: ${}.",
-                catalog_income_this_week
+                catalog_to_player
             ));
+        }
+
+        // M5 (§E-2): one aggregated status line per week — never once per
+        // release. While the label is still owed, report the balance; the week
+        // it clears, say so once (the snapshot at the top of the pass tells a
+        // still-red ledger from one that just went even).
+        if let Some(deal) = self.band.current_deal() {
+            if deal.unrecouped > 0 {
+                self.log(format!(
+                    "⚖️ Label recouping: ${} remaining.",
+                    deal.unrecouped
+                ));
+            } else if unrecouped_at_start > 0 {
+                let label_name = deal.label_name.clone();
+                self.log(format!(
+                    "✅ {} has recouped in full — the royalties are yours now.",
+                    label_name
+                ));
+            }
         }
     }
 }

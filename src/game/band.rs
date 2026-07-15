@@ -53,6 +53,20 @@ pub struct RecordDeal {
     /// The label's distribution muscle (0-100), taken from the label data.
     #[serde(default = "default_market_reach")]
     pub market_reach: u8,
+    /// Label recoupment ledger (design §E-2). The label's outlay the player
+    /// must repay out of royalties before a cent reaches the band: the advance
+    /// at signing, then pressing + promo at every release under the deal.
+    /// Royalty income pays this down first; while it is positive the player
+    /// earns nothing from the label's sales. Old saves default to 0 (nothing
+    /// owed — a fully recouped or advance-free deal).
+    ///
+    /// NOTE (M9 boundary): recoupment is tracked for the *active* deal only.
+    /// The design says the balance survives the deal, but today
+    /// `fulfill_album_obligation` clears `record_deal` (and this ledger with
+    /// it) the moment the album count is met. Making recoupment outlive the
+    /// deal is M9's job (deal lifecycle); M5 deliberately does not touch it.
+    #[serde(default)]
+    pub unrecouped: i32,
 }
 
 fn default_market_reach() -> u8 {

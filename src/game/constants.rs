@@ -413,6 +413,22 @@ pub(super) const TOUR_FAME_WEEKS_EXPONENT: f32 = 0.7;
 pub(super) const TOUR_REGIONAL_FAME_GAIN_BASE: f32 = 7.0;
 pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 
+// ============================================================================
+// M5: Label recoupment + label auto-repress
+// (docs/DESIGN-v0.7-money-cycle.md §E-2 and the §E-1 label half). The label's
+// money is a loan, not a gift: the advance at signing plus pressing and promo
+// at every release accrue to the deal's `unrecouped` ledger, and royalty
+// income pays that balance down before any of it reaches the player.
+// ============================================================================
+
+/// Per-copy pressing cost the label books against recoupment (design §E-2:
+/// $0.30/copy). Applied to the label's pressing run at each release and to
+/// every auto-repress run (§E-1 label half). [tune]
+pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.30;
+/// Recoupment cost per point of promo push the label applies in
+/// `apply_label_promo` (design §E-2: $15/point). [tune]
+pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).
