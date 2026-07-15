@@ -429,6 +429,67 @@ pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.30;
 /// `apply_label_promo` (design §E-2: $15/point). [tune]
 pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
 
+// ============================================================================
+// M9: Deal lifecycle — term, breach, renewal window, active label
+// (docs/DESIGN-v0.7-money-cycle.md §E-4, §E-5). A contract binds both
+// directions: albums owed AND a term served — free agency at the later of
+// the two. The term expiring with albums still owed is a breach; a
+// recoupment-dependent renewal window opens before a healthy term's
+// expiry; the label leans harder on the single-cut machinery and sends
+// memos while it's owed money.
+// ============================================================================
+
+/// Contract term at signing, by tier — inclusive week ranges (design §E-4
+/// table: Boutique 52-78, Independent 78-104, Major 104-156). [tune]
+pub(super) const DEAL_TERM_BOUTIQUE_WEEKS: (u16, u16) = (52, 78);
+pub(super) const DEAL_TERM_INDEPENDENT_WEEKS: (u16, u16) = (78, 104);
+pub(super) const DEAL_TERM_MAJOR_WEEKS: (u16, u16) = (104, 156);
+
+/// Breach (design §E-4): reputation hit and the cooldown before any label
+/// makes a new offer. [tune]
+pub(super) const DEAL_BREACH_REPUTATION_HIT: u8 = 10;
+pub(super) const DEAL_BREACH_COOLDOWN_WEEKS: u16 = 26;
+
+/// The renewal window opens this many weeks before a healthy term's expiry
+/// (albums already delivered). [tune]
+pub(super) const DEAL_RENEWAL_WINDOW_WEEKS: u32 = 26;
+
+/// Renewal-window ledger thresholds (design §E-4) deciding new contract /
+/// extension / silence. "Decent" / "weak" sales read off
+/// `reputation.commercial_success`; "deep in the red" off `unrecouped`.
+/// Recouped + decent sales → new contract; deep in the red + weak sales →
+/// silence; everything else (the common case: not yet recouped) →
+/// extension. [tune]
+pub(super) const DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS: u8 = 20;
+pub(super) const DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS: u8 = 8;
+pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 10_000;
+
+/// New-contract renewal terms: royalty bump range (raw rate, i.e. 0.02 =
+/// 2pp) on top of the current deal's rate, clamped to 1.0. [tune]
+pub(super) const DEAL_NEW_CONTRACT_ROYALTY_BUMP_MIN: f32 = 0.02;
+pub(super) const DEAL_NEW_CONTRACT_ROYALTY_BUMP_MAX: f32 = 0.04;
+
+/// Extension renewal terms: one more album, a year longer, royalty
+/// unchanged, a small advance as a fraction of the old deal's advance — the
+/// label protecting its investment, not rewarding the band. [tune]
+pub(super) const DEAL_EXTENSION_ALBUMS: u8 = 1;
+pub(super) const DEAL_EXTENSION_TERM_WEEKS: u16 = 52;
+pub(super) const DEAL_EXTENSION_ADVANCE_FRACTION: f32 = 0.15;
+
+/// Recoup pressure (design §E-5): while `unrecouped > 0` the label's
+/// single-cut chance doubles and its idle-weeks gate drops (3 → 2). [tune]
+pub(super) const LABEL_CUT_CHANCE_PRESSURE_MULTIPLIER: f64 = 2.0;
+pub(super) const LABEL_CUT_IDLE_WEEKS_PRESSURED: u32 = 2;
+
+/// Label memos (design §E-5): weekly roll while a condition holds, one
+/// memo max per week. The deadline memo's stress bite applies every week
+/// the condition holds, independent of whether the memo message itself
+/// rolled — "the deadline is real pressure, not flavor". [tune]
+pub(super) const DEAL_MEMO_CHANCE: f64 = 0.25;
+pub(super) const DEAL_MEMO_IDLE_WEEKS: u32 = 4;
+pub(super) const DEAL_MEMO_DEADLINE_WINDOW_WEEKS: u32 = 12;
+pub(super) const DEAL_MEMO_DEADLINE_STRESS_PER_WEEK: u8 = 3;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

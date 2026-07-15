@@ -237,6 +237,10 @@ impl Game {
         }
 
         self.label_single_cut_check(rng);
+        // M9 (design §E-4/§E-5): the deal's clock — cooldown decrement,
+        // term-expiry breach, and the renewal window/memos — runs every
+        // week alongside the single-cut check, on the same action stream.
+        self.label_weekly_deal_check(rng);
         self.update_support_tour_offer(rng);
         Ok(())
     }

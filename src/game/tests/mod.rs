@@ -12,6 +12,7 @@ use super::constants::{self, *};
 use super::*;
 
 mod certifications;
+mod deal_lifecycle;
 mod deals;
 mod determinism;
 mod fame;
@@ -73,6 +74,14 @@ fn test_deal(market_reach: u8, royalty_rate: f32) -> band::RecordDeal {
         // explicitly (or sign through `action_accept_deal`, which seeds it
         // from the advance).
         unrecouped: 0,
+        // M9: `0`/`0` is the legacy sentinel (`RecordDeal::term_weeks`) —
+        // term already "served" (so albums alone still free the band, as
+        // every pre-M9 test here expects) and never breachable. Deal
+        // lifecycle tests that need a real term build their own deal (see
+        // `deal_lifecycle::signed_deal_with_real_label`) since the renewal
+        // window looks the label up by name.
+        signed_week: 0,
+        term_weeks: 0,
     }
 }
 
@@ -87,5 +96,7 @@ fn test_deal_offer(game: &Game, expires_week: Option<u32>) -> PotentialDealOffer
         albums_required: 1,
         original_label_data: label,
         expires_week,
+        term_weeks: 90,
+        carry_forward_unrecouped: 0,
     }
 }

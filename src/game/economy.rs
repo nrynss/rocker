@@ -453,10 +453,27 @@ impl Game {
 
                 let release_genre = release.genre.clone();
                 if release.release_type == music::ReleaseType::Album {
-                    if self.band.current_deal().is_some() && self.band.fulfill_album_obligation() {
-                        self.log(
-                            "🤝 That album completes your record deal — you're a free agent again!",
-                        );
+                    // M9 (design §E-4): free agency comes at the LATER of
+                    // all albums delivered and the term served — an early
+                    // finish keeps the band signed (and the recoupment
+                    // ledger alive) until the clock runs out too.
+                    match self.band.fulfill_album_obligation(current_week) {
+                        band::DealCompletionOutcome::FreeAgent { label_name } => {
+                            self.log(format!(
+                                "🤝 That album completes your deal with {} — you're a free agent again!",
+                                label_name
+                            ));
+                        }
+                        band::DealCompletionOutcome::ObligationDelivered {
+                            label_name,
+                            term_end_week,
+                        } => {
+                            self.log(format!(
+                                "🤝 Obligation delivered — under contract with {} until week {}.",
+                                label_name, term_end_week
+                            ));
+                        }
+                        band::DealCompletionOutcome::StillActive => {}
                     }
                     self.band.albums_released.push(release);
                 } else {

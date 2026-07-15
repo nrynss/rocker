@@ -22,6 +22,12 @@ pub struct Band {
     pub members: Vec<BandMember>,
     pub record_deal: Option<RecordDeal>,
     pub reputation: BandReputation,
+    /// Weeks left before a label will make the band a new offer — imposed
+    /// after a breach (design §E-4). `0` means no cooldown, the default for
+    /// every band that has never breached a deal. Same field name FUTURE §3
+    /// plans a Manager around, so a later cycle inherits it.
+    #[serde(default)]
+    pub deal_cooldown: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,12 +71,77 @@ pub struct RecordDeal {
     /// `fulfill_album_obligation` clears `record_deal` (and this ledger with
     /// it) the moment the album count is met. Making recoupment outlive the
     /// deal is M9's job (deal lifecycle); M5 deliberately does not touch it.
+    ///
+    /// RESOLVED (M9): the deal no longer clears the instant albums are met —
+    /// see `fulfill_album_obligation` below. `unrecouped` now survives every
+    /// early album delivery and is only ever zeroed at real deal-end (free
+    /// agency pays nothing further; breach writes off whatever remains).
     #[serde(default)]
     pub unrecouped: i32,
+    /// The week this deal was signed, stamped at signing (design §E-4).
+    /// `0` alongside `term_weeks == 0` marks a deal that predates M9's term
+    /// system — see `term_weeks` for the legacy policy.
+    #[serde(default)]
+    pub signed_week: u32,
+    /// Contract length in weeks, generated at offer time by label tier
+    /// (design §E-4: Boutique 52-78, Independent 78-104, Major 104-156).
+    ///
+    /// Legacy policy: `0` is the sentinel for "no term system yet" — every
+    /// deal signed before M9 loads with `term_weeks: 0`. Such a deal is
+    /// treated as **term already served** (so free agency still fires the
+    /// instant the album count is met, exactly the pre-M9 behavior) and as
+    /// **never breachable** (a clock that didn't exist can't run out) — see
+    /// `term_served` / `term_expired`.
+    #[serde(default)]
+    pub term_weeks: u16,
 }
 
 fn default_market_reach() -> u8 {
     50
+}
+
+impl RecordDeal {
+    /// The later half of the free-agency rule (design §E-4): whether the
+    /// term has run its course as of `current_week`. A legacy deal
+    /// (`term_weeks == 0`) is always considered served — see the field's
+    /// doc comment for the policy this preserves.
+    pub fn term_served(&self, current_week: u32) -> bool {
+        self.term_weeks == 0 || current_week >= self.term_end_week()
+    }
+
+    /// Whether the term has expired in the *breach* sense: a real
+    /// (non-legacy) term whose clock ran out. Distinct from `term_served` —
+    /// a legacy deal is always "served" (so albums alone free it) but can
+    /// never "expire" into a breach that didn't exist when it was signed.
+    pub fn term_expired(&self, current_week: u32) -> bool {
+        self.term_weeks > 0 && current_week >= self.term_end_week()
+    }
+
+    /// The week the term runs out. Meaningless (reads as `signed_week`) for
+    /// a legacy deal with `term_weeks == 0` — callers must check
+    /// `term_weeks > 0` (via `term_expired`) before treating this as a
+    /// real deadline.
+    pub fn term_end_week(&self) -> u32 {
+        self.signed_week.saturating_add(u32::from(self.term_weeks))
+    }
+
+    /// Whether albums are still owed under the deal.
+    pub fn albums_owed(&self) -> bool {
+        self.albums_delivered < self.albums_required
+    }
+
+    /// The renewal window (design §E-4): open when all albums are
+    /// delivered, the deal carries a real term, and `current_week` falls
+    /// within `window_weeks` of the term's expiry (but hasn't passed it —
+    /// once the term is actually up, free agency or breach has already
+    /// resolved the deal).
+    pub fn renewal_window_open(&self, current_week: u32, window_weeks: u32) -> bool {
+        if self.term_weeks == 0 || self.albums_owed() {
+            return false;
+        }
+        let term_end = self.term_end_week();
+        current_week < term_end && current_week.saturating_add(window_weeks) >= term_end
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,6 +188,7 @@ impl Default for Band {
             ],
             record_deal: None,
             reputation: BandReputation::default(),
+            deal_cooldown: 0,
         }
     }
 }
@@ -251,18 +323,120 @@ impl Band {
         self.record_deal = Some(deal);
     }
 
-    pub fn fulfill_album_obligation(&mut self) -> bool {
-        if let Some(deal) = &mut self.record_deal {
-            deal.albums_delivered += 1;
-            if deal.albums_delivered >= deal.albums_required {
-                // Deal completed
-                // For now, let's clear the deal. Another option could be to mark it as completed.
-                self.record_deal = None;
-                return true; // Deal completed
+    /// An album just released under the deal. Design §E-4: free agency
+    /// comes at the LATER of all albums delivered and the term served — an
+    /// act that finishes its albums early stays on the roster (releases
+    /// still go through the label, single-cuts and recoupment continue)
+    /// until the term is also served. The album count crossing the
+    /// requirement is a one-shot event: further albums delivered while the
+    /// term runs on don't re-announce it.
+    pub fn fulfill_album_obligation(&mut self, current_week: u32) -> DealCompletionOutcome {
+        let Some(deal) = &mut self.record_deal else {
+            return DealCompletionOutcome::StillActive;
+        };
+        let already_delivered = !deal.albums_owed();
+        deal.albums_delivered = deal.albums_delivered.saturating_add(1);
+        if already_delivered || deal.albums_owed() {
+            // Either this crossing was already announced (the band keeps
+            // delivering albums while the term runs on), or the count still
+            // falls short — nothing deal-ending happens on this release.
+            return DealCompletionOutcome::StillActive;
+        }
+        // This release just crossed the album requirement for the first time.
+        if deal.term_served(current_week) {
+            let label_name = deal.label_name.clone();
+            self.record_deal = None;
+            DealCompletionOutcome::FreeAgent { label_name }
+        } else {
+            let label_name = deal.label_name.clone();
+            let term_end_week = deal.term_end_week();
+            DealCompletionOutcome::ObligationDelivered {
+                label_name,
+                term_end_week,
             }
         }
-        false // Deal not completed or no deal active
     }
+
+    /// Weekly term-clock decrement (design §E-4): ticks down independent of
+    /// any release, so a cooldown imposed by a breach actually expires.
+    pub fn tick_deal_cooldown(&mut self) {
+        self.deal_cooldown = self.deal_cooldown.saturating_sub(1);
+    }
+
+    /// Weekly breach check (design §E-4): the term's clock, checked
+    /// regardless of whether anything was released this week. Fires only
+    /// when a *real* term (`term_weeks > 0`) has expired with albums still
+    /// owed — a legacy deal (`term_weeks == 0`) can never breach. On
+    /// breach: the deal ends, `commercial_success` takes the hit, any
+    /// remaining `unrecouped` balance is written off, and a cooldown blocks
+    /// new offers. Returns `None` on every other week.
+    pub fn check_term_breach(&mut self, current_week: u32) -> Option<BreachOutcome> {
+        let owed_at_breach = {
+            let deal = self.record_deal.as_ref()?;
+            deal.term_expired(current_week) && deal.albums_owed()
+        };
+        if !owed_at_breach {
+            return None;
+        }
+        let deal = self.record_deal.take().expect("checked Some above");
+        self.reputation.commercial_success = self
+            .reputation
+            .commercial_success
+            .saturating_sub(crate::game::constants::DEAL_BREACH_REPUTATION_HIT);
+        self.deal_cooldown = crate::game::constants::DEAL_BREACH_COOLDOWN_WEEKS;
+        Some(BreachOutcome {
+            label_name: deal.label_name,
+            written_off: deal.unrecouped,
+        })
+    }
+
+    /// Weekly free-agency check for a deal that already delivered its
+    /// albums early (`ObligationDelivered`, from `fulfill_album_obligation`)
+    /// and has just been waiting out the calendar (design §E-4). Without
+    /// this, a deal that finished its albums early would only ever clear on
+    /// *another* release — but there's no reason to release more once
+    /// nothing is owed, so the term running out must free the band on its
+    /// own, checked every week alongside the breach clock. Returns the
+    /// label name when the deal ends this way; `None` on every other week
+    /// (including every legacy deal already cleared instantly by
+    /// `fulfill_album_obligation`, since `term_served` is trivially true for
+    /// them the moment albums are met).
+    pub fn check_term_served_free_agency(&mut self, current_week: u32) -> Option<String> {
+        let ends = {
+            let deal = self.record_deal.as_ref()?;
+            !deal.albums_owed() && deal.term_served(current_week)
+        };
+        if !ends {
+            return None;
+        }
+        let deal = self.record_deal.take().expect("checked Some above");
+        Some(deal.label_name)
+    }
+}
+
+/// What happened when an album released under a deal (design §E-4).
+#[derive(Debug, Clone, PartialEq)]
+pub enum DealCompletionOutcome {
+    /// Nothing deal-ending this release: albums are still owed, or the
+    /// album-count crossing already fired on an earlier release.
+    StillActive,
+    /// Albums delivered, but the term runs on — the band stays signed.
+    ObligationDelivered {
+        label_name: String,
+        term_end_week: u32,
+    },
+    /// Free agency: both albums delivered and the term served. The deal is
+    /// cleared.
+    FreeAgent { label_name: String },
+}
+
+/// The result of a term expiring with albums still owed (design §E-4).
+#[derive(Debug, Clone, PartialEq)]
+pub struct BreachOutcome {
+    pub label_name: String,
+    /// Whatever `unrecouped` balance remained, written off (never charged
+    /// to the player — the label simply eats the loss and remembers).
+    pub written_off: i32,
 }
 
 impl std::fmt::Display for Instrument {
