@@ -237,8 +237,15 @@ impl Game {
         let label_name = deal.label_name.clone();
         let albums_owed = deal.albums_owed();
         let albums_remaining = deal.albums_required.saturating_sub(deal.albums_delivered);
+        // Only a *real* term has a deadline. A legacy deal (`term_weeks == 0`)
+        // has `term_end_week == signed_week`, so `weeks_left` would saturate
+        // to 0 and read as "past deadline" — phantom pressure on a deal that
+        // can never breach. Gate on a real term (same guard the renewal
+        // window uses via `renewal_window_open`).
+        let has_real_term = deal.term_weeks > 0;
         let weeks_left = term_end_week.saturating_sub(self.week);
-        let deadline_pressure = albums_owed && weeks_left <= DEAL_MEMO_DEADLINE_WINDOW_WEEKS;
+        let deadline_pressure =
+            has_real_term && albums_owed && weeks_left <= DEAL_MEMO_DEADLINE_WINDOW_WEEKS;
 
         if deadline_pressure {
             self.player.stress = self

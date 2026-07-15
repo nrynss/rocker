@@ -257,6 +257,8 @@ mod tests {
             albums_delivered: 0,
             market_reach: 70,
             unrecouped: 0,
+            signed_week: 0,
+            term_weeks: 0,
         });
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
         app.game.band.record_deal = None;

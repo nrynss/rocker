@@ -463,6 +463,37 @@ fn write_songs_memo_fires_when_nothing_written_and_the_band_is_idle() {
 }
 
 #[test]
+fn legacy_deal_takes_no_phantom_deadline_pressure() {
+    // A pre-M9 deal (term_weeks == 0) has no term, so term_end_week reads as
+    // signed_week (0) and weeks_left would saturate to 0 — which naively
+    // looks "past deadline". But a legacy deal can never breach, so it must
+    // NOT accrue the deadline stress bite. Guarded on term_weeks > 0.
+    let mut game = test_game();
+    let mut deal = signed_deal_with_real_label(&game, 0, 0); // term_weeks: 0 = legacy
+    deal.albums_required = 5; // albums still owed
+    deal.albums_delivered = 0;
+    game.band.record_deal = Some(deal);
+    game.week = 40;
+    game.player.stress = 20;
+
+    for seed in 0..50u64 {
+        let before = game.player.stress;
+        let mut rng = StdRng::seed_from_u64(seed);
+        game.label_weekly_deal_check(&mut rng);
+        assert!(
+            game.player.stress <= before,
+            "a legacy deal must never apply deadline stress (seed {seed})"
+        );
+        // Keep the deal alive for the next iteration (a legacy deal with
+        // albums owed neither breaches nor frees).
+        assert!(
+            game.band.current_deal().is_some(),
+            "legacy deal with albums owed stays active"
+        );
+    }
+}
+
+#[test]
 fn cut_single_memo_fires_when_cuttable_material_sits_idle() {
     let mut game = test_game();
     let deal = signed_deal_with_real_label(&game, 0, 200);
