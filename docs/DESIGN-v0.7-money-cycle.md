@@ -64,15 +64,26 @@ seats you fill — that's it.
   finally do their job (repurposed as per-tier travel scaling on the
   **rig**, not the fame bracket; the old `touring_costs` fame-tier keys
   are re-keyed to rigs in `markets.json`).
+- **Tour length is a choice too.** The picker offers 1–4 weeks [tune:
+  3 weeks gated at fame 40, 4 at fame 60]; today's fame-derived length
+  is deleted with the fame-derived cost tier. Cost scales linearly
+  with weeks; fame and regional-fame gains scale sublinearly [tune] —
+  a long tour is a bigger investment, not a strictly better one.
+  Region × rig × length is the full booking matrix: many more ways to
+  tour, each a quoted decision.
 - **The quote comes first.** The tour picker shows, before booking:
   itemized cost, weeks, shows, and a projected gross range (computed
   from the same formula the tour uses, at momentum 1.0, ±the reception
   spread). Booking a money-losing tour is allowed — it buys fame and
   regional fame — but it is a *decision*, never a surprise.
+- **Tours feed the charts.** Regional fame earned on the road is the
+  same number that scales your presence on that territory's chart
+  (§C) — touring America is how a record starts selling, and
+  charting, in America.
 
 Existing per-show engine, momentum, regional fame, and the whole-tour
-pot formula are untouched apart from the capacity multiplier and wear
-table.
+pot formula are untouched apart from the capacity multiplier, the wear
+table, and the length choice.
 
 ---
 
@@ -108,14 +119,21 @@ lived part of who you were. Restored.
 - Low fame in a Mansion: no penalty. Rock'n'roll excess is allowed;
   the rent is the penalty.
 
-### Moving
+### Moving — always the player's call
 
-- `GameAction::ChangeLifestyle(tier)` — instant (no week consumed),
-  via a picker modal.
-- Moving **up** costs a deposit of 4 weeks' upkeep [tune] on top of the
-  first week. Moving **down** is free (news line).
-- **Broke eviction**: money < 0 for 2 consecutive weeks → automatic
-  downgrade one tier, news line, happiness −10 [tune].
+- Tier changes happen **only** through `GameAction::ChangeLifestyle(tier)`
+  — instant (no week consumed), via a picker modal. The game never
+  moves you up, and never moves you down except the one forced case
+  below.
+- Moving **up**: deposit of 4 weeks' upkeep [tune] on top of the first
+  week — and a one-shot happiness **+10** [tune]. New digs feel like
+  the career is going somewhere.
+- Moving **down**: free, but a one-shot happiness **−15** [tune].
+  Giving up the house hurts, even when it's the smart move.
+- **Broke eviction** — the only involuntary move: money < 0 for 2
+  consecutive weeks → down one tier, happiness **−20** [tune], news
+  line. Volunteering the downgrade before the landlord decides is
+  strictly gentler.
 
 ---
 
@@ -132,28 +150,60 @@ lived part of who you were. Restored.
 3. Flat 0.85 decay: even an untouched #1 falls below the floor in ≤8
    weeks. And nothing ever *climbs* — every record enters at its peak.
 
-### The fix
+### The fix: regional Top 100s
 
-- **Chart depth 40, display top 10.** `CHART_DEPTH = 40` retained
-  internally; eviction by position happens only below #40, where a
-  record is genuinely cold. The charts modal shows the top 10 and
-  scrolls to 40.
-- **Slower decay:** `CHART_DECAY = 0.92` [tune], floor stays 25.
-- **Ramp-in — records climb.** `ChartEntry` gains `base_score: u32` and
-  `peak_position: u8` (`#[serde(default)]`). Effective score =
+- **Five charts.** Local (the home scene), UK, Europe, America — each
+  stored, decayed, and competed **independently at depth 100** — and
+  **Worldwide**, which is *derived*: the same release's effective
+  scores summed across the four stored charts, re-ranked, top 100.
+  Never stored, never decayed on its own — pure aggregation, recomputed
+  after the weekly decay pass.
+- **Data model.** New `ChartRegion` enum and
+  `regional_charts: BTreeMap<ChartRegion, Vec<ChartEntry>>` on
+  `GameWorld` (`#[serde(default)]`; BTreeMap for deterministic
+  iteration). The legacy `charts` field stays serialized — on first
+  load of an old save it seeds the Local chart, then stays empty.
+  New module `src/game/world/regions.rs` owns the enum and presence
+  computation.
+- **Presence gates entry.** A release submits to each regional chart
+  at `score × presence(region)` [tune], dropping entries below the
+  floor:
+  - **Player:** Local is always home turf. Elsewhere, presence comes
+    from the distribution channel (§E-3: mail-order = Local only,
+    regional distributor 0.3, national 0.5) or the label's
+    `market_reach` when signed — multiplied by country-aggregated
+    `regional_fame`. Tours literally carry your records abroad (§A).
+  - **Scene bands:** unsigned acts chart Local (small spillover at
+    fame ≥ 60); signed acts spread by label tier — Boutique Local + 1
+    region, Independent 2, Major everywhere [tune].
+- **Ramp-in — records climb.** `ChartEntry` gains `base_score: u32`
+  and `peak_position: u8` (`#[serde(default)]`). Effective score =
   `base_score × ramp × decay`, where ramp is ×0.6 entry week, ×0.85
-  week 1, ×1.0 from week 2 [tune]; decay applies from week 2. A strong
-  release debuts mid-chart, climbs for two weeks, peaks, then slides.
-  Lifecycle stays **pure score** — no special evictions, no
-  `is_player` favoritism.
+  week 1, ×1.0 from week 2 [tune]; decay (`0.92` [tune], floor 25)
+  applies from week 2. A strong release debuts mid-chart, climbs for
+  two weeks, peaks, then slides. Lifecycle stays **pure score** per
+  region — eviction only below #100, no special cases, no `is_player`
+  favoritism.
 - **Calmer scene:** release odds 1-in-26 signed / 1-in-44 unsigned
-  [tune] → ~4–5 submissions/week. Scene fame/momentum rewards
+  [tune] → ~4–5 releases/week. Across four boards at depth 100 that
+  fills charts without churning them; scene fame/momentum rewards
   unchanged.
-- **News that tells the story** (player entries): climbing ("↑ #12 → #7"),
-  peak, #1, milestone weeks-on-chart. The existing slip-off line stays.
+- **UI:** the charts modal gets region tabs (`←/→` to switch, Local →
+  UK → Europe → America → Worldwide), top 10 at a glance, scroll to
+  100. Movement arrows, peak, weeks-on-chart. Player news lines name
+  the region ("📈 '{title}' ↑ #12 → #7 UK").
 
-The determinism tests must pass unmodified. `weeks_on_chart` display in
-`ui/render/modals/charts.rs` extends to show movement arrows.
+The determinism tests must pass unmodified.
+
+### Regional sales — copies scale with presence
+
+Demand follows the same presence model: `calculate_release_outcome`'s
+single global multiplication becomes a **sum over regions** —
+`Σ score × presence(region) × UNITS_PER_SCORE_POINT` — capped by the
+pressing as today. `copies_sold` stays one global number; only how it
+accumulates changes. An act present on all four boards moves roughly
+3–4× the copies of a Local-only act at the same score — which is why
+the certification thresholds in §D scale up with it.
 
 ---
 
@@ -162,12 +212,16 @@ The determinism tests must pass unmodified. `weeks_on_chart` display in
 `Release` already tracks cumulative `copies_sold` (first run + long
 tail). Certifications derive from it — **units only**, no other input.
 
+Thresholds are sized for the regional sales model (§C — an act on all
+four boards moves 3–4× a Local-only act, so the bar sits accordingly
+higher):
+
 | Award | Copies sold [tune] |
 |-------|--------------------|
-| Silver | 15,000 |
-| Gold | 40,000 |
-| Platinum | 100,000 |
-| Multi-platinum | each further 100,000 (×2, ×3, …) |
+| Silver | 50,000 |
+| Gold | 150,000 |
+| Platinum | 400,000 |
+| Multi-platinum | each further 400,000 (×2, ×3, …) |
 
 - `certified: u8` on `Release` (`#[serde(default)]`): 0 none, 1 silver,
   2 gold, 3 platinum, 4+ multi-platinum count.
@@ -323,8 +377,14 @@ New bots in `sim.rs`:
 
 Measured targets [tune until they hold]:
 
-- Chart half-life of a 300-score entry: 6–10 weeks inside the top 10.
-- Certifications per median 15-year career: 1–3 silver, gold on hits.
+- Chart half-life of a 300-score entry: 6–10 weeks inside a regional
+  top 10.
+- A Worldwide top-10 requires presence on at least three boards; a
+  Local-only act can top the Local chart but never crack Worldwide's
+  top 20.
+- Certifications per median 15-year career: 1–3 silver, gold on hits —
+  under the scaled thresholds and regional sales. A Local-only act
+  must still be able to reach Silver.
 - Van tour profitable at fame 15–35; full production profitable only
   at fame 75+.
 - Matched lifestyle upkeep: 10–25% of weekly income.
@@ -346,8 +406,11 @@ pass **unmodified**.
   and fills seats; it never re-prices a tour.
 - **The quote precedes the booking.** No cost the player first learns
   about in the outcome log.
-- **Charts are pure score lifecycle at depth 40.** No special eviction,
-  no player favoritism, determinism tests unmodified.
+- **Charts are pure score lifecycle, per region, at depth 100.** No
+  special eviction, no player favoritism, determinism tests unmodified.
+  Worldwide is derived by aggregation, never stored or decayed itself.
+- **Lifestyle moves are the player's call.** Broke eviction is the only
+  forced move; up feels good, down hurts, always one-shot.
 - **Certifications derive from `copies_sold` only.**
 - **A contract binds both directions: albums owed AND a term served.**
   Free agency at whichever comes later, never on the release beat.

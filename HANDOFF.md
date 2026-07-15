@@ -1,10 +1,12 @@
 # Rocker — Money Cycle Handoff (v0.7)
 
-> Feature cycle: tour economics that quote instead of ambush, the
-> lifestyle ladder, charts with depth-40 stability and climbers, record
-> certifications (silver/gold/platinum), label recoupment, re-pressing,
-> purchasable indie distribution, and contracts with a real clock —
-> terms, breach, renewals, and a label that actively chases its money.
+> Feature cycle: tour economics that quote instead of ambush (rig ×
+> length × region), the lifestyle ladder (player-only moves), regional
+> Top 100 charts (Local/UK/Europe/America + a derived Worldwide),
+> presence-scaled sales, record certifications (silver/gold/platinum),
+> label recoupment, re-pressing, purchasable indie distribution, and
+> contracts with a real clock — terms, breach, a recoupment-dependent
+> renewal window, and a label that actively chases its money.
 > **Design is decided** — read `docs/DESIGN-v0.7-money-cycle.md` before
 > claiming anything. Numbers marked [tune] there are sim-lab candidates
 > validated in M7, not invented per-agent.
@@ -84,21 +86,24 @@ Commit prefix: `money(M#): <short description>`.
 
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Branch | Done |
 |----|------|------|---------|------------------|--------|------------|--------|------|
-| **M1** | Tour economics: rig picker, itemized up-front quote, fame-decoupled costs, wear table (design §A) | M | — | `src/game/actions/live.rs` (tour fn + quote helper), tour/rig consts in `src/game/constants.rs`, `touring_costs` section of `data/markets.json`, touring structs in `src/data_loader.rs`, rig/quote UI in `src/ui/render/modals/pickers.rs` + its input wiring | ⬜ open | | money/v0.7 | |
-| **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, move modal, broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ⬜ open | | money/v0.7 | |
-| **M3** | Charts that breathe: depth 40, ramp-in climbers, decay 0.92, peak tracking, calmer scene odds, movement news (design §C) | M | — | `src/game/world/charts.rs`, release-odds consts in `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + scroll input | ⬜ open | | money/v0.7 | |
+| **M1** | Tour economics: rig picker, length picker (1–4 wks), itemized up-front quote, fame-decoupled costs, wear table (design §A) | L | — | `src/game/actions/live.rs` (tour fn + quote helper), tour/rig consts in `src/game/constants.rs`, `touring_costs` section of `data/markets.json`, touring structs in `src/data_loader.rs`, rig/length/quote UI in `src/ui/render/modals/pickers.rs` + its input wiring | ⬜ open | | money/v0.7 | |
+| **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, player-only move modal (+10 up / −15 down / −20 eviction), broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ⬜ open | | money/v0.7 | |
+| **M3** | Regional Top 100 charts: Local/UK/Europe/America stored + Worldwide aggregation, `regions.rs`, presence-gated entry, ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene regional spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ⬜ open | | money/v0.7 | |
 | **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ⬜ open | | money/v0.7 | |
 | **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ⬜ open | | money/v0.7 | |
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ⬜ open | | money/v0.7 | |
 | **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ⬜ open | | money/v0.7 | |
-| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
+| **M10** | Regional sales wiring: player chart submissions via presence, demand as sum-over-regions in `calculate_release_outcome`, region-named news (design §C — presence + regional sales) | M | M3, M6 | player-side submission + demand sections of `src/game/economy.rs`, presence-related consts in `constants.rs` | ⬜ open | | money/v0.7 | |
+| **M7** | Sim-lab validation: homebody / road-dog / indie-lifer bots, measured targets from design §F, [tune] sweeps | M | M1–M6, M9, M10 | `src/game/sim.rs`, `src/game/tests/**` (new test files), Notes below | ⬜ open | | money/v0.7 | |
 | **M8** | Cycle close: board audit, CHANGELOG, bump 0.7.0, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | | money/v0.7 | |
 
 ### Known overlaps
 
 | Pair | Issue |
 |------|-------|
-| M4 → M5 → M6/M9 | All touch `economy.rs` — serialized by prereqs. M4 owns only its new certification section; M5 the release-resolution/royalty paths; M6 the distribution/pressing helpers; M9 only the deal-completion call-site. |
+| M4 → M5 → M6/M9 → M10 | All touch `economy.rs` — serialized by prereqs. M4 owns only its new certification section; M5 the release-resolution/royalty paths; M6 the distribution/pressing helpers; M9 only the deal-completion call-site; M10 the submission/demand rewrite last. |
+| M3 ∥ M10 | M3 defines the `regions.rs` presence API and owns the scene side; M10 consumes that API for the player side in `economy.rs` — M10 does not edit `regions.rs`/`charts.rs`; API gaps go back to M3 via Notes. |
+| M1 ∥ M10 | Both read `regional_fame` — read-only for both; neither reshapes it. |
 | M6 ∥ M9 | Both unblock on M5 and both touch `business.rs` — M6 owns RePress/distribution, M9 only the sign-action term-stamping lines. Rebase, keep diffs section-scoped. |
 | M5 ∥ M9 | M5 lands first (prereq). M9 extends the same `RecordDeal` struct — take fields, don't reshape M5's. |
 | M1 ∥ M6 | Both touch `pickers.rs` — M1 owns the tour/rig picker, M6 the pressing/distribution picker. Rebase, keep diffs picker-scoped. |
@@ -115,3 +120,10 @@ Commit prefix: `money(M#): <short description>`.
   joins M5's recoupment ledger, and M9 was added. Rationale: deals
   cleared instantly on the release beat (`fulfill_album_obligation`),
   1-album deals + unrecouped advances made sign-and-run free money.
+- (cycle start, same day) Second amendment, still pre-claim: charts
+  went regional (Top 100 × Local/UK/Europe/America + derived
+  Worldwide — M3 now L, new M10 wires player presence/sales),
+  certification thresholds scaled ~×3–4 for regional sales, tours
+  gained a length picker (M1 now L), and lifestyle moves became
+  strictly player-initiated with one-shot happiness swings
+  (+10 up / −15 down / −20 eviction).
