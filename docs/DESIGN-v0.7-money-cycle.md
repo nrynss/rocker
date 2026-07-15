@@ -262,10 +262,24 @@ and `term_weeks: u16`, stamped at signing. Term by tier [tune]:
   `deal_cooldown: u16` on `Band` (`#[serde(default)]`, 26 weeks [tune])
   blocks new offers — same field name FUTURE §3 plans around, so the
   Musician cycle inherits it.
-- **Renewal**: term ends fulfilled and recouped, with a decent sales
-  record → the label's re-sign offer arrives through the existing offer
-  stream with +2–4pp royalty [tune]. Loyalty pays; it's still an offer,
-  not an auto-sign.
+- **The renewal window**: 26 weeks [tune] before expiry — all albums
+  delivered — the label looks at its ledger and makes a move through
+  the existing offer stream (normal expiry beat; declining is free,
+  you play out the term to free agency). What it offers depends on
+  whether it made its money back:
+  - **Recouped, decent sales** → a **new contract**: fresh albums +
+    term at the label's current terms with +2–4pp royalty [tune] and a
+    new advance (which joins the new ledger, per E-2). Signing replaces
+    the old deal; the remaining term dissolves into the new one.
+  - **Not yet recouped** → an **extension**: +1 album, +52 weeks
+    [tune], a small advance, royalty unchanged, and the unrecouped
+    balance carries forward — the label protecting its investment,
+    not rewarding you.
+  - **Deep in the red with weak sales** → no offer. They let the
+    clock run out and write you off.
+  - Nothing re-signs automatically. Loyalty pays only if you take it;
+    riding out the term to shop the open market is always allowed
+    (recoupment still survives the deal, per E-2).
 
 ### E-5. The label's active hand
 
