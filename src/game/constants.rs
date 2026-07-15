@@ -514,6 +514,39 @@ pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50]
 /// (design §E-1). [tune]
 pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
 
+// ============================================================================
+// M10: player regional presence + sum-over-territories sales
+// (docs/DESIGN-v0.7-money-cycle.md §C — "Presence gates entry" and
+// "Regional sales — copies scale with presence"). The player's release
+// submits to the Local scene board (full score, home turf) and to each of
+// the four `ChartRegion::TERRITORIES` at `score × presence(territory)`, and
+// demand is the same presence sum over those four territories. Presence is
+// `reach × regional-fame factor`, where reach is the release's distribution
+// reach (label `market_reach` when signed, else the bought channel / indie
+// fame formula — M6's `reach_for`, per-release floor preserved) and the
+// regional-fame factor is how known the act is in that territory's country.
+// Local is a UK subset: full score on its board, but it never adds demand
+// of its own and never feeds Worldwide (that stays M3's rule). All numbers
+// here are [tune] — M7's sim lab calibrates them against §F targets.
+// ============================================================================
+
+/// Presence on the Local scene board — always full score. Local is home
+/// turf (design §C): the player always enters, but its sales are already UK
+/// sales, so this board never contributes demand or Worldwide.
+pub(super) const LOCAL_PRESENCE: f32 = 1.0;
+
+/// UK home floor (design §C): local sales *are* UK sales, so even a
+/// mail-order act that has never toured (regional fame 0 everywhere) still
+/// reaches this much presence at home. Applied only to the UK territory —
+/// the other three earn their presence entirely through touring. [tune]
+pub(super) const UK_HOME_FLOOR: f32 = 0.1;
+
+/// Regional fame (`0..=100`) normalizes by this into the `0..1` "how known
+/// the act is in this country" factor that multiplies reach. Touring is what
+/// raises regional fame (`actions/live.rs`), so a studio-only act reads 0
+/// abroad and sells only at home behind the UK floor. [tune]
+pub(super) const REGIONAL_FAME_PRESENCE_DIVISOR: f32 = 100.0;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

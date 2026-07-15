@@ -111,6 +111,10 @@ fn royalties_pay_the_ledger_down_before_the_player_is_paid() {
 fn recoup_log_stops_and_player_earns_once_cleared() {
     let mut game = test_game();
     game.band.fame = 30;
+    // M10: a signed, touring act — regional presence so royalties are large
+    // enough to overshoot the tiny ledger balance (else demand pins to the UK
+    // home floor).
+    give_regional_presence(&mut game, 80);
     let mut deal = test_deal(70, 0.12);
     deal.unrecouped = 100; // almost paid off
     game.band.record_deal = Some(deal);
@@ -157,6 +161,8 @@ fn recoup_log_stops_and_player_earns_once_cleared() {
 fn sold_out_triggers_a_label_auto_repress() {
     let mut game = test_game();
     game.band.fame = 60;
+    // M10: a touring act's regional presence so demand blows past a tiny run.
+    give_regional_presence(&mut game, 80);
     game.band.record_deal = Some(test_deal(70, 0.12)); // ledger starts at 0
 
     let fresh_run = 70 * LABEL_PRESSING_PER_REACH + 60 * LABEL_PRESSING_PER_FAME;
@@ -196,6 +202,9 @@ fn sold_out_triggers_a_label_auto_repress() {
 fn certification_triggers_a_label_auto_repress() {
     let mut game = test_game();
     game.band.fame = 60;
+    // M10: a touring act's regional presence so first-run demand can reach
+    // the certification threshold under the sum-over-territories model.
+    give_regional_presence(&mut game, 80);
     game.band.record_deal = Some(test_deal(70, 0.12));
 
     let genre = genre::MusicGenre::Rock;
@@ -250,6 +259,9 @@ fn certification_triggers_a_label_auto_repress() {
 fn signed_release_re_presses_on_the_tail_and_can_certify() {
     let mut game = test_game();
     game.band.fame = 70;
+    // M10: a signed, touring act — regional presence so the sustained tail
+    // moves real volume across territories and can cross Silver.
+    give_regional_presence(&mut game, 80);
     let mut deal = test_deal(90, 0.12);
     deal.unrecouped = 0; // already recouped — watch the ledger grow with represses
     game.band.record_deal = Some(deal);

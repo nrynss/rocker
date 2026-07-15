@@ -126,6 +126,9 @@ fn each_distribution_channel_applies_its_reach_floor() {
     let mut game = test_game();
     game.band.record_deal = None;
     game.band.fame = 5; // fame formula alone: 0.15 + 0.05 * 0.85 ≈ 0.19
+    // M10: regional presence, so the channel's reach floor multiplies into
+    // territory sales instead of everything pinning to the UK home floor.
+    give_regional_presence(&mut game, 80);
 
     let mut release = test_release(1, ReleaseType::Single);
     release.copies_pressed = 0; // uncapped, so outcome isn't stock-limited

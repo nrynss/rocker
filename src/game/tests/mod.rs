@@ -55,6 +55,23 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
     }
 }
 
+/// M10 (design §C): simulate a touring act's regional presence. Sales beyond
+/// the UK home floor need `regional_fame` in a territory's country (built by
+/// `action_tour`), so demand/reach tests that predate the regional model set
+/// it directly here — one region per sales-territory country — to stand in
+/// for an act that has actually toured. Without this every act's demand pins
+/// to the UK home floor and reach/channel/label differences never surface.
+fn give_regional_presence(game: &mut Game, level: u8) {
+    for key in [
+        "united_kingdom:london",
+        "europe:germany",
+        "united_states:west_coast",
+        "japan:tokyo",
+    ] {
+        game.regional_fame.insert(key.to_string(), level);
+    }
+}
+
 /// The biggest venue whose door policy admits the band right now.
 fn best_open_venue(game: &Game) -> usize {
     (0..game.world.venues.len())

@@ -11,6 +11,9 @@ use super::*;
 fn unknown_indie_acts_reach_almost_nobody() {
     let mut game = test_game();
     game.band.record_deal = None;
+    // M10: the act is known regionally (it has toured), so fame then drives
+    // how much of that regional audience its indie distribution can reach.
+    give_regional_presence(&mut game, 80);
     let release = test_release(1, ReleaseType::Single);
 
     game.band.fame = 5;
@@ -28,6 +31,11 @@ fn unknown_indie_acts_reach_almost_nobody() {
 fn label_out_earns_indie_at_low_fame_but_not_at_high_fame() {
     let mut game = test_game();
     game.band.fame = 10;
+    // M10: a touring act with regional presence, so the label's wider reach
+    // (`market_reach`) actually multiplies through into territory sales — with
+    // regional fame at 0 every act pins to the UK home floor and the reach
+    // gap that this test is about never surfaces.
+    give_regional_presence(&mut game, 80);
     let release = test_release(1, ReleaseType::Single);
 
     game.band.record_deal = None;
@@ -84,6 +92,9 @@ fn a_pressing_can_sell_out() {
     let mut game = test_game();
     game.band.record_deal = None;
     game.band.fame = 60;
+    // M10: a touring act's regional presence, so demand across the territories
+    // can genuinely outrun a tiny garage run.
+    give_regional_presence(&mut game, 80);
 
     let mut release = test_release(1, ReleaseType::Single);
     release.copies_pressed = 500;
@@ -145,8 +156,8 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     assert!(
         game.turn_log
             .iter()
-            .any(|m| m.contains("enters the charts at #1")),
-        "charting should be reported to the player"
+            .any(|m| m.contains("enters the Local chart at #1")),
+        "charting should be reported to the player, named by region (M10)"
     );
 
     // ...while a nobody's dud sinks without a trace.
