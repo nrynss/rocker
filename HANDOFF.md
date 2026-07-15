@@ -87,10 +87,10 @@ Commit prefix: `money(M#): <short description>`.
 
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Branch | Done |
 |----|------|------|---------|------------------|--------|------------|--------|------|
-| **M1** | Tour economics: rig picker, length picker (1–4 wks), itemized up-front quote, fame-decoupled costs, wear table (design §A) | L | — | `src/game/actions/live.rs` (tour fn + quote helper), tour/rig consts in `src/game/constants.rs`, `touring_costs` section of `data/markets.json`, touring structs in `src/data_loader.rs`, rig/length/quote UI in `src/ui/render/modals/pickers.rs` + its input wiring | ⬜ open | | money/v0.7 | |
-| **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, player-only move modal (+10 up / −15 down / −20 eviction), broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ⬜ open | | money/v0.7 | |
-| **M3** | Regional Top 100 charts: UK/Europe/America/Japan territories + Local scene board (UK subset, no double-count) + Worldwide aggregation of the four territories, `regions.rs`, presence-gated entry, territory filler (chart-only ambient releases), ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene territory spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ⬜ open | | money/v0.7 | |
-| **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ⬜ open | | money/v0.7 | |
+| **M1** | Tour economics: rig picker, length picker (1–4 wks), itemized up-front quote, fame-decoupled costs, wear table (design §A) | L | — | `src/game/actions/live.rs` (tour fn + quote helper), tour/rig consts in `src/game/constants.rs`, `touring_costs` section of `data/markets.json`, touring structs in `src/data_loader.rs`, rig/length/quote UI in `src/ui/render/modals/pickers.rs` + its input wiring | ✅ done | sonnet-m1 | money/v0.7 | 024356b |
+| **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, player-only move modal (+10 up / −15 down / −20 eviction), broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ✅ done | sonnet-m2 | money/v0.7 | ed5578b |
+| **M3** | Regional Top 100 charts: UK/Europe/America/Japan territories + Local scene board (UK subset, no double-count) + Worldwide aggregation of the four territories, `regions.rs`, presence-gated entry, territory filler (chart-only ambient releases), ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene territory spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ✅ done | sonnet-m3 | money/v0.7 | c52cca8 |
+| **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ✅ done | haiku-m4 | money/v0.7 | 64d9b0a |
 | **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ⬜ open | | money/v0.7 | |
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ⬜ open | | money/v0.7 | |
 | **M9** | Deal lifecycle: contract term + albums, free agency at the later of both, breach + `deal_cooldown`, recoupment-dependent renewal window (new contract / extension / silence, opens 26 wks pre-expiry), label memos & recoup pressure (design §E-4, §E-5) | M | M5 | term/`signed_week` fields + fulfillment logic in `src/game/band.rs`, term generation + renewal in `src/game/world/deals.rs`, memos + pressure scaling in `src/game/label_moves.rs`, deal-completion call-site in `economy.rs`, `deal_cooldown` on `Band`, deal-term consts in `constants.rs` | ⬜ open | | money/v0.7 | |
@@ -128,6 +128,29 @@ Commit prefix: `money(M#): <short description>`.
   gained a length picker (M1 now L), and lifestyle moves became
   strictly player-initiated with one-shot happiness swings
   (+10 up / −15 down / −20 eviction).
+- **M1–M4 landed together (integration commit `b86f50b`).** Each was
+  built in an isolated worktree and cherry-picked onto the branch in the
+  order M2 → M1 → M3 → M4; `b86f50b` carries the shared integration fixes
+  on top of the four task commits. Post-integration: `cargo test` → **142
+  passed, 4 ignored**; all 4 balance-lab sweeps green; clippy `-D warnings`
+  and fmt clean; determinism trio unmodified.
+  - Review turned up and fixed: **M1** rig capacity multiplier didn't reach
+    the gross (bigger rigs cost more for identical earnings) — now folded
+    into `total_potential_gross`. **M3** `worldwide_chart` sorted a HashMap
+    (non-deterministic tie order) — added a `(title, band_name)` tiebreak;
+    scene chart news collapsed to one line per release. **M4** multi-platinum
+    over-counted awards past ×2 and the badge was off by one — both fixed,
+    regression tests added. **M2** reviewed clean.
+  - **Board-file notes for downstream tasks:** M4's badge went in
+    `modals/marketing.rs`, not `modals/file.rs` (that's the save/load
+    modal — the design/board filename was wrong; there is no discography
+    modal yet, so certified back-catalog that isn't a marketing target
+    shows no badge — **follow-up for a later UI task**). M3 left a
+    documented `TODO(M10)` shim in `economy.rs` (player submits to Local +
+    UK only) and, to keep pre-existing mechanics alive, repointed
+    `deals.rs::band_buzz` and `turn.rs`'s fame-decay pause at a new
+    `GameWorld::player_is_charting()` — **M9 should sanity-check the
+    `deals.rs` change when it claims that file.**
 - (cycle start, same day) Third amendment, still pre-claim: the home
   scene is a UK city, so **Local is a UK subset** — a scene board, not
   a territory; it never adds into Worldwide or demand (UK gets a 0.1
