@@ -2,8 +2,9 @@
 
 > Feature cycle: tour economics that quote instead of ambush (rig ×
 > length × region), the lifestyle ladder (player-only moves), regional
-> Top 100 charts (Local/UK/Europe/America + a derived Worldwide),
-> presence-scaled sales, record certifications (silver/gold/platinum),
+> Top 100 charts (UK/Europe/America/Japan territories, a Local scene
+> board inside the UK, a derived Worldwide), presence-scaled sales,
+> record certifications (silver/gold/platinum),
 > label recoupment, re-pressing, purchasable indie distribution, and
 > contracts with a real clock — terms, breach, a recoupment-dependent
 > renewal window, and a label that actively chases its money.
@@ -88,7 +89,7 @@ Commit prefix: `money(M#): <short description>`.
 |----|------|------|---------|------------------|--------|------------|--------|------|
 | **M1** | Tour economics: rig picker, length picker (1–4 wks), itemized up-front quote, fame-decoupled costs, wear table (design §A) | L | — | `src/game/actions/live.rs` (tour fn + quote helper), tour/rig consts in `src/game/constants.rs`, `touring_costs` section of `data/markets.json`, touring structs in `src/data_loader.rs`, rig/length/quote UI in `src/ui/render/modals/pickers.rs` + its input wiring | ⬜ open | | money/v0.7 | |
 | **M2** | Lifestyle ladder: tiers, weekly upkeep, stat effects, image, player-only move modal (+10 up / −15 down / −20 eviction), broke eviction (design §B) | M | — | `src/game/lifestyle.rs`, `LifestyleTier` + field in `src/game/player.rs`, `ChangeLifestyle` action in `src/game/actions/rest.rs`, lifestyle consts in `constants.rs`, **new** `src/ui/render/modals/lifestyle.rs` + `mod`/input wiring | ⬜ open | | money/v0.7 | |
-| **M3** | Regional Top 100 charts: Local/UK/Europe/America stored + Worldwide aggregation, `regions.rs`, presence-gated entry, ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene regional spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ⬜ open | | money/v0.7 | |
+| **M3** | Regional Top 100 charts: UK/Europe/America/Japan territories + Local scene board (UK subset, no double-count) + Worldwide aggregation of the four territories, `regions.rs`, presence-gated entry, territory filler (chart-only ambient releases), ramp-in climbers, peak tracking, legacy-save seeding, calmer scene odds + scene territory spread, region-tab UI, movement news (design §C) | L | — | `src/game/world/charts.rs`, **new** `src/game/world/regions.rs`, `regional_charts` on `GameWorld` in `world/mod.rs`, release/submission section of `src/game/world/scene.rs`, `src/ui/render/modals/charts.rs` + tab/scroll input | ⬜ open | | money/v0.7 | |
 | **M4** | Certifications: thresholds, weekly check, award effects, discography badges (design §D) | S | — | `certified` field in `src/game/music.rs`, certification pass + consts (own section of `src/game/economy.rs`), badge lines in `src/ui/render/modals/file.rs` | ⬜ open | | money/v0.7 | |
 | **M5** | Label recoupment (advance + pressing + promo) + label auto-repress (design §E-2, §E-1 label half) | M | M4 | `unrecouped` on `RecordDeal` in `src/game/band.rs`, advance-to-ledger line in `action_sign_deal` (`business.rs`), release-resolution + royalty sections of `src/game/economy.rs`, recoup consts in `constants.rs` | ⬜ open | | money/v0.7 | |
 | **M6** | Indie re-press action + distribution tiers (design §E-1 indie half, §E-3) | M | M5 | `RePress` + distribution choice in `src/game/actions/business.rs`, `distribution_multiplier`/`plan_pressing` in `economy.rs`, distribution consts, re-press/distribution picker UI in `pickers.rs` | ⬜ open | | money/v0.7 | |
@@ -127,3 +128,11 @@ Commit prefix: `money(M#): <short description>`.
   gained a length picker (M1 now L), and lifestyle moves became
   strictly player-initiated with one-shot happiness swings
   (+10 up / −15 down / −20 eviction).
+- (cycle start, same day) Third amendment, still pre-claim: the home
+  scene is a UK city, so **Local is a UK subset** — a scene board, not
+  a territory; it never adds into Worldwide or demand (UK gets a 0.1
+  home floor instead). **Japan added** as the fourth sales territory
+  (second-largest market of the era; already a tour destination) —
+  Worldwide aggregates exactly UK/Europe/America/Japan. Territory
+  filler added to M3 so four Top-100 boards fill without simulating
+  four scenes. Australia stays tour-only.

@@ -152,30 +152,47 @@ lived part of who you were. Restored.
 
 ### The fix: regional Top 100s
 
-- **Five charts.** Local (the home scene), UK, Europe, America — each
-  stored, decayed, and competed **independently at depth 100** — and
-  **Worldwide**, which is *derived*: the same release's effective
-  scores summed across the four stored charts, re-ranked, top 100.
-  Never stored, never decayed on its own — pure aggregation, recomputed
-  after the weekly decay pass.
+- **Four sales territories + a scene board + an aggregate.** The home
+  scene is a UK city; the charts are:
+  - **Local** — the home scene's board. A *subset view* of the UK
+    market, not a territory: every scene band competes here, the
+    player always enters, and its sales are **already UK sales** —
+    Local never adds into Worldwide and never adds demand of its own.
+    The grassroots prestige board where careers start.
+  - **UK, Europe, America, Japan** — the four **sales territories**,
+    each stored, decayed, and competed independently at **depth 100**.
+    Japan earns its slot: the second-largest record market of the era,
+    already a tour destination in `markets.json`. Australia stays
+    tour-only (fame and gross, no board).
+  - **Worldwide** — *derived*: the same release's effective scores
+    summed across **the four territories only**, re-ranked, top 100.
+    Never stored, never decayed on its own — pure aggregation,
+    recomputed after the weekly decay pass.
 - **Data model.** New `ChartRegion` enum and
   `regional_charts: BTreeMap<ChartRegion, Vec<ChartEntry>>` on
   `GameWorld` (`#[serde(default)]`; BTreeMap for deterministic
   iteration). The legacy `charts` field stays serialized — on first
-  load of an old save it seeds the Local chart, then stays empty.
+  load of an old save it seeds the Local board, then stays empty.
   New module `src/game/world/regions.rs` owns the enum and presence
   computation.
-- **Presence gates entry.** A release submits to each regional chart
-  at `score × presence(region)` [tune], dropping entries below the
-  floor:
-  - **Player:** Local is always home turf. Elsewhere, presence comes
-    from the distribution channel (§E-3: mail-order = Local only,
-    regional distributor 0.3, national 0.5) or the label's
-    `market_reach` when signed — multiplied by country-aggregated
-    `regional_fame`. Tours literally carry your records abroad (§A).
-  - **Scene bands:** unsigned acts chart Local (small spillover at
-    fame ≥ 60); signed acts spread by label tier — Boutique Local + 1
-    region, Independent 2, Major everywhere [tune].
+- **Presence gates entry.** A release submits to each board at
+  `score × presence(region)` [tune], dropping entries below the floor:
+  - **Player:** Local is always home turf (presence 1.0). **UK gets a
+    home floor** — 0.1 [tune] even for a mail-order act, because local
+    sales *are* UK sales. Beyond that, presence comes from the
+    distribution channel (§E-3: regional distributor 0.3, national
+    0.5) or the label's `market_reach` when signed — multiplied by
+    country-aggregated `regional_fame`. Tours literally carry your
+    records abroad (§A).
+  - **Scene bands:** unsigned acts chart Local (UK spillover at fame
+    ≥ 60); signed acts spread by label tier — Boutique UK, Independent
+    UK + 1 territory, Major all four [tune].
+- **Territory filler.** Four Top-100 boards can't be fed by one city's
+  scene. Each territory gains 4–6 ambient releases per week [tune] —
+  name-generated foreign acts as **chart-only entries** (no band
+  state, no scene simulation), scored on the scene-release scale and
+  seeded from the world RNG. America's chart is full of American
+  bands you'll never meet; the scene stays 180 bands.
 - **Ramp-in — records climb.** `ChartEntry` gains `base_score: u32`
   and `peak_position: u8` (`#[serde(default)]`). Effective score =
   `base_score × ramp × decay`, where ramp is ×0.6 entry week, ×0.85
@@ -189,21 +206,23 @@ lived part of who you were. Restored.
   fills charts without churning them; scene fame/momentum rewards
   unchanged.
 - **UI:** the charts modal gets region tabs (`←/→` to switch, Local →
-  UK → Europe → America → Worldwide), top 10 at a glance, scroll to
-  100. Movement arrows, peak, weeks-on-chart. Player news lines name
-  the region ("📈 '{title}' ↑ #12 → #7 UK").
+  UK → Europe → America → Japan → Worldwide), top 10 at a glance,
+  scroll to 100. Movement arrows, peak, weeks-on-chart. Player news
+  lines name the region ("📈 '{title}' ↑ #12 → #7 UK").
 
 The determinism tests must pass unmodified.
 
 ### Regional sales — copies scale with presence
 
 Demand follows the same presence model: `calculate_release_outcome`'s
-single global multiplication becomes a **sum over regions** —
-`Σ score × presence(region) × UNITS_PER_SCORE_POINT` — capped by the
-pressing as today. `copies_sold` stays one global number; only how it
-accumulates changes. An act present on all four boards moves roughly
-3–4× the copies of a Local-only act at the same score — which is why
-the certification thresholds in §D scale up with it.
+single global multiplication becomes a **sum over the four sales
+territories** (UK, Europe, America, Japan — Local is inside UK and
+adds nothing) — `Σ score × presence(territory) ×
+UNITS_PER_SCORE_POINT` — capped by the pressing as today.
+`copies_sold` stays one global number; only how it accumulates
+changes. An act present on all four territories moves roughly 3–4×
+the copies of a home-market act at the same score — which is why the
+certification thresholds in §D scale up with it.
 
 ---
 
@@ -379,12 +398,12 @@ Measured targets [tune until they hold]:
 
 - Chart half-life of a 300-score entry: 6–10 weeks inside a regional
   top 10.
-- A Worldwide top-10 requires presence on at least three boards; a
-  Local-only act can top the Local chart but never crack Worldwide's
-  top 20.
+- A Worldwide top-10 requires presence in at least three territories;
+  a home-market act (mail-order, no tours abroad) can top the Local
+  board but never crack Worldwide's top 20.
 - Certifications per median 15-year career: 1–3 silver, gold on hits —
-  under the scaled thresholds and regional sales. A Local-only act
-  must still be able to reach Silver.
+  under the scaled thresholds and territory sales. A home-market act
+  (UK floor only) must still be able to reach Silver.
 - Van tour profitable at fame 15–35; full production profitable only
   at fame 75+.
 - Matched lifestyle upkeep: 10–25% of weekly income.
@@ -406,9 +425,10 @@ pass **unmodified**.
   and fills seats; it never re-prices a tour.
 - **The quote precedes the booking.** No cost the player first learns
   about in the outcome log.
-- **Charts are pure score lifecycle, per region, at depth 100.** No
+- **Charts are pure score lifecycle, per board, at depth 100.** No
   special eviction, no player favoritism, determinism tests unmodified.
-  Worldwide is derived by aggregation, never stored or decayed itself.
+  Worldwide is derived from the four sales territories only — **Local
+  is a UK subset and never double-counts** into Worldwide or demand.
 - **Lifestyle moves are the player's call.** Broke eviction is the only
   forced move; up feels good, down hurts, always one-shot.
 - **Certifications derive from `copies_sold` only.**
