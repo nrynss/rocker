@@ -670,6 +670,85 @@ All new rolls draw from the existing action stream; all new fields take
 
 ---
 
+## §10 — Later cycles: Music Rights & Era Upgrades
+
+Two enhancement themes captured here so they aren't lost. **Neither is
+part of the Musician cycle (§1–§9) nor the v0.7 Money Cycle** — they are
+their own future work, listed with the systems they depend on. Do not
+start either until its prerequisites have shipped.
+
+### §10.1 — Music Rights & Ownership
+
+**Prerequisite: v0.7 M5 (label recoupment) and M9 (deal lifecycle) must
+be shipped first.** A buyout price is fundamentally *the unrecouped
+balance plus a premium*, and "a bigger label acquires the release" only
+makes sense once labels are active agents with a valuation model — so
+this can't be designed coherently until the recoupment ledger
+(`RecordDeal.unrecouped`) and the deal-as-relationship model are real
+and proven. Building it earlier means building on unfinished
+foundations.
+
+The theme is master ownership as a tradeable asset:
+
+- **Who owns a release.** Today a `Release` is implicitly owned by
+  whoever put it out. Make ownership explicit (an owner tag: the player,
+  or a named label) so it can change hands.
+- **Player buys back their master.** From a small/struggling label:
+  price ≈ remaining `unrecouped` + a premium scaled by the release's
+  sales tail and the label's leverage. Frees future royalties to flow
+  100% to the player, at a large up-front cost — the Taylor-Swift
+  re-record move, in miniature. Reputation effects lean on M9's
+  breach/free-agency rules.
+- **A bigger label buys the master out from under a small one.** The
+  release keeps selling but now under the acquirer's terms/reach; the
+  player may get a better royalty and distribution, or may resent losing
+  the relationship — a personality/relationship hook for the Musician
+  cycle if it lands first.
+- **Label M&A.** A struggling scene label gets acquired; its signed acts
+  (including the player, if signed to it) transfer to the acquirer.
+  Natural extension of the scene's existing attrition model.
+- **Catalog sales.** A label (or the player) sells a back-catalogue
+  release for a lump sum, forfeiting its long-tail royalties — cash now
+  vs. income later.
+
+Everything derives from the recoupment ledger and the deal model; no new
+quality formulas. This is the coherent "labels as a whole" cycle that
+one-off buyout features would otherwise orphan.
+
+### §10.2 — Era Upgrades: Music Videos & MTV
+
+**Prerequisite: none hard, but best after the v0.7 marketing/fame work
+settles.** The game already has a timeline with eras
+(`timeline.rs`, `market_conditions`, `era_genre_modifier`) and a
+marketing-campaign system (`MarketingCampaignType`, the buzz model) —
+this theme makes *the era itself* unlock new promotional surfaces, so a
+1974 career and a 1985 career play differently.
+
+- **Music videos as an era-gated marketing channel.** Before MTV
+  (launched 1981 in reality — drive the exact year from the timeline
+  data, not a hardcode), a video is a niche promo spend. From the MTV
+  era on, a video becomes a powerful, expensive marketing campaign type:
+  a large buzz/fame multiplier, gated by the era, with cost scaling to
+  production values. A cheap clip vs. a lavish one is the same
+  quote-first decision the tour rig picker uses.
+- **The MTV rotation as a chart-adjacent surface.** Heavy rotation is a
+  fame/reach amplifier the way regional presence (v0.7 §C) is for sales
+  — a video in rotation lifts a release's chart presence in the
+  territories that carry the channel. Ties into the regional-charts
+  model rather than duplicating it.
+- **Era-reactive framing.** The press/timeline already reacts to the era
+  (the v0.6 rehab example — a shrug in 1972, a frenzy in 1988); a video
+  flop or a banned/controversial clip is period-perfect fodder for the
+  same era-aware event system.
+- **Genre interaction.** Some genres photographed better on early MTV
+  (glam, new wave, pop) than others — a natural tie to
+  `era_genre_modifier` and the Musician cycle's genre model.
+
+All new fields `#[serde(default)]`; era gating reads the timeline, never
+a hardcoded year; any new rolls draw from the existing action stream.
+
+---
+
 ## Key design constraints — do not violate
 
 - **`Musician` is the universal type for anyone who makes music.** Player,
