@@ -115,10 +115,15 @@ fn signed_bands_do_not_run_their_own_marketing() {
 fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
-    // A crowded chart: ten scene records the player has to outsell.
-    for i in 0..world::CHART_SIZE {
-        game.world
-            .submit_chart_entry(format!("Scene Filler {i}"), "Scene Band".into(), false, 200);
+    // A crowded Local board: scene records the player has to outsell.
+    for i in 0..10 {
+        game.world.submit_chart_entry(
+            world::ChartRegion::Local,
+            format!("Scene Filler {i}"),
+            "Scene Band".into(),
+            false,
+            200,
+        );
     }
 
     // A famous band drops a great record...
@@ -132,10 +137,10 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 
     assert!(
         game.world
-            .charts
-            .iter()
-            .any(|e| e.is_player && e.title == "Big Hit"),
-        "a high-scoring release should land on the chart"
+            .regional_charts
+            .get(&world::ChartRegion::Local)
+            .is_some_and(|entries| entries.iter().any(|e| e.is_player && e.title == "Big Hit")),
+        "a high-scoring release should land on the Local chart"
     );
     assert!(
         game.turn_log
@@ -155,8 +160,12 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     game.process_music_releases_and_marketing();
 
     assert!(
-        !game.world.charts.iter().any(|e| e.title == "Total Flop"),
-        "a flop should not crack a crowded top 10"
+        !game
+            .world
+            .regional_charts
+            .get(&world::ChartRegion::Local)
+            .is_some_and(|entries| entries.iter().any(|e| e.title == "Total Flop")),
+        "a flop should not crack the Local chart"
     );
 }
 

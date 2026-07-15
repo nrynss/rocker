@@ -144,7 +144,22 @@ impl Game {
 
                 // The charts are a shared scoreboard: your record competes
                 // against the scene's releases on the same sales scale.
+                // TODO(M10): this is a minimal shim to keep the build green
+                // after M3's regional-charts rework. It submits to Local
+                // (always home turf) and UK (the design's home-territory
+                // floor) at full score; it does not yet implement the
+                // presence-scaled submission to Europe/America/Japan via
+                // distribution channel / label market_reach, nor the
+                // sum-over-territories demand model — both design §C, M10.
                 let chart_position = self.world.submit_chart_entry(
+                    world::ChartRegion::Local,
+                    release.name.clone(),
+                    self.band.name.clone(),
+                    true,
+                    sales_score,
+                );
+                self.world.submit_chart_entry(
+                    world::ChartRegion::Uk,
                     release.name.clone(),
                     self.band.name.clone(),
                     true,

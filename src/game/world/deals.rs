@@ -53,7 +53,11 @@ impl GameWorld {
         let catalog_heat = (band.singles_released.len() as u32 * BUZZ_PER_SINGLE
             + band.albums_released.len() as u32 * BUZZ_PER_ALBUM)
             .min(BUZZ_CATALOG_CAP);
-        let chart_heat = if self.charts.iter().any(|entry| entry.is_player) {
+        // (M3 note for M9: this used to read the legacy flat `self.charts`
+        // field; that field is now vestigial (design §C — regional Top
+        // 100s), so the check moved to the regional boards via
+        // `player_is_charting`.)
+        let chart_heat = if self.player_is_charting() {
             BUZZ_CHART_BONUS
         } else {
             0

@@ -50,7 +50,10 @@ pub enum Screen {
         detail: bool,
     },
     SupportOffer,
-    Charts,
+    Charts {
+        region: crate::game::world::ChartRegion,
+        scroll: usize,
+    },
     MarketingRelease {
         selected: usize,
     },
@@ -333,9 +336,14 @@ impl App {
             MenuEntry {
                 hotkey: 'c',
                 label: "Charts…",
-                detail: match game.world.charts.iter().position(|e| e.is_player) {
-                    Some(spot) => format!("you're at #{}!", spot + 1),
-                    None => "this week's top 10".into(),
+                detail: match game
+                    .world
+                    .regional_charts
+                    .get(&crate::game::world::ChartRegion::Local)
+                    .and_then(|entries| entries.iter().position(|e| e.is_player))
+                {
+                    Some(spot) => format!("you're at #{} Local!", spot + 1),
+                    None => "regional Top 100s".into(),
                 },
                 enabled: true,
                 kind: MenuKind::Charts,
@@ -423,6 +431,26 @@ impl App {
         targets
     }
 
+    /// The current standings for one charts tab — Worldwide is derived
+    /// fresh (design §C), the rest are read straight off their stored
+    /// board. Shared by the input handler (to clamp scrolling) and the
+    /// modal renderer, so both agree on what "this tab" means.
+    pub fn charts_region_entries(
+        &self,
+        region: crate::game::world::ChartRegion,
+    ) -> Vec<crate::game::world::ChartEntry> {
+        if region == crate::game::world::ChartRegion::Worldwide {
+            self.game.world.worldwide_chart()
+        } else {
+            self.game
+                .world
+                .regional_charts
+                .get(&region)
+                .cloned()
+                .unwrap_or_default()
+        }
+    }
+
     // --- Logging ---
 
     pub(crate) fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
@@ -466,7 +494,7 @@ impl App {
             Screen::Main => self.handle_main_key(key),
             Screen::Deals { .. } => self.handle_deals_key(key),
             Screen::SupportOffer => self.handle_support_offer_key(key),
-            Screen::Charts => self.handle_charts_key(key),
+            Screen::Charts { .. } => self.handle_charts_key(key),
             Screen::MarketingRelease { .. } => self.handle_marketing_release_key(key),
             Screen::MarketingCampaign { .. } => self.handle_marketing_campaign_key(key),
             Screen::File { .. } => self.handle_file_key(key),

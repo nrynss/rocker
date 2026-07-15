@@ -217,6 +217,10 @@ impl Game {
         let mut loaded_game: Game = serde_json::from_str(&json_string)?;
 
         loaded_game.data_files = GameDataFiles::load()?;
+        // M3 note: one-time migration for saves from before regional
+        // charts — the old flat top-10 seeds the Local board, then stays
+        // empty (design §C, `GameWorld::migrate_legacy_charts`).
+        loaded_game.world.migrate_legacy_charts();
 
         Ok(loaded_game)
     }

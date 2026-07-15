@@ -62,7 +62,7 @@ impl Game {
             GameAction::Gig(_) | GameAction::GoOnTour(..) | GameAction::AcceptSupportTour
         ) || !self.just_released_music.is_empty();
         public_action
-            || self.world.charts.iter().any(|entry| entry.is_player)
+            || self.world.player_is_charting()
             || (self.band.fame >= ESTABLISHMENT_MIN_FAME && self.has_recent_release())
     }
 

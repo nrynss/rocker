@@ -26,7 +26,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
             match &app.screen {
                 Screen::Deals { .. } => modals::draw_deals_modal(frame, app),
                 Screen::SupportOffer => modals::draw_support_modal(frame, app),
-                Screen::Charts => modals::draw_charts_modal(frame, app),
+                Screen::Charts { .. } => modals::draw_charts_modal(frame, app),
                 Screen::TourReport { .. } => modals::draw_tour_report_modal(frame, app),
                 Screen::MarketingRelease { .. } | Screen::MarketingCampaign { .. } => {
                     modals::draw_marketing_modal(frame, app)
@@ -169,6 +169,48 @@ mod tests {
 
         // A high-fame band: every rig/length should quote cleanly.
         app.game.band.fame = 90;
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+    }
+
+    /// The charts modal (region tabs, empty board, a populated board
+    /// scrolled deep, and the derived Worldwide tab) should render without
+    /// panicking (design §C, task M3).
+    #[test]
+    fn charts_modal_renders_every_region_without_panicking() {
+        use crate::game::world::ChartRegion;
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_main();
+
+        // Empty Local board.
+        app.screen = Screen::Charts {
+            region: ChartRegion::Local,
+            scroll: 0,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // A crowded UK board, scrolled past the top 10.
+        for i in 0..40 {
+            app.game.world.submit_chart_entry(
+                ChartRegion::Uk,
+                format!("Song {i}"),
+                format!("Band {i}"),
+                i == 0,
+                500 + i as u32,
+            );
+        }
+        app.screen = Screen::Charts {
+            region: ChartRegion::Uk,
+            scroll: 25,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // The derived Worldwide tab.
+        app.screen = Screen::Charts {
+            region: ChartRegion::Worldwide,
+            scroll: 0,
+        };
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 }

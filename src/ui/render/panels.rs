@@ -252,9 +252,14 @@ pub(super) fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
         )),
         Line::from(format!("Top Act    {}", top_band)),
     ];
-    // The reigning #1 record — in your colours when it's yours, and absent
-    // entirely while the charts are still empty.
-    if let Some(hit) = game.world.charts.first() {
+    // The reigning #1 record on the Local board — in your colours when
+    // it's yours, and absent entirely while the charts are still empty.
+    if let Some(hit) = game
+        .world
+        .regional_charts
+        .get(&crate::game::world::ChartRegion::Local)
+        .and_then(|entries| entries.first())
+    {
         let text = format!("No. 1      '{}' — {}", hit.title, hit.band_name);
         lines.push(if hit.is_player {
             Line::styled(text, Style::new().fg(ACCENT).bold())
