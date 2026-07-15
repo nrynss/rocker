@@ -334,9 +334,7 @@ pub const TOUR_HEALTH_GUARD: u8 = 30;
 // in `lifestyle.rs`. Per-tier arrays are indexed by `LifestyleTier`'s
 // declaration order: Squat, Shared flat, City apartment, Townhouse,
 // Mansion. [tune] except where noted.
-// 
-
-====================================================================
+// ============================================================================
 
 /// Weekly rent, by tier. [tune]
 pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
@@ -368,7 +366,8 @@ pub(super) const LIFESTYLE_MOVE_DOWN_HAPPINESS: u8 = 15;
 pub(super) const LIFESTYLE_EVICTION_WEEKS: u32 = 2;
 /// One-shot happiness loss from a forced eviction. [tune]
 pub(super) const LIFESTYLE_EVICTION_HAPPINESS: u8 = 20;
-=======
+
+// ============================================================================
 // M1: Tour economics — rig picker, length picker, itemized up-front quote
 // (docs/DESIGN-v0.7-money-cycle.md §A). Fame never re-prices a tour: it only
 // gates which rigs/lengths are selectable and how many seats a tour fills.

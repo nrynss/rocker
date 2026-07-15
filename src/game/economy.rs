@@ -213,9 +213,13 @@ impl Game {
             }
         }
 
-        // If multi-platinum (level > 3), award platinum bumps for each additional tier.
+        // If multi-platinum (level > 3), award platinum bumps for each
+        // *newly crossed* tier. Count from max(old_level, 3), not from 3:
+        // an entry already at ×2 (level 4) climbing to ×3 (level 5) crosses
+        // one new tier, not two — otherwise every step past ×2 re-awards
+        // tiers it already banked (and double-logs).
         if new_level > 3 {
-            let multiplatinum_count = new_level - 3;
+            let multiplatinum_count = new_level - old_level.max(3);
             for _ in 0..multiplatinum_count {
                 // Award platinum bumps again for each multi-platinum tier.
                 self.log(format!(

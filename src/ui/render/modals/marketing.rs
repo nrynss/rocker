@@ -19,7 +19,7 @@ fn format_cert_badge(certified: u8) -> String {
         1 => "🥈".to_string(),
         2 => "🥇".to_string(),
         3 => "💠".to_string(),
-        n => format!("💠×{}", n - 3), // Multi-platinum: ×2, ×3, etc.
+        n => format!("💠×{}", n - 2), // Multi-platinum: level 4 → ×2, level 5 → ×3, …
     }
 }
 pub(crate) fn draw_marketing_modal(frame: &mut Frame, app: &App) {

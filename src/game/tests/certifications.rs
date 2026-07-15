@@ -182,6 +182,30 @@ fn multiplatinum_repeats_platinum_bumps() {
 }
 
 #[test]
+fn incremental_multiplatinum_awards_one_tier_per_step() {
+    // The common path: a record already at ×2 (level 4) creeps up to ×3
+    // (level 5) on tail sales. Crossing one new tier must award platinum's
+    // bumps exactly once — not `new_level - 3` (= 2) times, which would
+    // re-bank the tier it already had.
+    let mut game = test_game();
+    let happiness = game.player.happiness;
+    let commercial = game.band.reputation.commercial_success;
+
+    game.apply_certification_awards(4, 5, "Test Release", 1_200_000);
+
+    assert_eq!(
+        game.player.happiness,
+        happiness + 12,
+        "×2 → ×3 crosses one tier: one platinum happiness bump (+12), not two"
+    );
+    assert_eq!(
+        game.band.reputation.commercial_success,
+        commercial + 8,
+        "×2 → ×3 crosses one tier: one platinum commercial bump (+8), not two"
+    );
+}
+
+#[test]
 fn happiness_and_reputation_cap_at_100() {
     let mut game = test_game();
 

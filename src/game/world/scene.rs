@@ -137,17 +137,22 @@ impl GameWorld {
                 self.music_market.saturation = (self.music_market.saturation + 1).min(95);
             }
 
+            // One news line per release, not one per board — a Major act
+            // now charts across up to five boards at once, and a line each
+            // would flood the feed and undo the calmer-scene intent (§C).
+            // Report the single best showing (highest rank, i.e. lowest
+            // position number).
             let current_fame = self.bands[idx].fame;
-            for (region, pos) in positions {
-                if pos <= 5 || current_fame >= 60 {
-                    news.push(format!(
-                        "📀 {}'s '{}' charts at #{} {}.",
-                        band_name,
-                        title,
-                        pos,
-                        region.label()
-                    ));
-                }
+            if let Some(&(region, pos)) = positions.iter().min_by_key(|(_, pos)| *pos)
+                && (pos <= 5 || current_fame >= 60)
+            {
+                news.push(format!(
+                    "📀 {}'s '{}' charts at #{} {}.",
+                    band_name,
+                    title,
+                    pos,
+                    region.label()
+                ));
             }
         }
 

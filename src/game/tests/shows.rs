@@ -233,6 +233,42 @@ fn tour_quote_cost_is_fame_independent_for_fixed_rig_and_length() {
     );
 }
 
+/// A bigger rig books bigger rooms, so its quoted gross ceiling must rise
+/// with the capacity multiplier (design §A). Without this the capacity mult
+/// would only scale reported attendance and a Full-production rig would
+/// gross exactly what a van does for 50× the cost.
+#[test]
+fn a_bigger_rig_quotes_a_bigger_gross() {
+    let mut game = test_game();
+    game.band.fame = 95; // clears every rig gate
+    let region_index = game
+        .get_sorted_regions()
+        .iter()
+        .position(|(_, _, _, _, _, fame_req)| *fame_req <= 95)
+        .expect("a region open at fame 95");
+
+    let van = game
+        .quote_tour(region_index, TourRig::Van, 2)
+        .expect("van quote");
+    let full = game
+        .quote_tour(region_index, TourRig::Full, 2)
+        .expect("full-production quote");
+
+    assert!(
+        full.gross_high > van.gross_high && full.gross_low > van.gross_low,
+        "full production (capacity ×1.7) must out-gross the van (×0.8): \
+         van {}–{}, full {}–{}",
+        van.gross_low,
+        van.gross_high,
+        full.gross_low,
+        full.gross_high
+    );
+    assert!(
+        full.cost > van.cost,
+        "and it must cost more, so the bigger gross is a real trade-off"
+    );
+}
+
 /// Fame gates which rigs and lengths are selectable; it never re-prices one
 /// (design §A table: Van —, Bus 25, Truck 55, Full 75; 3wk needs 40, 4wk
 /// needs 60).

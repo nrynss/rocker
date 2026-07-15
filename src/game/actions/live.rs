@@ -444,15 +444,20 @@ impl Game {
 
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();
-        // The whole-tour pot: exactly the pre-v0.6/v0.7 formula, untouched
-        // by the rig/length choice apart from capacity below (design §A —
-        // "existing ... whole-tour pot formula are untouched"). A longer
-        // tour spreads the same regional pot across more shows, not a
-        // bigger one — the payoff of a longer tour is fame, not extra gross.
-        let total_potential_gross = (base_gross * era_modifier * market_modifier).max(0.0);
+        // The whole-tour pot: the pre-v0.6/v0.7 regional formula, scaled by
+        // the rig's capacity multiplier (design §A — "a bigger rig books
+        // bigger rooms, raising the gross ceiling"; the pot is "untouched
+        // apart from the capacity multiplier"). The multiplier belongs on
+        // the pot, not just the reported attendance: the per-show take is
+        // this pot / shows, so without it a $8,000/wk full-production rig
+        // would gross exactly what a $150/wk van does. A longer tour still
+        // spreads the same pot across more shows — length buys fame, rig
+        // buys gross.
+        let total_potential_gross =
+            (base_gross * era_modifier * market_modifier * rig.capacity_mult()).max(0.0);
 
-        // Capacity mult scales the synthesized venue (§A): a bigger rig
-        // books bigger rooms, raising the gross ceiling.
+        // Same multiplier on the synthesized venue so reported attendance
+        // stays consistent with the bigger rooms the rig is playing (§A).
         let synth_capacity = (Self::synth_tour_venue_capacity(*population, *economic_strength)
             as f32
             * rig.capacity_mult())

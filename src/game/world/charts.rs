@@ -195,7 +195,18 @@ impl GameWorld {
                 },
             )
             .collect();
-        list.sort_by_key(|e| std::cmp::Reverse(e.score));
+        // Stable, fully deterministic order: score descending, then a
+        // (title, band_name) tiebreak. The totals came from a `HashMap`,
+        // whose iteration order is randomized per process, so sorting on
+        // score alone would let tied entries — and thus which ones survive
+        // the depth-100 truncation — vary between runs and even between
+        // renders. The tiebreak pins the order regardless.
+        list.sort_by(|a, b| {
+            b.score
+                .cmp(&a.score)
+                .then_with(|| a.title.cmp(&b.title))
+                .then_with(|| a.band_name.cmp(&b.band_name))
+        });
         list.truncate(CHART_DEPTH);
         for (idx, entry) in list.iter_mut().enumerate() {
             entry.note_position(idx + 1);
