@@ -301,10 +301,14 @@ impl Game {
         } else {
             demand
         };
+        // M7 (§F): income divides by SALES_INCOME_DIVISOR so the raised
+        // UNITS_PER_SCORE_POINT lifts copies-sold (for certification) without
+        // inflating the money the v0.6 balance was tuned around.
         let income = if let Some(deal) = self.band.current_deal() {
             ((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32
+                / SALES_INCOME_DIVISOR
         } else {
-            units_sold * INDIE_INCOME_PER_COPY
+            units_sold * INDIE_INCOME_PER_COPY / SALES_INCOME_DIVISOR
         };
         (income, units_sold, sold_out)
     }
@@ -736,9 +740,12 @@ impl Game {
                         }
                         release.copies_sold += units;
                         let gross = units * income_per_copy;
+                        // M7 (§F): same SALES_INCOME_DIVISOR as the first-run
+                        // payout — the copy bump feeds certification, not the
+                        // tail's cash.
                         let ongoing_income = match royalty_rate {
-                            Some(rate) => (gross as f32 * rate) as u32,
-                            None => gross,
+                            Some(rate) => (gross as f32 * rate) as u32 / SALES_INCOME_DIVISOR,
+                            None => gross / SALES_INCOME_DIVISOR,
                         };
                         release.total_income_generated += ongoing_income;
                         catalog_gross_this_week += ongoing_income;

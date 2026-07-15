@@ -101,7 +101,9 @@ fn a_pressing_can_sell_out() {
     let (income, units, sold_out) = game.calculate_release_outcome(400, &release);
     assert!(sold_out, "demand should outstrip a garage run");
     assert_eq!(units, 500);
-    assert_eq!(income, 500 * INDIE_INCOME_PER_COPY);
+    // M7 (§F): income is copies × per-copy ÷ SALES_INCOME_DIVISOR — the copy
+    // bump feeds certification, not the bank balance.
+    assert_eq!(income, 500 * INDIE_INCOME_PER_COPY / SALES_INCOME_DIVISOR);
 
     release.copies_pressed = 50_000;
     let (_, units_uncapped, sold_out) = game.calculate_release_outcome(400, &release);

@@ -27,7 +27,23 @@ pub(super) const SALES_FAME_WEIGHT: f32 = 1.2;
 
 // Unit economics: a sales score converts into copies people want to buy,
 // bounded by how many copies actually exist.
-pub(super) const UNITS_PER_SCORE_POINT: f32 = 10.0;
+//
+// M7 (§F): raised 10 → 50 so real careers move enough copies for the
+// certification thresholds (§D: Silver 50k) to be reachable — at the old
+// rate a hit sold only hundreds–low-thousands and nobody ever certified.
+// Copies drive both certification *and* income, so `SALES_INCOME_DIVISOR`
+// divides income back down by the same factor: certifications climb to the
+// designed 50k/150k/400k scale while per-release income stays where the
+// (already-balanced) v0.6 economy had it.
+pub(super) const UNITS_PER_SCORE_POINT: f32 = 30.0;
+/// Divides record income after the `UNITS_PER_SCORE_POINT` bump so raising
+/// copies-sold for certification (§D) doesn't inflate the money economy
+/// (M7 §F). Kept in step with the ratio `UNITS_PER_SCORE_POINT / 10`, so an
+/// *uncapped* release earns exactly what the v0.6 economy gave it. A release
+/// capped by a small pressing run earns `run / divisor` — which is why the
+/// Garage run below is sized to `500 × divisor`, holding a garage-run act's
+/// income where it was.
+pub(super) const SALES_INCOME_DIVISOR: u32 = 3;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
@@ -37,9 +53,16 @@ pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
 
 // Pressing runs. Independents choose a run and pay setup plus per-copy
-// costs; a label presses to the size of its network and your name.
+// costs; a label presses to the size of its network and your name. The
+// National run (50k) is exactly the Silver certification mark (§D), so a
+// self-pressed indie hit on the biggest run can just reach it.
+//
+// M7 (§F): the Garage run grew 500 → 1_500 (= 500 × SALES_INCOME_DIVISOR)
+// so a garage-run act's capped income lands back where v0.6 had it after
+// the income divisor — the larger tiers are unchanged (the determinism
+// script presses a Club run and must stay affordable).
 pub const PRESSING_TIERS: [(&str, u32); 4] = [
-    ("Garage run", 500),
+    ("Garage run", 1_500),
     ("Club run", 2_000),
     ("Regional run", 10_000),
     ("National run", 50_000),
@@ -380,10 +403,24 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 
 /// Cost per tour week, before country travel mult and the rig's
 /// `markets.json` travel/equipment modifiers (design §A table).
-pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [150, 600, 2_500, 8_000];
+///
+/// M7 (§F): compressed from the original [150, 600, 2_500, 8_000], which —
+/// against a tour box office of only a few hundred to a few thousand — made
+/// every rig above the van a guaranteed deep loss at any fame. Paired with
+/// the `TOUR_GROSS_COEFFICIENT` bump below so a bigger rig's capacity boost
+/// can actually clear its cost: the van profits for a small act, full
+/// production only once the act is big enough to fill the rooms it books.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [120, 400, 1_200, 3_000];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
 pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
+
+/// The tour box-office coefficient (M7 §F): scales the whole-tour gross pot
+/// (`base_gross = sqrt(pop) × econ × audience × this`). Raised 0.06 → 0.15
+/// so that, with the capacity multiplier above and the compressed rig costs,
+/// touring is a real revenue path — a full-production rig turns a profit
+/// once the act is famous enough to fill its rooms, not a bottomless loss.
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.15;
 
 /// Wear per tour week — health lost, replacing the flat
 /// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the

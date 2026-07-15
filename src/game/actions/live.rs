@@ -439,8 +439,10 @@ impl Game {
         let regional_fame_current = *self.regional_fame.get(&regional_fame_key).unwrap_or(&0);
 
         let audience = (self.band.fame as f32 / 3.0) + (regional_fame_current as f32);
-        let base_gross =
-            (*population as f32).sqrt() * (*economic_strength as f32 / 100.0) * audience * 0.06;
+        let base_gross = (*population as f32).sqrt()
+            * (*economic_strength as f32 / 100.0)
+            * audience
+            * TOUR_GROSS_COEFFICIENT;
 
         let era_modifier = self.timeline.get_gig_pay_modifier();
         let market_modifier = self.world.get_market_modifier();

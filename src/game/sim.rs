@@ -19,7 +19,9 @@ use crate::data_loader::GameDataFiles;
 use crate::game::band::Band;
 use crate::game::events::EventManager;
 use crate::game::music;
+use crate::game::music::DistributionChannel;
 use crate::game::music::ReleaseType;
+use crate::game::player::LifestyleTier;
 use crate::game::player::Player;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::GameWorld;
@@ -126,14 +128,29 @@ enum Bot {
     BalancedIndie,
     /// Balanced-indie who signs the first deal offered and keeps delivering.
     LabelLoyalist,
+    /// M7 (§F): never tours; matches its lifestyle tier to what it can
+    /// afford. Must survive fifteen years without bankruptcy — the proof
+    /// that lifestyle upkeep is a real cost, not a death spiral.
+    Homebody,
+    /// M7 (§F): tours constantly on the biggest rig it can afford. Must not
+    /// trivially out-earn the release-focused grinders (touring buys fame
+    /// and regional presence, not a bottomless purse).
+    RoadDog,
+    /// M7 (§F): never signs; buys the best indie distribution tier it can.
+    /// Must be viable — slower than a signed peer, ahead of the old flat
+    /// 0.15 indie floor.
+    IndieLifer,
 }
 
 impl Bot {
-    const ALL: [Bot; 4] = [
+    const ALL: [Bot; 7] = [
         Bot::GigGrinder,
         Bot::StudioRat,
         Bot::BalancedIndie,
         Bot::LabelLoyalist,
+        Bot::Homebody,
+        Bot::RoadDog,
+        Bot::IndieLifer,
     ];
 
     fn name(self) -> &'static str {
@@ -142,6 +159,19 @@ impl Bot {
             Bot::StudioRat => "studio-rat",
             Bot::BalancedIndie => "balanced-indie",
             Bot::LabelLoyalist => "label-loyalist",
+            Bot::Homebody => "homebody",
+            Bot::RoadDog => "road-dog",
+            Bot::IndieLifer => "indie-lifer",
+        }
+    }
+
+    /// Non-action state a policy needs to set before deciding — only the
+    /// indie-lifer uses it, to buy the best distribution channel its fame
+    /// and wallet allow (the channel is a picker-remembered `Game` field,
+    /// applied at record time, not a `GameAction`). No-op for everyone else.
+    fn pre_turn(self, game: &mut Game) {
+        if self == Bot::IndieLifer {
+            game.current_distribution_channel = best_affordable_channel(game);
         }
     }
 
@@ -153,8 +183,11 @@ impl Bot {
         match self {
             Bot::GigGrinder => gig_grinder(game),
             Bot::StudioRat => studio_rat(game),
-            Bot::BalancedIndie => indie_loop(game, Some(CLUB_RUN)),
+            Bot::BalancedIndie => indie_loop(game, Some(CLUB_RUN), true),
             Bot::LabelLoyalist => label_loyalist(game),
+            Bot::Homebody => homebody(game),
+            Bot::RoadDog => road_dog(game),
+            Bot::IndieLifer => indie_lifer(game),
         }
     }
 }
@@ -252,9 +285,11 @@ fn studio_rat(game: &Game) -> GameAction {
 /// The intended player loop. `pressing` is the run an unsigned band buys;
 /// when signed the label presses regardless (`plan_pressing` checks the
 /// deal first), so `None` is fine there.
-fn indie_loop(game: &Game, pressing: Option<usize>) -> GameAction {
-    // A support slot is exposure money can't buy — and it pays.
-    if game.pending_support_offer.is_some()
+fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> GameAction {
+    // A support slot is exposure money can't buy — and it pays. The
+    // homebody skips it (never tours); everyone else grabs it.
+    if allow_support
+        && game.pending_support_offer.is_some()
         && game.player.stress < TOUR_STRESS_GUARD
         && game.player.health >= TOUR_HEALTH_GUARD
     {
@@ -303,7 +338,97 @@ fn label_loyalist(game: &Game) -> GameAction {
     } else {
         Some(CLUB_RUN)
     };
-    indie_loop(game, pressing)
+    indie_loop(game, pressing, true)
+}
+
+/// M7: the best distribution channel this act's fame and wallet allow.
+/// `DistributionChannel::ALL` is ascending in reach, so the last one that
+/// clears both its fame gate and its fee wins.
+fn best_affordable_channel(game: &Game) -> DistributionChannel {
+    let mut best = DistributionChannel::ALL[0];
+    for &channel in DistributionChannel::ALL.iter() {
+        if channel.is_available(game.band.fame) && game.player.can_afford(channel.fee()) {
+            best = channel;
+        }
+    }
+    best
+}
+
+/// M7 (§F): never tours (nor takes a support slot), and keeps its lifestyle
+/// tier matched to its means — trading up only when flush enough to cover
+/// several deposits over, trading down the moment it goes into the red.
+/// Both moves are instant and there are only five tiers, so the run of
+/// consecutive `ChangeLifestyle` turns is bounded well under `STALL_LIMIT`.
+fn homebody(game: &Game) -> GameAction {
+    let cur = game.player.lifestyle;
+    let money = game.player.money;
+
+    let next_up = LifestyleTier::ALL
+        .iter()
+        .copied()
+        .find(|t| *t > cur && t.down() == Some(cur));
+    if let Some(up) = next_up {
+        // Only climb when the deposit is trivial relative to cash on hand,
+        // so upkeep stays a sane slice of income rather than a spiral.
+        if money > up.move_up_cost() as i32 * 3 {
+            return GameAction::ChangeLifestyle(up);
+        }
+    }
+    if money < 0
+        && let Some(down) = cur.down()
+    {
+        return GameAction::ChangeLifestyle(down);
+    }
+    // The indie day job, minus the road: never accept a support tour.
+    indie_loop(game, Some(CLUB_RUN), false)
+}
+
+/// M7 (§F): the biggest tour this act can afford right now — a region it
+/// qualifies for, the grandest available rig, the longest available length,
+/// all vetted through the same `quote_tour` the picker shows the player.
+fn plan_biggest_tour(game: &Game) -> Option<(usize, TourRig, u8)> {
+    let regions = game.get_sorted_regions();
+    let region_index = regions
+        .iter()
+        .position(|(_, _, _, _, _, fame_req)| game.band.fame >= *fame_req)?;
+    for &rig in TourRig::ALL.iter().rev() {
+        if !game.rig_is_available(rig) {
+            continue;
+        }
+        for weeks in (1..=4u8).rev() {
+            if !game.tour_length_is_available(weeks) {
+                continue;
+            }
+            if let Ok(quote) = game.quote_tour(region_index, rig, weeks)
+                && game.player.can_afford(quote.cost)
+            {
+                return Some((region_index, rig, weeks));
+            }
+        }
+    }
+    None
+}
+
+/// M7 (§F): lives on the road. Tours the biggest affordable rig whenever
+/// stress and health allow; otherwise writes/records so there's fresh
+/// material (and a higher live cap) to tour behind.
+fn road_dog(game: &Game) -> GameAction {
+    if game.player.stress < TOUR_STRESS_GUARD
+        && game.player.health >= TOUR_HEALTH_GUARD
+        && let Some((region, rig, weeks)) = plan_biggest_tour(game)
+    {
+        return GameAction::GoOnTour(region, rig, weeks);
+    }
+    indie_loop(game, Some(CLUB_RUN), true)
+}
+
+/// M7 (§F): the eternal independent — never signs (it simply never accepts;
+/// offers expire on their own, and explicitly rejecting them is a no-week
+/// action that would only spin the calendar). The `pre_turn` hook keeps it
+/// on the best distribution tier its fame and wallet allow, which is what
+/// sets it apart from balanced-indie's default mail-order reach.
+fn indie_lifer(game: &Game) -> GameAction {
+    indie_loop(game, Some(CLUB_RUN), true)
 }
 
 // ---------------------------------------------------------------------------
@@ -356,6 +481,12 @@ struct Career {
     first_deal_week: Option<u32>,
     deals_signed: u32,
     sell_outs: u32,
+    /// M7 (§E-4): contract breaches — a term ran out with albums owed.
+    breaches: u32,
+    /// M7 (§D): released records certified silver or better by the end.
+    certifications: usize,
+    /// M7 (§B): lifestyle tier at the end, as an `ALL` index (0 = Squat).
+    final_lifestyle: u8,
     /// Band fame sampled at each completed game-year boundary.
     fame_by_year: Vec<u8>,
 }
@@ -390,6 +521,9 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
         first_deal_week: None,
         deals_signed: 0,
         sell_outs: 0,
+        breaches: 0,
+        certifications: 0,
+        final_lifestyle: 0,
         fame_by_year: Vec::new(),
     };
     let mut had_deal = false;
@@ -397,6 +531,7 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
 
     while !game.is_game_over() && game.week <= horizon_weeks {
         let week_before = game.week;
+        bot.pre_turn(game);
         let action = bot.decide(game);
         if game.process_turn(action).is_err() {
             game.process_turn(GameAction::LazeAround)
@@ -406,6 +541,12 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
         for line in game.take_turn_log() {
             if line.contains("sold out") {
                 career.sell_outs += 1;
+            }
+            // M7: a term-expiry breach (§E-4) — the label drops the band
+            // with albums still owed. The steady releasers should never
+            // trip this; a sign-then-neglect policy will.
+            if line.contains("the contract ran out with albums still owed") {
+                career.breaches += 1;
             }
         }
         observe(&mut career, game, &mut had_deal);
@@ -430,6 +571,17 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
     career.final_money = game.player.money;
     career.albums = game.band.albums_released.len();
     career.singles = game.band.singles_released.len();
+    career.certifications = game
+        .band
+        .albums_released
+        .iter()
+        .chain(game.band.singles_released.iter())
+        .filter(|r| r.certified >= 1)
+        .count();
+    career.final_lifestyle = LifestyleTier::ALL
+        .iter()
+        .position(|t| *t == game.player.lifestyle)
+        .unwrap_or(0) as u8;
     career
 }
 
@@ -587,6 +739,35 @@ fn print_report(careers: &[Career]) {
             runs.iter().map(|c| c.deals_signed).sum::<u32>() as f32 / runs.len() as f32,
             show(median(runs.iter().map(|c| c.albums).collect())),
             show(median(runs.iter().map(|c| c.singles).collect())),
+        );
+    }
+
+    // M7 (§F): the v0.7 money-cycle metrics — certifications a career
+    // reaches, contract breaches, bankruptcies, and where each bot ends up
+    // living. These are the numbers the design's targets are read against.
+    println!();
+    println!("v0.7 money cycle (median certs; breaches & bankruptcies are totals over all runs):");
+    for bot in Bot::ALL {
+        let runs: Vec<&Career> = careers.iter().filter(|c| c.bot == bot).collect();
+        if runs.is_empty() {
+            continue;
+        }
+        let bankruptcies = runs
+            .iter()
+            .filter(|c| c.ending == Ending::WentBroke)
+            .count();
+        let final_tier = median(runs.iter().map(|c| c.final_lifestyle).collect())
+            .map(|i| LifestyleTier::ALL[i as usize].label())
+            .unwrap_or("--");
+        println!(
+            "  {:<15} med certs {:>2}, max certs {:>2}, breaches {:>3}, bankruptcies {:>2}/{}, med end home {}",
+            bot.name(),
+            show(median(runs.iter().map(|c| c.certifications).collect())),
+            runs.iter().map(|c| c.certifications).max().unwrap_or(0),
+            runs.iter().map(|c| c.breaches).sum::<u32>(),
+            bankruptcies,
+            runs.len(),
+            final_tier,
         );
     }
     println!();
@@ -1066,6 +1247,71 @@ fn tour_gross_by_skill_tier_sweep() {
         println!(
             "  {label:<9} (skill {skill:>3}, live_perf {live_performance:>3}): avg reception {avg_reception:.1}, avg total gross ${avg_gross:.0}, avg momentum spread {avg_momentum_spread:.3}"
         );
+    }
+}
+
+/// §A/§F — tour profitability by rig and fame. A single tour's money delta
+/// is its box office minus its quoted cost (box office is per-show take,
+/// untouched by M10's record-sales presence model), so this reads the
+/// design target directly: the van should clear a profit for a small act,
+/// while a full-production rig only pays off once the act is big enough to
+/// fill the bigger rooms its capacity multiplier books. Confounders are
+/// minimized — a fresh band (no catalog tail), Squat lifestyle (no upkeep),
+/// cash on hand so the cost never gates the booking.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn tour_profitability_by_rig_and_fame_sweep() {
+    fn net_at(seed: u64, fame: u8, rig: TourRig, weeks: u8) -> Option<i64> {
+        let mut game = seeded_game(seed);
+        suppress_story_events(&mut game);
+        game.band.fame = fame;
+        game.band.peak_fame = fame;
+        game.band.skill = 50;
+        for member in &mut game.band.members {
+            member.skill = 50;
+        }
+        game.band.reputation.live_performance = 40;
+        game.player.stress = 20;
+        game.player.health = 90;
+        game.player.money = 1_000_000; // cost never gates the booking
+
+        let regions = game.get_sorted_regions();
+        let region_index = regions
+            .iter()
+            .position(|(_, _, _, _, _, fame_req)| fame >= *fame_req)?;
+        if !game.rig_is_available(rig) || !game.tour_length_is_available(weeks) {
+            return None;
+        }
+        let money_before = game.player.money;
+        game.process_turn(GameAction::GoOnTour(region_index, rig, weeks))
+            .ok()?;
+        // Net of the whole turn: box office earned minus the tour cost
+        // spent (Squat upkeep is 0, no catalog to pay a tail).
+        Some(game.player.money as i64 - money_before as i64)
+    }
+
+    println!(
+        "tour net profit (box office − cost) by rig and fame, 2-week tour, avg over 20 seeds:"
+    );
+    for fame in [25u8, 55, 80] {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .collect();
+            if nets.is_empty() {
+                println!(
+                    "  fame {fame:>3}  {:<16}: (rig gated — unavailable at this fame)",
+                    rig.label()
+                );
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  fame {fame:>3}  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+        }
     }
 }
 
