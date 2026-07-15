@@ -1,7 +1,8 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
+use crate::data::format_money;
 use crate::game::music::ReleaseType;
-use crate::game::{GameAction, PRESSING_TIERS};
+use crate::game::{GameAction, PRESSING_TIERS, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
 
 impl App {
@@ -114,7 +115,7 @@ impl App {
                 };
             }
             KeyCode::Enter => {
-                let (country_key, _, region_name, _, _, fame_req) = &sorted_regions[selected];
+                let (_, _, region_name, _, _, fame_req) = &sorted_regions[selected];
                 if self.game.band.fame < *fame_req {
                     self.push_log(
                         LogKind::Error,
@@ -124,44 +125,93 @@ impl App {
                         ),
                     );
                 } else {
-                    // Check if player can afford the tour cost to give clear feedback
-                    let tier_name = if self.game.band.fame < 35 {
-                        "local"
-                    } else if self.game.band.fame < 60 {
-                        "regional"
-                    } else if self.game.band.fame < 80 {
-                        "national"
-                    } else {
-                        "international"
+                    // The rig/length choice — and its quote — come next
+                    // (design §A, M1): fame gates the region, never the cost.
+                    self.screen = Screen::TourBookingPicker {
+                        region_index: selected,
+                        rig: TourRig::Van,
+                        weeks: 1,
                     };
-                    let country_travel_mult = match country_key.as_str() {
-                        "united_states" => 1.5,
-                        "united_kingdom" => 0.8,
-                        "europe" => 1.2,
-                        "japan" => 1.0,
-                        "australia" => 1.4,
-                        _ => 1.0,
-                    };
-                    if let Some(touring_costs) = self
-                        .game
-                        .data_files
-                        .markets_data
-                        .market_modifiers
-                        .touring_costs
-                        .get(tier_name)
-                    {
-                        let cost =
-                            (touring_costs.base_cost_per_show as f32 * country_travel_mult) as i32;
-                        if !self.game.player.can_afford(cost) {
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Rig + length picker (design §A, M1): navigates independently over
+    /// rigs (↑↓) and weeks (←→), and shows the live quote via
+    /// `draw_tour_booking_picker_modal`. Booking only dispatches once the
+    /// quote resolves and the player can afford it — the gate check mirrors
+    /// `Game::quote_tour`/`action_go_on_tour` so the error the player sees
+    /// here always matches what booking would say.
+    pub(crate) fn handle_tour_booking_picker_key(&mut self, key: KeyEvent) {
+        let Screen::TourBookingPicker {
+            region_index,
+            rig,
+            weeks,
+        } = self.screen
+        else {
+            return;
+        };
+
+        match key.code {
+            KeyCode::Esc => {
+                self.screen = Screen::RegionPicker {
+                    selected: region_index,
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                let count = TourRig::ALL.len();
+                let idx = rig.ordinal().checked_sub(1).unwrap_or(count - 1);
+                self.screen = Screen::TourBookingPicker {
+                    region_index,
+                    rig: TourRig::ALL[idx],
+                    weeks,
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let idx = (rig.ordinal() + 1) % TourRig::ALL.len();
+                self.screen = Screen::TourBookingPicker {
+                    region_index,
+                    rig: TourRig::ALL[idx],
+                    weeks,
+                };
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                let new_weeks = if weeks <= 1 { 4 } else { weeks - 1 };
+                self.screen = Screen::TourBookingPicker {
+                    region_index,
+                    rig,
+                    weeks: new_weeks,
+                };
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                let new_weeks = if weeks >= 4 { 1 } else { weeks + 1 };
+                self.screen = Screen::TourBookingPicker {
+                    region_index,
+                    rig,
+                    weeks: new_weeks,
+                };
+            }
+            KeyCode::Enter => {
+                let quote: Result<TourQuote, String> =
+                    self.game.quote_tour(region_index, rig, weeks);
+                match quote {
+                    Ok(quote) => {
+                        if self.game.player.can_afford(quote.cost) {
+                            self.screen = Screen::Main;
+                            self.dispatch(GameAction::GoOnTour(region_index, rig, weeks));
+                        } else {
                             self.push_log(
                                 LogKind::Error,
-                                format!("❌ You need ${} to finance this tour!", cost),
+                                format!(
+                                    "❌ You need {} to finance this tour!",
+                                    format_money(quote.cost)
+                                ),
                             );
-                            return;
                         }
                     }
-                    self.screen = Screen::Main;
-                    self.dispatch(GameAction::GoOnTour(selected));
+                    Err(msg) => self.push_log(LogKind::Error, format!("❌ {msg}")),
                 }
             }
             _ => {}

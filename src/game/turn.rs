@@ -59,7 +59,7 @@ impl Game {
     fn is_publicly_active(&self, action: &GameAction) -> bool {
         let public_action = matches!(
             action,
-            GameAction::Gig(_) | GameAction::GoOnTour(_) | GameAction::AcceptSupportTour
+            GameAction::Gig(_) | GameAction::GoOnTour(..) | GameAction::AcceptSupportTour
         ) || !self.just_released_music.is_empty();
         public_action
             || self.world.charts.iter().any(|entry| entry.is_player)

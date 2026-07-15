@@ -528,25 +528,21 @@
       }
     },
     "touring_costs": {
-      "local": {
-        "base_cost_per_show": 500,
+      "van_tour": {
         "travel_cost_modifier": 1.0,
         "equipment_cost_modifier": 1.0
       },
-      "regional": {
-        "base_cost_per_show": 1500,
-        "travel_cost_modifier": 2.5,
-        "equipment_cost_modifier": 1.5
+      "tour_bus": {
+        "travel_cost_modifier": 1.1,
+        "equipment_cost_modifier": 1.05
       },
-      "national": {
-        "base_cost_per_show": 5000,
-        "travel_cost_modifier": 8.0,
-        "equipment_cost_modifier": 3.0
+      "truck_and_crew": {
+        "travel_cost_modifier": 1.25,
+        "equipment_cost_modifier": 1.2
       },
-      "international": {
-        "base_cost_per_show": 15000,
-        "travel_cost_modifier": 20.0,
-        "equipment_cost_modifier": 5.0
+      "full_production": {
+        "travel_cost_modifier": 1.4,
+        "equipment_cost_modifier": 1.35
       }
     }
   }

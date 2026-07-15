@@ -6,6 +6,7 @@ use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
 
 use crate::data_loader::GameDataFiles;
+use crate::game::actions::TourRig;
 use crate::game::band::{self, Band};
 use crate::game::constants;
 use crate::game::events::EventManager;
@@ -28,7 +29,10 @@ pub enum GameAction {
         pressing: Option<usize>,
     },
     Gig(usize),
-    GoOnTour(usize),
+    /// Region index, chosen rig, and tour length in weeks — all explicit
+    /// player choices, quoted before booking (design §A, M1). Fame never
+    /// selects any of these; it only gates which are available.
+    GoOnTour(usize, TourRig, u8),
     TakeBreak,
     VisitDoctor,
     AcceptDeal(usize),

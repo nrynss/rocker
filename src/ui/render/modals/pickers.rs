@@ -1,14 +1,17 @@
-//! Venue, pressing-run, and tour-region pickers.
+//! Venue, pressing-run, tour-region, and tour-booking (rig/length/quote)
+//! pickers.
 
 use ratatui::{
     Frame,
+    layout::{Constraint, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Clear, List, ListItem, ListState},
+    widgets::{Block, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 use crate::data::format_money;
 use crate::game::PRESSING_TIERS;
+use crate::game::TourRig;
 use crate::game::music::ReleaseType;
 use crate::ui::app::{App, Screen};
 
@@ -151,38 +154,9 @@ pub(crate) fn draw_region_picker_modal(frame: &mut Frame, app: &App) {
                     Style::new().fg(Color::White)
                 };
 
-                let tier_name = if app.game.band.fame < 35 {
-                    "local"
-                } else if app.game.band.fame < 60 {
-                    "regional"
-                } else if app.game.band.fame < 80 {
-                    "national"
-                } else {
-                    "international"
-                };
-                let country_travel_mult = match country_key.as_str() {
-                    "united_states" => 1.5,
-                    "united_kingdom" => 0.8,
-                    "europe" => 1.2,
-                    "japan" => 1.0,
-                    "australia" => 1.4,
-                    _ => 1.0,
-                };
-                let cost_str = if let Some(touring_costs) = app
-                    .game
-                    .data_files
-                    .markets_data
-                    .market_modifiers
-                    .touring_costs
-                    .get(tier_name)
-                {
-                    let cost =
-                        (touring_costs.base_cost_per_show as f32 * country_travel_mult) as i32;
-                    format_money(cost)
-                } else {
-                    "N/A".to_string()
-                };
-
+                // No cost preview here (M1, design §A): cost depends on the
+                // rig and length chosen next, not the region or fame — the
+                // booking picker shows the itemized quote.
                 let country_name = country_key.replace("_", " ");
                 ListItem::new(Line::from(vec![
                     Span::styled(format!("{:<15}", region_name), style.bold()),
@@ -195,14 +169,6 @@ pub(crate) fn draw_region_picker_modal(frame: &mut Frame, app: &App) {
                         style,
                     ),
                     Span::styled(format!("  Econ: {:>3}", economic_strength), style),
-                    Span::styled(
-                        format!("  Cost: {:>6}", cost_str),
-                        if locked {
-                            style
-                        } else {
-                            Style::new().fg(Color::Yellow)
-                        },
-                    ),
                     Span::raw("  "),
                     status,
                 ]))
@@ -214,9 +180,155 @@ pub(crate) fn draw_region_picker_modal(frame: &mut Frame, app: &App) {
         .block(
             Block::bordered()
                 .title(" 🚌 Select Region to Tour ")
-                .title_bottom(" Enter book tour · Esc close "),
+                .title_bottom(" Enter choose rig & length · Esc close "),
         )
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
     let mut state = ListState::default().with_selected(Some(selected));
     frame.render_stateful_widget(list, area, &mut state);
+}
+
+/// The rig + length picker (design §A, M1): reached after choosing a region.
+/// Shows every rig and length with its fame gate, plus a live itemized quote
+/// — cost, weeks, shows, and a projected gross range — computed from the
+/// exact formula `action_go_on_tour` uses, so booking is never a surprise.
+pub(crate) fn draw_tour_booking_picker_modal(frame: &mut Frame, app: &App) {
+    let Screen::TourBookingPicker {
+        region_index,
+        rig,
+        weeks,
+    } = app.screen
+    else {
+        return;
+    };
+
+    let region_name = app
+        .game
+        .get_sorted_regions()
+        .get(region_index)
+        .map(|(_, _, name, _, _, _)| name.clone())
+        .unwrap_or_else(|| "Unknown region".to_string());
+
+    let area = centered_rect(84, 66, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::bordered()
+        .title(format!(" 🎫 Book a Tour of {region_name} "))
+        .title_bottom(" ↑↓ rig · ←→ length · Enter book · Esc back ");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let [rig_area, weeks_area, quote_area] = Layout::vertical([
+        Constraint::Length(6),
+        Constraint::Length(3),
+        Constraint::Min(6),
+    ])
+    .areas(inner);
+
+    let rig_items: Vec<ListItem> = TourRig::ALL
+        .iter()
+        .map(|&r| {
+            let available = app.game.rig_is_available(r);
+            let style = if available {
+                Style::new().fg(Color::White)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            };
+            let (health_cost, stress_cost) = r.wear_per_week();
+            let gate = if available {
+                format!("🔓 fame {}+", r.fame_gate())
+            } else {
+                format!("🔒 needs fame {}", r.fame_gate())
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<17}", r.label()), style.bold()),
+                Span::styled(
+                    format!(" {:>7}/wk", format_money(r.cost_per_week() as i32)),
+                    style,
+                ),
+                Span::styled(format!("  cap ×{:.1}", r.capacity_mult()), style),
+                Span::styled(
+                    format!("  health -{health_cost}/stress +{stress_cost} per wk"),
+                    style,
+                ),
+                Span::raw("  "),
+                Span::styled(gate, style),
+            ]))
+        })
+        .collect();
+    let rig_list = List::new(rig_items)
+        .block(Block::default().title("Rig"))
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut rig_state = ListState::default().with_selected(Some(rig.ordinal()));
+    frame.render_stateful_widget(rig_list, rig_area, &mut rig_state);
+
+    let weeks_spans: Vec<Span> = (1..=4u8)
+        .map(|w| {
+            let available = app.game.tour_length_is_available(w);
+            let selected = w == weeks;
+            let label = if available {
+                format!(" {w} week{} ", if w == 1 { "" } else { "s" })
+            } else {
+                format!(" {w} week{} 🔒 ", if w == 1 { "" } else { "s" })
+            };
+            let mut style = if available {
+                Style::new().fg(Color::White)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            };
+            if selected {
+                style = style.add_modifier(Modifier::REVERSED);
+            }
+            Span::styled(label, style)
+        })
+        .collect();
+    frame.render_widget(
+        Paragraph::new(vec![Line::from("Length"), Line::from(weeks_spans)]),
+        weeks_area,
+    );
+
+    let quote_lines: Vec<Line> = match app.game.quote_tour(region_index, rig, weeks) {
+        Ok(quote) => {
+            let affordable = app.game.player.can_afford(quote.cost);
+            vec![
+                Line::styled("Quote", Style::new().bold()),
+                Line::from(format!(
+                    "  {} of {}, {} week{}: {} shows",
+                    quote.rig.label(),
+                    quote.region_name,
+                    quote.weeks,
+                    if quote.weeks == 1 { "" } else { "s" },
+                    quote.shows
+                )),
+                Line::from(format!("  Cost: {}", format_money(quote.cost))),
+                Line::from(format!(
+                    "  Projected gross: {} – {}",
+                    format_money(quote.gross_low as i32),
+                    format_money(quote.gross_high as i32)
+                )),
+                Line::from(format!(
+                    "  Fame gain: +{}   Regional fame gain: +{}–{}",
+                    quote.fame_gain, quote.regional_fame_gain_min, quote.regional_fame_gain_max
+                )),
+                if affordable {
+                    Line::styled("  Ready to book.", Style::new().fg(Color::Green))
+                } else {
+                    Line::styled(
+                        format!(
+                            "  Not enough cash — you have {}.",
+                            format_money(app.game.player.money)
+                        ),
+                        Style::new().fg(Color::Red),
+                    )
+                },
+            ]
+        }
+        Err(msg) => vec![
+            Line::styled("Quote", Style::new().bold()),
+            Line::styled(format!("  {msg}"), Style::new().fg(Color::Red)),
+        ],
+    };
+    frame.render_widget(
+        Paragraph::new(quote_lines).wrap(Wrap { trim: false }),
+        quote_area,
+    );
 }

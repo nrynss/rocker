@@ -1002,7 +1002,9 @@ fn balanced_indie_reaches_the_win_screen_by_year_twelve_on_most_seeds() {
 #[test]
 #[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
 fn tour_gross_by_skill_tier_sweep() {
-    const FIXED_FAME: u8 = 40; // "regional" tier: same tour_weeks/cost for every run below.
+    const FIXED_FAME: u8 = 40; // clears the Tour bus gate (25); same rig/weeks/cost for every run below.
+    const FIXED_RIG: TourRig = TourRig::Bus;
+    const FIXED_WEEKS: u8 = 2;
 
     fn tour_at(seed: u64, skill: u8, live_performance: u8) -> (u8, u32, f32, f32) {
         let mut game = seeded_game(seed);
@@ -1024,7 +1026,7 @@ fn tour_gross_by_skill_tier_sweep() {
             .position(|(_, _, _, _, _, fame_req)| *fame_req <= FIXED_FAME)
             .expect("at least one region open at fame 40");
 
-        game.process_turn(GameAction::GoOnTour(region_index))
+        game.process_turn(GameAction::GoOnTour(region_index, FIXED_RIG, FIXED_WEEKS))
             .expect("tour should be affordable and unblocked");
         let report = game.last_tour_report.expect("tour produces a report");
 

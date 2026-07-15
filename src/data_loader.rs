@@ -135,9 +135,16 @@ pub struct EconomicCycleEffect {
     pub merchandise_modifier: f32,
 }
 
+/// Per-rig travel/equipment scaling for touring (M1, docs/DESIGN-v0.7-
+/// money-cycle.md §A). Keyed by `TourRig::markets_key()` — re-keyed from the
+/// old fame-tier keys (local/regional/national/international), which priced
+/// a tour off the player's fame bracket rather than an explicit choice.
+/// The rig's own cost-per-week lives in `game::constants` (a decided design
+/// table, not data); these two modifiers are the extra logistics overhead of
+/// moving a bigger rig — previously loaded and never read at all. Not part
+/// of save state: `GameDataFiles` is reloaded fresh from disk every launch.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TouringCosts {
-    pub base_cost_per_show: u32,
     pub travel_cost_modifier: f32,
     pub equipment_cost_modifier: f32,
 }

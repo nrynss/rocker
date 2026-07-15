@@ -319,7 +319,9 @@ pub const TOUR_HEALTH_GUARD: u8 = 30;
 // in `lifestyle.rs`. Per-tier arrays are indexed by `LifestyleTier`'s
 // declaration order: Squat, Shared flat, City apartment, Townhouse,
 // Mansion. [tune] except where noted.
-// ============================================================================
+// 
+
+====================================================================
 
 /// Weekly rent, by tier. [tune]
 pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
@@ -351,6 +353,51 @@ pub(super) const LIFESTYLE_MOVE_DOWN_HAPPINESS: u8 = 15;
 pub(super) const LIFESTYLE_EVICTION_WEEKS: u32 = 2;
 /// One-shot happiness loss from a forced eviction. [tune]
 pub(super) const LIFESTYLE_EVICTION_HAPPINESS: u8 = 20;
+=======
+// M1: Tour economics — rig picker, length picker, itemized up-front quote
+// (docs/DESIGN-v0.7-money-cycle.md §A). Fame never re-prices a tour: it only
+// gates which rigs/lengths are selectable and how many seats a tour fills.
+// Same region + rig + length = same cost, at any fame.
+// ============================================================================
+
+/// The four tour rigs (`TourRig`, `actions/live.rs`), in ascending scale —
+/// index-aligned with every `TOUR_RIG_*` table below.
+pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
+
+/// Cost per tour week, before country travel mult and the rig's
+/// `markets.json` travel/equipment modifiers (design §A table).
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [150, 600, 2_500, 8_000];
+
+/// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
+pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
+
+/// Wear per tour week — health lost, replacing the flat
+/// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the
+/// flat cost). The van grinds you down; the production rig has roadies.
+pub(super) const TOUR_RIG_HEALTH_COST_PER_WEEK: [u8; 4] = [5, 4, 3, 2];
+/// Wear per tour week — stress gained, replacing the flat
+/// `TOUR_STRESS_COST_PER_WEEK` for the headline tour (design §A).
+pub(super) const TOUR_RIG_STRESS_COST_PER_WEEK: [u8; 4] = [9, 8, 6, 5];
+
+/// Tour length picker bounds: 1-4 weeks (today's fame-derived length is
+/// deleted along with the fame-derived cost tier).
+pub(super) const TOUR_LENGTH_MIN_WEEKS: u8 = 1;
+pub(super) const TOUR_LENGTH_MAX_WEEKS: u8 = 4;
+/// Fame required to select each length, indexed by `weeks - 1`: 3 weeks
+/// gated at fame 40, 4 at fame 60 (design §A); 1-2 weeks are never gated.
+pub(super) const TOUR_LENGTH_FAME_GATE: [u8; 4] = [0, 0, 40, 60];
+
+/// Fame and regional-fame gains scale sublinearly with tour length — a long
+/// tour is a bigger investment, not a strictly better one (design §A,
+/// explicitly left to be picked here) — via `base * weeks.powf(exponent)`,
+/// rounded. At exponent 0.7: 1wk -> x1.0, 2wk -> x1.62, 3wk -> x2.16,
+/// 4wk -> x2.64 (roughly two-thirds of linear scaling). [tune]
+pub(super) const TOUR_FAME_GAIN_BASE: f32 = 4.0;
+pub(super) const TOUR_FAME_WEEKS_EXPONENT: f32 = 0.7;
+/// Regional fame reuses the same sublinear weeks curve; the old flat
+/// `10 + rng(0..=5)` becomes this base plus the same rng spread. [tune]
+pub(super) const TOUR_REGIONAL_FAME_GAIN_BASE: f32 = 7.0;
+pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world

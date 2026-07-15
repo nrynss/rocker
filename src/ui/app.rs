@@ -5,7 +5,7 @@ use crate::data::constants;
 use crate::game::music::ReleaseType;
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
-    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
+    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD, TourRig,
 };
 
 use super::render;
@@ -69,6 +69,13 @@ pub enum Screen {
     },
     RegionPicker {
         selected: usize,
+    },
+    /// The rig + length picker reached after choosing a region: shows an
+    /// itemized quote live as the player changes selection (design §A, M1).
+    TourBookingPicker {
+        region_index: usize,
+        rig: TourRig,
+        weeks: u8,
     },
     PressingPicker {
         release_type: ReleaseType,
@@ -466,6 +473,7 @@ impl App {
             Screen::GameOver => self.should_exit = true,
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
+            Screen::TourBookingPicker { .. } => self.handle_tour_booking_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
             Screen::TourReport { .. } => self.handle_tour_report_key(key),
             Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),

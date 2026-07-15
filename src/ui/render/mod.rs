@@ -34,6 +34,9 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::File { .. } => modals::draw_file_modal(frame, app),
                 Screen::VenuePicker { .. } => modals::draw_venue_picker_modal(frame, app),
                 Screen::RegionPicker { .. } => modals::draw_region_picker_modal(frame, app),
+                Screen::TourBookingPicker { .. } => {
+                    modals::draw_tour_booking_picker_modal(frame, app)
+                }
                 Screen::PressingPicker { .. } => modals::draw_pressing_picker_modal(frame, app),
                 Screen::LifestylePicker { .. } => modals::draw_lifestyle_picker_modal(frame, app),
                 _ => {}
@@ -137,6 +140,35 @@ mod tests {
             rows,
         });
         app.screen = Screen::TourReport { scroll: 19 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+    }
+
+    /// M1's region picker and rig/length booking picker (design §A) should
+    /// render without panicking, both with a valid live quote and with a
+    /// picker state that resolves to a quote error (rig gated by fame) —
+    /// the modal must degrade gracefully, never panic, when the quote is
+    /// unavailable.
+    #[test]
+    fn tour_booking_picker_renders_without_panicking() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+
+        let mut app = app_on_main();
+        app.screen = Screen::RegionPicker { selected: 0 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // A low-fame band: Bus/Truck/Full and the longer lengths are all
+        // gated, so the quote for a non-Van selection should resolve to an
+        // Err the modal must render as a message rather than panicking.
+        app.screen = Screen::TourBookingPicker {
+            region_index: 0,
+            rig: crate::game::TourRig::Full,
+            weeks: 4,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // A high-fame band: every rig/length should quote cleanly.
+        app.game.band.fame = 90;
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 }
