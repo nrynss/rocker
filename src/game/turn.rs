@@ -297,6 +297,7 @@ impl Game {
                 | GameAction::RejectDeal(_)
                 | GameAction::DeclineSupportTour
                 | GameAction::StartMarketingCampaign(_, _)
+                | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
                 | GameAction::Quit
         );
 

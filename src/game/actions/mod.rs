@@ -32,6 +32,7 @@ impl Game {
             GameAction::StartMarketingCampaign(release_id, campaign_type) => {
                 self.action_start_marketing_campaign(release_id, campaign_type)
             }
+            GameAction::ChangeLifestyle(tier) => self.action_change_lifestyle(tier),
             GameAction::Quit => {
                 self.game_over = true;
                 Ok(())

@@ -2,6 +2,7 @@
 
 mod deals;
 mod file;
+mod lifestyle;
 mod main;
 mod marketing;
 mod pickers;

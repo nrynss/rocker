@@ -313,6 +313,45 @@ pub const GIG_HEALTH_GUARD: u8 = 20;
 pub const TOUR_STRESS_GUARD: u8 = 70;
 pub const TOUR_HEALTH_GUARD: u8 = 30;
 
+// ============================================================================
+// M2: the lifestyle ladder (docs/DESIGN-v0.7-money-cycle.md §B). Weekly
+// upkeep, stat effects, and one-shot move consequences, deducted/applied
+// in `lifestyle.rs`. Per-tier arrays are indexed by `LifestyleTier`'s
+// declaration order: Squat, Shared flat, City apartment, Townhouse,
+// Mansion. [tune] except where noted.
+// ============================================================================
+
+/// Weekly rent, by tier. [tune]
+pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
+/// Added to `STRESS_PASSIVE_RELEASE`, by tier. [tune]
+pub(super) const LIFESTYLE_STRESS_RELEASE_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
+/// The weekly stress drain cannot pull happiness below this floor
+/// (event/incident losses still can), by tier. [tune]
+pub(super) const LIFESTYLE_HAPPINESS_FLOOR: [u8; 5] = [0, 5, 10, 15, 20];
+/// Added to the health/stress recovery of rest-type actions (`LazeAround`,
+/// `TakeBreak`), by tier. [tune]
+pub(super) const LIFESTYLE_REST_HEALING_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
+
+/// Fame at/above which living at Squat or Shared flat draws tabloid
+/// attention. [tune]
+pub(super) const LIFESTYLE_IMAGE_FAME_THRESHOLD: u8 = 60;
+/// Happiness lost per week while the image penalty holds. [tune]
+pub(super) const LIFESTYLE_IMAGE_HAPPINESS_LOSS: u8 = 2;
+
+/// Moving up: deposit of this many weeks' upkeep, on top of the first
+/// week (so 5 weeks' worth of the new tier's upkeep, total). [tune]
+pub(super) const LIFESTYLE_MOVE_UP_DEPOSIT_WEEKS: u32 = 4;
+/// One-shot happiness gain on a voluntary move up. [tune]
+pub(super) const LIFESTYLE_MOVE_UP_HAPPINESS: u8 = 10;
+/// One-shot happiness loss on a voluntary move down. [tune]
+pub(super) const LIFESTYLE_MOVE_DOWN_HAPPINESS: u8 = 15;
+
+/// Consecutive weeks with money < 0 before the landlord forces a
+/// downgrade (decided design, not [tune]).
+pub(super) const LIFESTYLE_EVICTION_WEEKS: u32 = 2;
+/// One-shot happiness loss from a forced eviction. [tune]
+pub(super) const LIFESTYLE_EVICTION_HAPPINESS: u8 = 20;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

@@ -35,6 +35,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::VenuePicker { .. } => modals::draw_venue_picker_modal(frame, app),
                 Screen::RegionPicker { .. } => modals::draw_region_picker_modal(frame, app),
                 Screen::PressingPicker { .. } => modals::draw_pressing_picker_modal(frame, app),
+                Screen::LifestylePicker { .. } => modals::draw_lifestyle_picker_modal(frame, app),
                 _ => {}
             }
         }

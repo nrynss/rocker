@@ -11,7 +11,7 @@ use crate::game::constants;
 use crate::game::events::EventManager;
 use crate::game::genre;
 use crate::game::music::{MarketingCampaignType, Release};
-use crate::game::player::Player;
+use crate::game::player::{LifestyleTier, Player};
 use crate::game::shows::TourReport;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{GameWorld, PotentialDealOffer};
@@ -21,8 +21,12 @@ pub enum GameAction {
     LazeAround,
     WriteSongs,
     Practice,
-    RecordSingle { pressing: Option<usize> },
-    RecordAlbum { pressing: Option<usize> },
+    RecordSingle {
+        pressing: Option<usize>,
+    },
+    RecordAlbum {
+        pressing: Option<usize>,
+    },
     Gig(usize),
     GoOnTour(usize),
     TakeBreak,
@@ -32,6 +36,9 @@ pub enum GameAction {
     AcceptSupportTour,
     DeclineSupportTour,
     StartMarketingCampaign(u32, MarketingCampaignType), // release_id, campaign_type
+    /// Move to a different lifestyle tier — always the player's call,
+    /// instant, no week consumed (v0.7 design §B).
+    ChangeLifestyle(LifestyleTier),
     Quit,
 }
 

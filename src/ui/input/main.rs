@@ -126,6 +126,13 @@ impl App {
                     input: String::new(),
                 };
             }
+            MenuKind::Lifestyle => {
+                let selected = crate::game::player::LifestyleTier::ALL
+                    .iter()
+                    .position(|&t| t == self.game.player.lifestyle)
+                    .unwrap_or(0);
+                self.screen = Screen::LifestylePicker { selected };
+            }
             MenuKind::Quit => self.dispatch(GameAction::Quit),
         }
     }

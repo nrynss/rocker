@@ -77,6 +77,9 @@ pub enum Screen {
     TourReport {
         scroll: usize,
     },
+    LifestylePicker {
+        selected: usize,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -95,6 +98,7 @@ pub enum MenuKind {
     GoOnTour,
     RecordSingle,
     RecordAlbum,
+    Lifestyle,
 }
 
 pub struct MenuEntry {
@@ -345,6 +349,17 @@ impl App {
                 kind: MenuKind::TourReport,
             },
             MenuEntry {
+                hotkey: 'h',
+                label: "Lifestyle…",
+                detail: format!(
+                    "{} · ${}/wk",
+                    game.player.lifestyle.label(),
+                    game.player.lifestyle.upkeep_per_week()
+                ),
+                enabled: true,
+                kind: MenuKind::Lifestyle,
+            },
+            MenuEntry {
                 hotkey: 's',
                 label: "Save Game",
                 detail: String::new(),
@@ -453,6 +468,7 @@ impl App {
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
             Screen::TourReport { .. } => self.handle_tour_report_key(key),
+            Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),
         }
     }
 }
