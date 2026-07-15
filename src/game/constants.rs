@@ -535,12 +535,6 @@ pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
 /// sales, so this board never contributes demand or Worldwide.
 pub(super) const LOCAL_PRESENCE: f32 = 1.0;
 
-/// UK home floor (design §C): local sales *are* UK sales, so even a
-/// mail-order act that has never toured (regional fame 0 everywhere) still
-/// reaches this much presence at home. Applied only to the UK territory —
-/// the other three earn their presence entirely through touring. [tune]
-pub(super) const UK_HOME_FLOOR: f32 = 0.1;
-
 /// Regional fame (`0..=100`) normalizes by this into the `0..1` "how known
 /// the act is in this country" factor that multiplies reach. Touring is what
 /// raises regional fame (`actions/live.rs`), so a studio-only act reads 0

@@ -112,11 +112,17 @@ impl Game {
     /// varies by territory. Used to scale both the chart submission and the
     /// demand sum for each of the four `ChartRegion::TERRITORIES`.
     fn territory_presence(&self, region: world::ChartRegion, reach: f32) -> f32 {
-        let base = reach * self.regional_fame_factor(Self::territory_country(region));
         if matches!(region, world::ChartRegion::Uk) {
-            base.max(UK_HOME_FLOOR)
+            // Home market: the act's distribution reach carries it directly.
+            // A label's `market_reach` (or a bought indie channel) sells you
+            // at home without a domestic tour — regional fame only decides
+            // how far you reach *abroad* (design §C: "tours carry your
+            // records abroad"). A non-touring act therefore sells at home
+            // roughly as it did before regional charts; touring adds the
+            // three foreign territories on top.
+            reach
         } else {
-            base
+            reach * self.regional_fame_factor(Self::territory_country(region))
         }
     }
 
@@ -689,14 +695,16 @@ impl Game {
                         // floor.
                         let reach =
                             Self::reach_for(fame as u8, market_reach, release.distribution_channel);
+                        // Mirrors `territory_presence`: the UK home market
+                        // rides the act's reach directly; the three foreign
+                        // territories scale by regional fame (touring).
                         let presence_sum: f32 = territory_fame
                             .iter()
                             .map(|&(region, fame_factor)| {
-                                let base = reach * fame_factor;
                                 if matches!(region, world::ChartRegion::Uk) {
-                                    base.max(UK_HOME_FLOOR)
+                                    reach
                                 } else {
-                                    base
+                                    reach * fame_factor
                                 }
                             })
                             .sum();
