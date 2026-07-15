@@ -11,8 +11,11 @@
 > document's ability-picker Practice rework in §2/§6 — current Practice
 > still does a flat, uniform bump per member, not per-ability training).
 > Addiction (§9.1), vacations (§9.3), and the manager (§9.4) remain fully
-> unbuilt and are next in line. The Musician struct itself (§1–§8) is
-> untouched — this remains the plan for that cycle.
+> unbuilt and are still queued — the v0.7 Money Cycle (tour economics,
+> lifestyle ladder, chart stability, certifications, pressing &
+> distribution costs; `docs/DESIGN-v0.7-money-cycle.md`) slotted in ahead
+> of them. The Musician struct itself (§1–§8) is untouched — this remains
+> the plan for that cycle.
 
 This document describes three interlocking systems that must be designed and
 built together. They replace HANDOFF task #5 (the flat `genre_ratings`
