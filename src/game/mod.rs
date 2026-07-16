@@ -26,6 +26,7 @@ pub mod world;
 #[cfg(test)]
 mod tests;
 
+pub use actions::{TourQuote, TourRig};
 pub use constants::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, PRESSING_TIERS, STUDIO_STRESS_BLOCK,
     TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,

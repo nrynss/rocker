@@ -59,10 +59,10 @@ impl Game {
     fn is_publicly_active(&self, action: &GameAction) -> bool {
         let public_action = matches!(
             action,
-            GameAction::Gig(_) | GameAction::GoOnTour(_) | GameAction::AcceptSupportTour
+            GameAction::Gig(_) | GameAction::GoOnTour(..) | GameAction::AcceptSupportTour
         ) || !self.just_released_music.is_empty();
         public_action
-            || self.world.charts.iter().any(|entry| entry.is_player)
+            || self.world.player_is_charting()
             || (self.band.fame >= ESTABLISHMENT_MIN_FAME && self.has_recent_release())
     }
 
@@ -237,6 +237,10 @@ impl Game {
         }
 
         self.label_single_cut_check(rng);
+        // M9 (design §E-4/§E-5): the deal's clock — cooldown decrement,
+        // term-expiry breach, and the renewal window/memos — runs every
+        // week alongside the single-cut check, on the same action stream.
+        self.label_weekly_deal_check(rng);
         self.update_support_tour_offer(rng);
         Ok(())
     }
@@ -297,6 +301,8 @@ impl Game {
                 | GameAction::RejectDeal(_)
                 | GameAction::DeclineSupportTour
                 | GameAction::StartMarketingCampaign(_, _)
+                | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
+                | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
                 | GameAction::Quit
         );
 

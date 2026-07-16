@@ -11,6 +11,9 @@ use super::*;
 fn unknown_indie_acts_reach_almost_nobody() {
     let mut game = test_game();
     game.band.record_deal = None;
+    // M10: the act is known regionally (it has toured), so fame then drives
+    // how much of that regional audience its indie distribution can reach.
+    give_regional_presence(&mut game, 80);
     let release = test_release(1, ReleaseType::Single);
 
     game.band.fame = 5;
@@ -28,6 +31,11 @@ fn unknown_indie_acts_reach_almost_nobody() {
 fn label_out_earns_indie_at_low_fame_but_not_at_high_fame() {
     let mut game = test_game();
     game.band.fame = 10;
+    // M10: a touring act with regional presence, so the label's wider reach
+    // (`market_reach`) actually multiplies through into territory sales — with
+    // regional fame at 0 every act pins to the UK home floor and the reach
+    // gap that this test is about never surfaces.
+    give_regional_presence(&mut game, 80);
     let release = test_release(1, ReleaseType::Single);
 
     game.band.record_deal = None;
@@ -84,13 +92,18 @@ fn a_pressing_can_sell_out() {
     let mut game = test_game();
     game.band.record_deal = None;
     game.band.fame = 60;
+    // M10: a touring act's regional presence, so demand across the territories
+    // can genuinely outrun a tiny garage run.
+    give_regional_presence(&mut game, 80);
 
     let mut release = test_release(1, ReleaseType::Single);
     release.copies_pressed = 500;
     let (income, units, sold_out) = game.calculate_release_outcome(400, &release);
     assert!(sold_out, "demand should outstrip a garage run");
     assert_eq!(units, 500);
-    assert_eq!(income, 500 * INDIE_INCOME_PER_COPY);
+    // M7 (§F): income is copies × per-copy ÷ SALES_INCOME_DIVISOR — the copy
+    // bump feeds certification, not the bank balance.
+    assert_eq!(income, 500 * INDIE_INCOME_PER_COPY / SALES_INCOME_DIVISOR);
 
     release.copies_pressed = 50_000;
     let (_, units_uncapped, sold_out) = game.calculate_release_outcome(400, &release);
@@ -115,10 +128,15 @@ fn signed_bands_do_not_run_their_own_marketing() {
 fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
-    // A crowded chart: ten scene records the player has to outsell.
-    for i in 0..world::CHART_SIZE {
-        game.world
-            .submit_chart_entry(format!("Scene Filler {i}"), "Scene Band".into(), false, 200);
+    // A crowded Local board: scene records the player has to outsell.
+    for i in 0..10 {
+        game.world.submit_chart_entry(
+            world::ChartRegion::Local,
+            format!("Scene Filler {i}"),
+            "Scene Band".into(),
+            false,
+            200,
+        );
     }
 
     // A famous band drops a great record...
@@ -132,16 +150,16 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 
     assert!(
         game.world
-            .charts
-            .iter()
-            .any(|e| e.is_player && e.title == "Big Hit"),
-        "a high-scoring release should land on the chart"
+            .regional_charts
+            .get(&world::ChartRegion::Local)
+            .is_some_and(|entries| entries.iter().any(|e| e.is_player && e.title == "Big Hit")),
+        "a high-scoring release should land on the Local chart"
     );
     assert!(
         game.turn_log
             .iter()
-            .any(|m| m.contains("enters the charts at #1")),
-        "charting should be reported to the player"
+            .any(|m| m.contains("enters the Local chart at #1")),
+        "charting should be reported to the player, named by region (M10)"
     );
 
     // ...while a nobody's dud sinks without a trace.
@@ -155,8 +173,12 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     game.process_music_releases_and_marketing();
 
     assert!(
-        !game.world.charts.iter().any(|e| e.title == "Total Flop"),
-        "a flop should not crack a crowded top 10"
+        !game
+            .world
+            .regional_charts
+            .get(&world::ChartRegion::Local)
+            .is_some_and(|entries| entries.iter().any(|e| e.title == "Total Flop")),
+        "a flop should not crack the Local chart"
     );
 }
 

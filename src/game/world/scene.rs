@@ -7,6 +7,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::GameWorld;
+use super::regions::{self, ChartRegion};
 
 /// The scene never empties out or grows without bound.
 pub const SCENE_START_BANDS: usize = 180;
@@ -39,7 +40,10 @@ impl GameWorld {
     ) {
         let era_year = timeline.get_current_era().year;
         let trending = timeline.get_trending_genres();
-        let mut releases: Vec<(usize, String, u32)> = Vec::new();
+        // Label + fame at release time travel with the score so the
+        // post-loop submission pass can work out where each release
+        // charts without re-borrowing `self.bands` (design §C).
+        let mut releases: Vec<(usize, String, u32, Option<String>, u8)> = Vec::new();
 
         for (idx, band) in self.bands.iter_mut().enumerate() {
             let on_trend = trending.iter().any(|t| t.contains(band.genre.name()));
@@ -56,8 +60,10 @@ impl GameWorld {
             }
             band.peak_fame = band.peak_fame.max(band.fame);
 
-            // Releases: signed bands put records out more often.
-            let release_odds = if band.label.is_some() { 16 } else { 28 };
+            // Releases: signed bands put records out more often. Calmer
+            // than the pre-regional-charts odds (design §C) — four Top-100
+            // boards fill without the scene turning over weekly.
+            let release_odds = if band.label.is_some() { 26 } else { 44 };
             if rng.gen_range(0..release_odds) == 0 {
                 let title = data_files.generate_song_title(rng);
                 let quality = rng.gen_range(25..=85) as f32;
@@ -73,7 +79,7 @@ impl GameWorld {
                     * rng.gen_range(0.7..1.4)) as u32;
 
                 band.latest_release = title.clone();
-                releases.push((idx, title, score));
+                releases.push((idx, title, score, band.label.clone(), band.fame));
             }
 
             // Signings: a rising unsigned act catches a label's ear.
@@ -87,25 +93,70 @@ impl GameWorld {
             }
         }
 
-        // Chart submissions happen after the borrow on bands ends.
-        for (idx, title, score) in releases {
+        // Chart submissions happen after the borrow on bands ends. Every
+        // scene band always competes on Local (design §C); unsigned acts
+        // spill into the UK once famous enough, signed acts spread by
+        // label tier — the `regions` module's presence API decides where.
+        for (idx, title, score, label, fame) in releases {
             let band_name = self.bands[idx].name.clone();
-            let position = self.submit_chart_entry(title.clone(), band_name.clone(), false, score);
-            if let Some(pos) = position {
+
+            let mut regions_to_chart = vec![ChartRegion::Local];
+            match label
+                .as_deref()
+                .and_then(|name| regions::label_tier_for(name, data_files))
+            {
+                Some(tier) => regions_to_chart.extend(regions::signed_spread(tier, rng)),
+                None => regions_to_chart.extend(regions::unsigned_spillover(fame).iter().copied()),
+            }
+
+            let mut positions: Vec<(ChartRegion, usize)> = Vec::new();
+            let mut local_position = None;
+            for region in regions_to_chart {
+                let position =
+                    self.submit_chart_entry(region, title.clone(), band_name.clone(), false, score);
+                if let Some(pos) = position {
+                    if region == ChartRegion::Local {
+                        local_position = Some(pos);
+                    }
+                    positions.push((region, pos));
+                }
+            }
+
+            // Fame/momentum growth still tracks Local — the home board
+            // every act enters, so the scene keeps living the way it
+            // always did regardless of how far a release spreads abroad.
+            // Bonus scales 5..1 across the full depth-100 board (the old
+            // 5..1-over-10 curve, stretched to match).
+            if let Some(pos) = local_position {
                 let band = &mut self.bands[idx];
-                band.fame = (band.fame + ((11 - pos as u8) / 2).max(1)).min(100);
+                let fame_bonus = ((101u32.saturating_sub(pos as u32)) / 20).max(1) as u8;
+                band.fame = (band.fame + fame_bonus).min(100);
                 band.momentum = (band.momentum + 1).min(3);
                 band.peak_fame = band.peak_fame.max(band.fame);
                 // A charting record crowds the market a little.
                 self.music_market.saturation = (self.music_market.saturation + 1).min(95);
-                if pos <= 5 || self.bands[idx].fame >= 60 {
-                    news.push(format!(
-                        "📀 {}'s '{}' charts at #{}.",
-                        band_name, title, pos
-                    ));
-                }
+            }
+
+            // One news line per release, not one per board — a Major act
+            // now charts across up to five boards at once, and a line each
+            // would flood the feed and undo the calmer-scene intent (§C).
+            // Report the single best showing (highest rank, i.e. lowest
+            // position number).
+            let current_fame = self.bands[idx].fame;
+            if let Some(&(region, pos)) = positions.iter().min_by_key(|(_, pos)| *pos)
+                && (pos <= 5 || current_fame >= 60)
+            {
+                news.push(format!(
+                    "📀 {}'s '{}' charts at #{} {}.",
+                    band_name,
+                    title,
+                    pos,
+                    region.label()
+                ));
             }
         }
+
+        self.fill_territories(rng, timeline, data_files);
     }
 
     /// Bands break up and new ones form: the scene has a life of its own.

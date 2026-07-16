@@ -2,10 +2,10 @@ use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::data::constants;
-use crate::game::music::ReleaseType;
+use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
-    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
+    STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD, TourRig,
 };
 
 use super::render;
@@ -50,7 +50,10 @@ pub enum Screen {
         detail: bool,
     },
     SupportOffer,
-    Charts,
+    Charts {
+        region: crate::game::world::ChartRegion,
+        scroll: usize,
+    },
     MarketingRelease {
         selected: usize,
     },
@@ -70,12 +73,37 @@ pub enum Screen {
     RegionPicker {
         selected: usize,
     },
+    /// The rig + length picker reached after choosing a region: shows an
+    /// itemized quote live as the player changes selection (design §A, M1).
+    TourBookingPicker {
+        region_index: usize,
+        rig: TourRig,
+        weeks: u8,
+    },
     PressingPicker {
         release_type: ReleaseType,
         selected: usize,
+        /// Distribution channel choice alongside the pressing run (design
+        /// §E-3, M6) — meaningful only while unsigned; signed releases never
+        /// reach this screen (`open_pressing_picker` dispatches straight
+        /// through).
+        channel: DistributionChannel,
     },
     TourReport {
         scroll: usize,
+    },
+    LifestylePicker {
+        selected: usize,
+    },
+    /// Which sold-out/low-stock release to re-press (design §E-1 indie
+    /// half, M6).
+    RePressPicker {
+        selected: usize,
+    },
+    /// The pressing-tier choice for a re-press, once the release is picked.
+    RePressTierPicker {
+        release_id: u32,
+        selected: usize,
     },
 }
 
@@ -95,6 +123,9 @@ pub enum MenuKind {
     GoOnTour,
     RecordSingle,
     RecordAlbum,
+    Lifestyle,
+    /// Open the re-press picker (design §E-1 indie half, M6).
+    RePress,
 }
 
 pub struct MenuEntry {
@@ -159,18 +190,39 @@ impl App {
         let signed = game.band.current_deal().is_some();
         let single_cost = game.recording_cost(&ReleaseType::Single);
         let album_cost = game.recording_cost(&ReleaseType::Album);
-        // The cheapest pressing run, for affordability checks.
+        // The cheapest pressing run, for affordability checks. M6: also the
+        // currently-selected distribution channel's fee (§E-3) — Ok(0) while
+        // signed, and `plan_distribution` folds the fame-gate check in too,
+        // but here we just want the floor cost, not the error.
+        //
+        // A channel the player picked while famous can become unavailable
+        // after fame decay. `plan_distribution` reports that as `Err`; if we
+        // let `unwrap_or(0)` swallow it the menu would show recording as
+        // affordable, then the action would fail with a fame error instead of
+        // the expected money error. So track availability and gate `enabled`
+        // on it too (always available while signed — the label distributes).
+        let channel_available = signed
+            || game
+                .current_distribution_channel
+                .is_available(game.band.fame);
         let (single_min, album_min) = if signed {
             (single_cost, album_cost)
         } else {
+            let fee = game
+                .plan_distribution(game.current_distribution_channel)
+                .unwrap_or(0);
             (
-                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1),
-                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1),
+                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1) + fee,
+                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1) + fee,
             )
         };
         let songs = game.band.unreleased_songs.len();
         let offers = game.pending_deal_offers.len();
         let releases = game.just_released_music.len() + game.band.total_releases();
+        // M6 (§E-1 indie half): releases eligible for a player-initiated
+        // re-press right now — empty for a signed act (its label restocks
+        // on its own).
+        let repress_count = game.repressable_releases().len();
 
         let mut entries = vec![
             MenuEntry {
@@ -211,11 +263,17 @@ impl App {
                     "no songs written".into()
                 } else if signed {
                     format!("${} — label presses", single_cost)
+                } else if !channel_available {
+                    format!(
+                        "{} locked — need more fame",
+                        game.current_distribution_channel.label()
+                    )
                 } else {
                     format!("${} + pressing", single_cost)
                 },
                 enabled: game.player.stress < 90
                     && game.band.can_record_single()
+                    && channel_available
                     && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
             },
@@ -228,11 +286,17 @@ impl App {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
                 } else if signed {
                     format!("${} — label presses", album_cost)
+                } else if !channel_available {
+                    format!(
+                        "{} locked — need more fame",
+                        game.current_distribution_channel.label()
+                    )
                 } else {
                     format!("${} + pressing", album_cost)
                 },
                 enabled: game.player.stress < 90
                     && game.band.can_record_album()
+                    && channel_available
                     && game.player.can_afford(album_min),
                 kind: MenuKind::RecordAlbum,
             },
@@ -322,9 +386,14 @@ impl App {
             MenuEntry {
                 hotkey: 'c',
                 label: "Charts…",
-                detail: match game.world.charts.iter().position(|e| e.is_player) {
-                    Some(spot) => format!("you're at #{}!", spot + 1),
-                    None => "this week's top 10".into(),
+                detail: match game
+                    .world
+                    .regional_charts
+                    .get(&crate::game::world::ChartRegion::Local)
+                    .and_then(|entries| entries.iter().position(|e| e.is_player))
+                {
+                    Some(spot) => format!("you're at #{} Local!", spot + 1),
+                    None => "regional Top 100s".into(),
                 },
                 enabled: true,
                 kind: MenuKind::Charts,
@@ -343,6 +412,34 @@ impl App {
                 },
                 enabled: true,
                 kind: MenuKind::TourReport,
+            },
+            MenuEntry {
+                hotkey: 'h',
+                label: "Lifestyle…",
+                detail: format!(
+                    "{} · ${}/wk",
+                    game.player.lifestyle.label(),
+                    game.player.lifestyle.upkeep_per_week()
+                ),
+                enabled: true,
+                kind: MenuKind::Lifestyle,
+            },
+            MenuEntry {
+                hotkey: 'p',
+                label: "Re-press…",
+                detail: if signed {
+                    "your label restocks automatically".into()
+                } else if repress_count == 0 {
+                    "nothing low on stock".into()
+                } else {
+                    format!(
+                        "{} release{} ready",
+                        repress_count,
+                        if repress_count == 1 { "" } else { "s" }
+                    )
+                },
+                enabled: !signed && repress_count > 0,
+                kind: MenuKind::RePress,
             },
             MenuEntry {
                 hotkey: 's',
@@ -401,6 +498,26 @@ impl App {
         targets
     }
 
+    /// The current standings for one charts tab — Worldwide is derived
+    /// fresh (design §C), the rest are read straight off their stored
+    /// board. Shared by the input handler (to clamp scrolling) and the
+    /// modal renderer, so both agree on what "this tab" means.
+    pub fn charts_region_entries(
+        &self,
+        region: crate::game::world::ChartRegion,
+    ) -> Vec<crate::game::world::ChartEntry> {
+        if region == crate::game::world::ChartRegion::Worldwide {
+            self.game.world.worldwide_chart()
+        } else {
+            self.game
+                .world
+                .regional_charts
+                .get(&region)
+                .cloned()
+                .unwrap_or_default()
+        }
+    }
+
     // --- Logging ---
 
     pub(crate) fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
@@ -444,15 +561,19 @@ impl App {
             Screen::Main => self.handle_main_key(key),
             Screen::Deals { .. } => self.handle_deals_key(key),
             Screen::SupportOffer => self.handle_support_offer_key(key),
-            Screen::Charts => self.handle_charts_key(key),
+            Screen::Charts { .. } => self.handle_charts_key(key),
             Screen::MarketingRelease { .. } => self.handle_marketing_release_key(key),
             Screen::MarketingCampaign { .. } => self.handle_marketing_campaign_key(key),
             Screen::File { .. } => self.handle_file_key(key),
             Screen::GameOver => self.should_exit = true,
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
+            Screen::TourBookingPicker { .. } => self.handle_tour_booking_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),
             Screen::TourReport { .. } => self.handle_tour_report_key(key),
+            Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),
+            Screen::RePressPicker { .. } => self.handle_repress_picker_key(key),
+            Screen::RePressTierPicker { .. } => self.handle_repress_tier_picker_key(key),
         }
     }
 }

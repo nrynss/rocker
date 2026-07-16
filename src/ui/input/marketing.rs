@@ -53,12 +53,12 @@ impl App {
             KeyCode::Esc => self.screen = Screen::MarketingRelease { selected: 0 },
             KeyCode::Up | KeyCode::Char('k') => {
                 if let Screen::MarketingCampaign { selected, .. } = &mut self.screen {
-                    *selected = selected.checked_sub(1).unwrap_or(count - 1);
+                    *selected = super::cycle_index(*selected, count, false);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if let Screen::MarketingCampaign { selected, .. } = &mut self.screen {
-                    *selected = (*selected + 1) % count;
+                    *selected = super::cycle_index(*selected, count, true);
                 }
             }
             KeyCode::Enter => {

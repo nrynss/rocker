@@ -63,7 +63,12 @@ impl App {
                     );
                 }
             }
-            MenuKind::Charts => self.screen = Screen::Charts,
+            MenuKind::Charts => {
+                self.screen = Screen::Charts {
+                    region: crate::game::world::ChartRegion::Local,
+                    scroll: 0,
+                }
+            }
             MenuKind::TourReport => self.screen = Screen::TourReport { scroll: 0 },
             MenuKind::Marketing => {
                 let signed = self.game.band.current_deal().is_some();
@@ -126,13 +131,66 @@ impl App {
                     input: String::new(),
                 };
             }
+            MenuKind::Lifestyle => {
+                let selected = crate::game::player::LifestyleTier::ALL
+                    .iter()
+                    .position(|&t| t == self.game.player.lifestyle)
+                    .unwrap_or(0);
+                self.screen = Screen::LifestylePicker { selected };
+            }
+            MenuKind::RePress => {
+                if self.game.band.current_deal().is_some() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "Your label restocks the catalog automatically.",
+                    );
+                } else if self.game.repressable_releases().is_empty() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "Nothing is sold out or low on stock right now.",
+                    );
+                } else {
+                    self.screen = Screen::RePressPicker { selected: 0 };
+                }
+            }
             MenuKind::Quit => self.dispatch(GameAction::Quit),
         }
     }
 
     pub(crate) fn handle_charts_key(&mut self, key: KeyEvent) {
-        if key.code == KeyCode::Esc {
-            self.screen = Screen::Main;
+        let Screen::Charts { region, scroll } = self.screen else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            // ←/→ cycle Local → UK → Europe → America → Japan → Worldwide.
+            KeyCode::Left | KeyCode::Char('h') => {
+                self.screen = Screen::Charts {
+                    region: region.prev_tab(),
+                    scroll: 0,
+                };
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                self.screen = Screen::Charts {
+                    region: region.next_tab(),
+                    scroll: 0,
+                };
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.screen = Screen::Charts {
+                    region,
+                    scroll: scroll.saturating_sub(1),
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let count = self.charts_region_entries(region).len();
+                let max_scroll = count.saturating_sub(1);
+                self.screen = Screen::Charts {
+                    region,
+                    scroll: (scroll + 1).min(max_scroll),
+                };
+            }
+            _ => {}
         }
     }
 

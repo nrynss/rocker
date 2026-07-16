@@ -1,3 +1,6 @@
+use crate::game::constants::{
+    DISTRIBUTION_CHANNEL_FAME_GATE, DISTRIBUTION_CHANNEL_FEE, DISTRIBUTION_CHANNEL_REACH_FLOOR,
+};
 use crate::game::genre::MusicGenre;
 use serde::{Deserialize, Serialize};
 
@@ -75,6 +78,73 @@ impl MarketingCampaignType {
     }
 }
 
+/// Indie distribution channels (design §E-3, M6): releasing while unsigned
+/// buys reach through one of these, fee due at release. A label deal
+/// ignores channels entirely — its own `market_reach` always wins
+/// (`economy::distribution_multiplier`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DistributionChannel {
+    MailOrder,
+    Regional,
+    National,
+}
+
+impl Default for DistributionChannel {
+    /// Mail order & gigs — the pre-M6 indie formula with no purchasable
+    /// floor, so an old save (or a signed release, which never sets this)
+    /// reads exactly as it always did.
+    fn default() -> Self {
+        DistributionChannel::MailOrder
+    }
+}
+
+impl DistributionChannel {
+    /// In picker order, smallest reach to biggest.
+    pub const ALL: [DistributionChannel; 3] = [
+        DistributionChannel::MailOrder,
+        DistributionChannel::Regional,
+        DistributionChannel::National,
+    ];
+
+    /// Index into the `DISTRIBUTION_CHANNEL_*` const tables — also this
+    /// channel's position in `ALL`, for picker navigation.
+    pub fn ordinal(self) -> usize {
+        match self {
+            DistributionChannel::MailOrder => 0,
+            DistributionChannel::Regional => 1,
+            DistributionChannel::National => 2,
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DistributionChannel::MailOrder => "Mail order & gigs",
+            DistributionChannel::Regional => "Regional distributor",
+            DistributionChannel::National => "National distributor",
+        }
+    }
+
+    /// Fame required to select this channel at all (design §E-3 table).
+    pub fn fame_gate(self) -> u8 {
+        DISTRIBUTION_CHANNEL_FAME_GATE[self.ordinal()]
+    }
+
+    pub fn is_available(self, fame: u8) -> bool {
+        fame >= self.fame_gate()
+    }
+
+    /// Fee due at each release under this channel (design §E-3 table).
+    pub fn fee(self) -> i32 {
+        DISTRIBUTION_CHANNEL_FEE[self.ordinal()]
+    }
+
+    /// Reach floor: effective indie reach is `max(floor, current fame
+    /// formula)` (design §E-3 table).
+    pub fn reach_floor(self) -> f32 {
+        DISTRIBUTION_CHANNEL_REACH_FLOOR[self.ordinal()]
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveMarketingCampaign {
     pub campaign_type: MarketingCampaignType,
@@ -112,4 +182,28 @@ pub struct Release {
     /// Meaningful for albums; stays 0 on singles.
     #[serde(default)]
     pub singles_cut: u32,
+    /// Certification level (§D): 0 = none, 1 = silver, 2 = gold, 3 = platinum, 4+ = multi-platinum count.
+    /// Derived from cumulative copies_sold at certification thresholds.
+    #[serde(default)]
+    pub certified: u8,
+    /// Indie distribution channel this release went out under (design §E-3,
+    /// M6), frozen at record time. `None` for label releases (channel-blind;
+    /// reach is `market_reach`) and for pre-M6 saves — both read as
+    /// `DistributionChannel::default()` (Mail order & gigs) wherever reach is
+    /// computed, so old catalog behaves exactly as before. Kept per-release
+    /// (not a single "current" setting) so a later channel upgrade never
+    /// retroactively changes an old release's tail sales.
+    #[serde(default)]
+    pub distribution_channel: Option<DistributionChannel>,
+    /// The signing label's `market_reach`, frozen on the release at record
+    /// time. `Some(reach)` for a label release, `None` for indie releases and
+    /// pre-M6 saves. Reach is otherwise read from the band's *current* deal,
+    /// so without this a signed record's catalog tail would collapse to indie
+    /// reach the moment the act leaves the label — the record keeps the
+    /// distribution footprint it was actually released with. `None` falls back
+    /// to the live deal (so indie/legacy behaviour is unchanged), which is why
+    /// this disambiguates label releases from legacy ones that also carry
+    /// `distribution_channel: None`.
+    #[serde(default)]
+    pub label_market_reach: Option<u8>,
 }

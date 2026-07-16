@@ -1,7 +1,16 @@
-//! Record-deal scouting, buzz, and scene poaching of rejected offers.
+//! Record-deal scouting, buzz, scene poaching of rejected offers, and (M9)
+//! the term a deal carries at signing plus the recoupment-dependent
+//! renewal window that opens before a healthy term's expiry (design §E-4).
 
-use crate::data_loader::{GameDataFiles, RecordLabel};
+use crate::data_loader::{GameDataFiles, RecordLabel, RecordLabelsData};
 use crate::game::band::Band;
+use crate::game::constants::{
+    DEAL_EXTENSION_ADVANCE_FRACTION, DEAL_EXTENSION_ALBUMS, DEAL_EXTENSION_TERM_WEEKS,
+    DEAL_NEW_CONTRACT_ROYALTY_BUMP_MAX, DEAL_NEW_CONTRACT_ROYALTY_BUMP_MIN,
+    DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS, DEAL_RENEWAL_DEEP_RED_UNRECOUPED,
+    DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS, DEAL_RENEWAL_WINDOW_WEEKS,
+    DEAL_TERM_BOUTIQUE_WEEKS, DEAL_TERM_INDEPENDENT_WEEKS, DEAL_TERM_MAJOR_WEEKS,
+};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +38,17 @@ pub struct PotentialDealOffer {
     /// (0) would kill every live offer the moment an old save loaded.
     #[serde(default)]
     pub expires_week: Option<u32>,
+    /// Contract length in weeks (design §E-4), generated here at offer
+    /// time. `0` on a pre-M9 save's still-pending offer — accepting it
+    /// then signs a legacy-policy deal (see `RecordDeal::term_weeks`).
+    #[serde(default)]
+    pub term_weeks: u16,
+    /// Set only on a renewal-window EXTENSION offer (design §E-4): the old
+    /// deal's `unrecouped` balance, carried into the new deal's ledger on
+    /// top of this offer's own (small) advance instead of starting fresh.
+    /// `0` for every ordinary signing and every NEW CONTRACT renewal.
+    #[serde(default)]
+    pub carry_forward_unrecouped: i32,
 }
 
 impl GameWorld {
@@ -53,7 +73,11 @@ impl GameWorld {
         let catalog_heat = (band.singles_released.len() as u32 * BUZZ_PER_SINGLE
             + band.albums_released.len() as u32 * BUZZ_PER_ALBUM)
             .min(BUZZ_CATALOG_CAP);
-        let chart_heat = if self.charts.iter().any(|entry| entry.is_player) {
+        // (M3 note for M9: this used to read the legacy flat `self.charts`
+        // field; that field is now vestigial (design §C — regional Top
+        // 100s), so the check moved to the regional boards via
+        // `player_is_charting`.)
+        let chart_heat = if self.player_is_charting() {
             BUZZ_CHART_BONUS
         } else {
             0
@@ -67,6 +91,13 @@ impl GameWorld {
         game_data: &GameDataFiles,
         rng: &mut impl Rng,
     ) -> Vec<PotentialDealOffer> {
+        // M9 (design §E-4): a breach's cooldown blocks every new offer.
+        // This is the single choke point `check_and_generate_deal_offers`
+        // (turn.rs) calls through for the player, so gating here — rather
+        // than at that call site — is enough.
+        if band.deal_cooldown > 0 {
+            return Vec::new();
+        }
         let mut offers = Vec::new();
         let labels_data = game_data.get_record_labels_data();
         let buzz = self.band_buzz(band);
@@ -165,6 +196,7 @@ impl GameWorld {
                             "Boutique" => rng.gen_range(1..=2),
                             _ => 2,
                         };
+                        let term_weeks = term_weeks_for_tier(tier_name, rng);
 
                         offers.push(PotentialDealOffer {
                             label_name: label.name.clone(),
@@ -176,11 +208,141 @@ impl GameWorld {
                             // The world has no clock; the game stamps the
                             // deadline when the offer lands on the table.
                             expires_week: None,
+                            term_weeks,
+                            carry_forward_unrecouped: 0,
                         });
                     }
                 }
             }
         }
         offers
+    }
+
+    /// The renewal window (design §E-4): 26 weeks [tune] before a healthy
+    /// term's expiry, with all albums delivered, the label looks at its
+    /// ledger and makes a move through the same offer stream a fresh
+    /// signing uses. `None` when the window isn't open, or when the ledger
+    /// says "deep in the red with weak sales" (the label just lets the
+    /// clock run out).
+    pub fn generate_renewal_offer(
+        &self,
+        band: &Band,
+        game_data: &GameDataFiles,
+        rng: &mut impl Rng,
+        current_week: u32,
+    ) -> Option<PotentialDealOffer> {
+        let deal = band.current_deal()?;
+        if !deal.renewal_window_open(current_week, DEAL_RENEWAL_WINDOW_WEEKS) {
+            return None;
+        }
+        let labels_data = game_data.get_record_labels_data();
+        let label_data = find_label_by_name(labels_data, &deal.label_tier, &deal.label_name)?;
+
+        match renewal_decision(deal.unrecouped, band.reputation.commercial_success) {
+            RenewalDecision::Silence => None,
+            RenewalDecision::Extension => {
+                let advance = (deal.advance as f32 * DEAL_EXTENSION_ADVANCE_FRACTION) as u32;
+                Some(PotentialDealOffer {
+                    label_name: deal.label_name.clone(),
+                    label_tier: deal.label_tier.clone(),
+                    advance,
+                    royalty_rate: deal.royalty_rate,
+                    albums_required: DEAL_EXTENSION_ALBUMS,
+                    original_label_data: label_data.clone(),
+                    expires_week: None,
+                    term_weeks: DEAL_EXTENSION_TERM_WEEKS,
+                    // The label protects its investment: the balance it's
+                    // still owed carries into the new deal's ledger.
+                    carry_forward_unrecouped: deal.unrecouped,
+                })
+            }
+            RenewalDecision::NewContract => {
+                let bump = rng.gen_range(
+                    DEAL_NEW_CONTRACT_ROYALTY_BUMP_MIN..=DEAL_NEW_CONTRACT_ROYALTY_BUMP_MAX,
+                );
+                let royalty_rate = (deal.royalty_rate + bump).min(1.0);
+                let advance_percentage = match band.fame {
+                    0..=20 => rng.gen_range(0.0..0.4),
+                    21..=50 => rng.gen_range(0.3..0.7),
+                    51..=100 => rng.gen_range(0.6..1.0),
+                    _ => 0.5,
+                };
+                let advance_range_span = label_data.advance_range[1] - label_data.advance_range[0];
+                let advance = (label_data.advance_range[0]
+                    + (advance_range_span as f32 * advance_percentage) as u32)
+                    .clamp(label_data.advance_range[0], label_data.advance_range[1]);
+                let term_weeks = term_weeks_for_tier(&deal.label_tier, rng);
+                let albums_required = match deal.label_tier.as_str() {
+                    "Major" => rng.gen_range(2..=4),
+                    "Independent" => rng.gen_range(1..=3),
+                    "Boutique" => rng.gen_range(1..=2),
+                    _ => 2,
+                };
+                Some(PotentialDealOffer {
+                    label_name: deal.label_name.clone(),
+                    label_tier: deal.label_tier.clone(),
+                    advance,
+                    royalty_rate,
+                    albums_required,
+                    original_label_data: label_data.clone(),
+                    expires_week: None,
+                    term_weeks,
+                    // Recouped — a fresh ledger starts clean off the new
+                    // advance alone.
+                    carry_forward_unrecouped: 0,
+                })
+            }
+        }
+    }
+}
+
+/// Contract term at signing, by tier (design §E-4 table) — shared between a
+/// fresh signing and a renewal-window NEW CONTRACT.
+fn term_weeks_for_tier(tier_name: &str, rng: &mut impl Rng) -> u16 {
+    let (min, max) = match tier_name {
+        "Major" => DEAL_TERM_MAJOR_WEEKS,
+        "Independent" => DEAL_TERM_INDEPENDENT_WEEKS,
+        "Boutique" => DEAL_TERM_BOUTIQUE_WEEKS,
+        _ => DEAL_TERM_INDEPENDENT_WEEKS,
+    };
+    rng.gen_range(min..=max)
+}
+
+/// Look up a label's live data by name within its own tier — the renewal
+/// window comes from the same label the band is already signed to.
+fn find_label_by_name<'a>(
+    labels_data: &'a RecordLabelsData,
+    label_tier: &str,
+    label_name: &str,
+) -> Option<&'a RecordLabel> {
+    let list = match label_tier {
+        "Major" => &labels_data.major_labels,
+        "Independent" => &labels_data.independent_labels,
+        "Boutique" => &labels_data.boutique_labels,
+        _ => return None,
+    };
+    list.iter().find(|l| l.name == label_name)
+}
+
+/// The three-way renewal-window ledger read (design §E-4). Recouped with
+/// decent sales earns a new contract; deep in the red with weak sales gets
+/// silence; everything else — chiefly "not yet recouped" — gets an
+/// extension, the label protecting its investment rather than rewarding
+/// the band.
+enum RenewalDecision {
+    NewContract,
+    Extension,
+    Silence,
+}
+
+fn renewal_decision(unrecouped: i32, commercial_success: u8) -> RenewalDecision {
+    if unrecouped <= 0 && commercial_success >= DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS {
+        RenewalDecision::NewContract
+    } else if unrecouped >= DEAL_RENEWAL_DEEP_RED_UNRECOUPED
+        && commercial_success <= DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS
+    {
+        RenewalDecision::Silence
+    } else {
+        RenewalDecision::Extension
     }
 }

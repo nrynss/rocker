@@ -26,12 +26,14 @@ impl App {
                 };
             }
             KeyCode::Up | KeyCode::Char('k') if !detail => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::Deals { selected, detail };
+                self.screen = Screen::Deals {
+                    selected: super::cycle_index(selected, count, false),
+                    detail,
+                };
             }
             KeyCode::Down | KeyCode::Char('j') if !detail => {
                 self.screen = Screen::Deals {
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                     detail,
                 };
             }

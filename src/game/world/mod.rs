@@ -2,14 +2,16 @@
 
 mod charts;
 mod deals;
+mod regions;
 mod scene;
 mod venues;
 
 // Public API re-exports (scene size / chart width are part of the world surface;
 // some are only read from tests today, but stay on the module root).
 #[allow(unused_imports)]
-pub use charts::{CHART_SIZE, ChartEntry};
+pub use charts::{CHART_DEPTH, ChartEntry};
 pub use deals::PotentialDealOffer;
+pub use regions::ChartRegion;
 #[allow(unused_imports)]
 pub use scene::{SCENE_MAX_BANDS, SCENE_MIN_BANDS, SCENE_START_BANDS, SceneBand};
 pub use venues::Venue;
@@ -19,6 +21,7 @@ use crate::game::genre::MusicGenre;
 use crate::game::timeline::MusicTimeline;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameWorld {
@@ -31,8 +34,17 @@ pub struct GameWorld {
     pub current_trends: MusicTrend,
     #[serde(default)]
     pub dynamic_genre_modifiers: std::collections::HashMap<MusicGenre, f32>,
+    /// Vestigial: the pre-regional flat top-10. Kept serialized only so an
+    /// old save has something to migrate from (`migrate_legacy_charts`,
+    /// design §C) — nothing writes to it anymore.
     #[serde(default)]
     pub charts: Vec<ChartEntry>,
+    /// The regional Top 100s: Local (the home scene's board, a UK subset)
+    /// plus the four sales territories. `BTreeMap` so iteration (decay,
+    /// territory filler) is always in the same deterministic order.
+    /// Worldwide is derived on demand and is never a key here.
+    #[serde(default)]
+    pub regional_charts: BTreeMap<ChartRegion, Vec<ChartEntry>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +85,7 @@ impl GameWorld {
             current_trends: MusicTrend::Rock,
             dynamic_genre_modifiers: std::collections::HashMap::new(),
             charts: Vec::new(),
+            regional_charts: BTreeMap::new(),
         }
     }
 
@@ -269,12 +282,30 @@ mod tests {
                 (SCENE_MIN_BANDS..=SCENE_MAX_BANDS).contains(&n),
                 "scene size {n} out of bounds"
             );
-            assert!(world.charts.len() <= CHART_SIZE);
+            for entries in world.regional_charts.values() {
+                assert!(entries.len() <= CHART_DEPTH);
+            }
         }
 
+        // A living scene (plus territory filler) keeps every regional
+        // board full, not just the home scene's Local board.
+        for region in ChartRegion::TERRITORIES {
+            assert!(
+                !world
+                    .regional_charts
+                    .get(&region)
+                    .unwrap_or(&Vec::new())
+                    .is_empty(),
+                "{region:?} should have chart entries after 300 weeks of filler"
+            );
+        }
         assert!(
-            !world.charts.is_empty(),
-            "a living scene keeps the charts full"
+            !world
+                .regional_charts
+                .get(&ChartRegion::Local)
+                .unwrap_or(&Vec::new())
+                .is_empty(),
+            "a living scene keeps the Local board full"
         );
         assert!(news_seen > 0, "300 weeks should produce scene news");
     }
@@ -284,19 +315,24 @@ mod tests {
         let data = GameDataFiles::load().expect("data files present");
         let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(5));
 
-        for i in 0..CHART_SIZE {
+        for i in 0..CHART_DEPTH {
             world.submit_chart_entry(
+                ChartRegion::Uk,
                 format!("Filler {i}"),
                 "Someone".into(),
                 false,
-                100 + i as u32,
+                1000 + i as u32,
             );
         }
-        let pos = world.submit_chart_entry("Big Hit".into(), "You".into(), true, 5000);
+        let pos =
+            world.submit_chart_entry(ChartRegion::Uk, "Big Hit".into(), "You".into(), true, 50000);
         assert_eq!(pos, Some(1), "a huge score should enter at #1");
-        let flop = world.submit_chart_entry("Flop".into(), "You".into(), true, 1);
-        assert_eq!(flop, None, "a tiny score should miss a full chart");
-        assert_eq!(world.charts.len(), CHART_SIZE);
+        let flop = world.submit_chart_entry(ChartRegion::Uk, "Flop".into(), "You".into(), true, 1);
+        assert_eq!(
+            flop, None,
+            "a tiny score should miss a full, high-scoring chart"
+        );
+        assert_eq!(world.regional_charts[&ChartRegion::Uk].len(), CHART_DEPTH);
     }
 
     #[test]
@@ -347,6 +383,9 @@ mod tests {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
+            distribution_channel: None,
+            label_market_reach: None,
         }
     }
 
@@ -482,7 +521,13 @@ mod tests {
         // A record on this week's chart adds heat while it lasts.
         let star = act(60, 3, 1);
         let cold = world.band_buzz(&star);
-        world.submit_chart_entry("The Hit".into(), "The Test Pattern".into(), true, 5_000);
+        world.submit_chart_entry(
+            ChartRegion::Local,
+            "The Hit".into(),
+            "The Test Pattern".into(),
+            true,
+            5_000,
+        );
         assert_eq!(world.band_buzz(&star), cold + deals::BUZZ_CHART_BONUS as u8);
     }
 }

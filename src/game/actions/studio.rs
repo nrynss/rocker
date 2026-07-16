@@ -180,8 +180,25 @@ impl Game {
 
         let recording_cost = self.recording_cost(&music::ReleaseType::Single);
         let (copies, pressing_cost) = self.plan_pressing(&music::ReleaseType::Single, pressing)?;
-        let cost = recording_cost + pressing_cost;
+        // M6 (§E-3): an unsigned release also buys reach through a
+        // distribution channel — fee due now, alongside recording/pressing.
+        // `plan_distribution` is `Ok(0)` while signed (label deals ignore
+        // channels entirely).
+        let distribution_channel = self.current_distribution_channel;
+        let distribution_fee = self.plan_distribution(distribution_channel)?;
+        let cost = recording_cost + pressing_cost + distribution_fee;
         if !self.player.can_afford(cost) {
+            if distribution_fee > 0 {
+                return Err(format!(
+                    "An independent single costs ${} — ${} studio time, ${} to press {} copies, and ${} for {}!",
+                    cost,
+                    recording_cost,
+                    pressing_cost,
+                    copies,
+                    distribution_fee,
+                    distribution_channel.label()
+                ));
+            }
             if pressing_cost > 0 {
                 return Err(format!(
                     "An independent single costs ${} — ${} studio time plus ${} to press {} copies!",
@@ -199,6 +216,7 @@ impl Game {
 
         let release_quality = self.calculate_release_quality(avg_song_quality, rng);
         let release_name = format!("Single: {}", selected_songs[0].name);
+        let signed = self.band.current_deal().is_some();
 
         let new_release = music::Release {
             id: self.next_release_id,
@@ -216,6 +234,15 @@ impl Game {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
+            distribution_channel: if signed {
+                None
+            } else {
+                Some(distribution_channel)
+            },
+            // Freeze the label's reach on the release so its catalog tail
+            // survives the deal ending (§E-3); `None` for an indie release.
+            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -229,6 +256,14 @@ impl Game {
             self.log(format!(
                 "🎙️ Recorded '{}' for ${} — the label presses {} copies, out in {} weeks.",
                 name, recording_cost, copies, INITIAL_SALES_WINDOW_WEEKS
+            ));
+        }
+        if distribution_fee > 0 {
+            self.log(format!(
+                "🚚 {} takes ${} to carry '{}'.",
+                distribution_channel.label(),
+                distribution_fee,
+                name
             ));
         }
         self.apply_label_promo();
@@ -258,8 +293,25 @@ impl Game {
 
         let recording_cost = self.recording_cost(&music::ReleaseType::Album);
         let (copies, pressing_cost) = self.plan_pressing(&music::ReleaseType::Album, pressing)?;
-        let cost = recording_cost + pressing_cost;
+        // M6 (§E-3): an unsigned release also buys reach through a
+        // distribution channel — fee due now, alongside recording/pressing.
+        // `plan_distribution` is `Ok(0)` while signed (label deals ignore
+        // channels entirely).
+        let distribution_channel = self.current_distribution_channel;
+        let distribution_fee = self.plan_distribution(distribution_channel)?;
+        let cost = recording_cost + pressing_cost + distribution_fee;
         if !self.player.can_afford(cost) {
+            if distribution_fee > 0 {
+                return Err(format!(
+                    "An independent album costs ${} — ${} studio time, ${} to press {} copies, and ${} for {}!",
+                    cost,
+                    recording_cost,
+                    pressing_cost,
+                    copies,
+                    distribution_fee,
+                    distribution_channel.label()
+                ));
+            }
             if pressing_cost > 0 {
                 return Err(format!(
                     "An independent album costs ${} — ${} studio time plus ${} to press {} copies!",
@@ -278,6 +330,7 @@ impl Game {
 
         let release_quality = self.calculate_release_quality(avg_song_quality, rng);
         let release_name = self.data_files.random_album_title(rng);
+        let signed = self.band.current_deal().is_some();
 
         let new_release = music::Release {
             id: self.next_release_id,
@@ -295,6 +348,15 @@ impl Game {
             copies_sold: 0,
             peak_chart_position: None,
             singles_cut: 0,
+            certified: 0,
+            distribution_channel: if signed {
+                None
+            } else {
+                Some(distribution_channel)
+            },
+            // Freeze the label's reach on the release so its catalog tail
+            // survives the deal ending (§E-3); `None` for an indie release.
+            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -308,6 +370,14 @@ impl Game {
             self.log(format!(
                 "🎙️ Recorded the album '{}' for ${} — the label presses {} copies, out in {} weeks.",
                 name, recording_cost, copies, INITIAL_SALES_WINDOW_WEEKS
+            ));
+        }
+        if distribution_fee > 0 {
+            self.log(format!(
+                "🚚 {} takes ${} to carry '{}'.",
+                distribution_channel.label(),
+                distribution_fee,
+                name
             ));
         }
         self.apply_label_promo();

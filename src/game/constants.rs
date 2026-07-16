@@ -27,7 +27,23 @@ pub(super) const SALES_FAME_WEIGHT: f32 = 1.2;
 
 // Unit economics: a sales score converts into copies people want to buy,
 // bounded by how many copies actually exist.
-pub(super) const UNITS_PER_SCORE_POINT: f32 = 10.0;
+//
+// M7 (§F): raised 10 → 30 so real careers move enough copies for the
+// certification thresholds (§D: Silver 50k) to be reachable — at the old
+// rate a hit sold only hundreds–low-thousands and nobody ever certified.
+// Copies drive both certification *and* income, so `SALES_INCOME_DIVISOR`
+// divides income back down by the same factor: certifications climb to the
+// designed 50k/150k/400k scale while per-release income stays where the
+// (already-balanced) v0.6 economy had it.
+pub(super) const UNITS_PER_SCORE_POINT: f32 = 30.0;
+/// Divides record income after the `UNITS_PER_SCORE_POINT` bump so raising
+/// copies-sold for certification (§D) doesn't inflate the money economy
+/// (M7 §F). Kept in step with the ratio `UNITS_PER_SCORE_POINT / 10`, so an
+/// *uncapped* release earns exactly what the v0.6 economy gave it. A release
+/// capped by a small pressing run earns `run / divisor` — which is why the
+/// Garage run below is sized to `500 × divisor`, holding a garage-run act's
+/// income where it was.
+pub(super) const SALES_INCOME_DIVISOR: u32 = 3;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
@@ -37,9 +53,16 @@ pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
 
 // Pressing runs. Independents choose a run and pay setup plus per-copy
-// costs; a label presses to the size of its network and your name.
+// costs; a label presses to the size of its network and your name. The
+// National run (50k) is exactly the Silver certification mark (§D), so a
+// self-pressed indie hit on the biggest run can just reach it.
+//
+// M7 (§F): the Garage run grew 500 → 1_500 (= 500 × SALES_INCOME_DIVISOR)
+// so a garage-run act's capped income lands back where v0.6 had it after
+// the income divisor — the larger tiers are unchanged (the determinism
+// script presses a Club run and must stay affordable).
 pub const PRESSING_TIERS: [(&str, u32); 4] = [
-    ("Garage run", 500),
+    ("Garage run", 1_500),
     ("Club run", 2_000),
     ("Regional run", 10_000),
     ("National run", 50_000),
@@ -55,6 +78,21 @@ pub(super) const LABEL_PRESSING_PER_FAME: u32 = 50;
 // actually reach. Labels bring their market_reach; independents are capped
 // by their own fame.
 pub(super) const INDIE_REACH_FLOOR: f32 = 0.15;
+
+// ============================================================================
+// Certifications (design §D): records certify off cumulative copies_sold.
+// Thresholds scaled for the regional sales model (§C).
+// ============================================================================
+
+pub(super) const CERT_SILVER_THRESHOLD: u32 = 50_000;
+pub(super) const CERT_GOLD_THRESHOLD: u32 = 150_000;
+pub(super) const CERT_PLATINUM_THRESHOLD: u32 = 400_000;
+pub(super) const CERT_MULTIPLATINUM_STEP: u32 = 400_000;
+
+// Award bumps for each certification level (silver/gold/platinum; multi-platinum repeats platinum).
+pub(super) const CERT_FAME_BUMP: &[u8] = &[2, 4, 6]; // Silver, Gold, Platinum
+pub(super) const CERT_HAPPINESS_BUMP: &[u8] = &[5, 8, 12]; // Silver, Gold, Platinum
+pub(super) const CERT_COMMERCIAL_SUCCESS_BUMP: &[u8] = &[3, 5, 8]; // Silver, Gold, Platinum
 
 // Support tours: bigger acts occasionally want you as their opener.
 pub(super) const SUPPORT_OFFER_MIN_FAME: u8 = 5;
@@ -312,6 +350,233 @@ pub const GIG_STRESS_GUARD: u8 = 85;
 pub const GIG_HEALTH_GUARD: u8 = 20;
 pub const TOUR_STRESS_GUARD: u8 = 70;
 pub const TOUR_HEALTH_GUARD: u8 = 30;
+
+// ============================================================================
+// M2: the lifestyle ladder (docs/DESIGN-v0.7-money-cycle.md §B). Weekly
+// upkeep, stat effects, and one-shot move consequences, deducted/applied
+// in `lifestyle.rs`. Per-tier arrays are indexed by `LifestyleTier`'s
+// declaration order: Squat, Shared flat, City apartment, Townhouse,
+// Mansion. [tune] except where noted.
+// ============================================================================
+
+/// Weekly rent, by tier. [tune]
+pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
+/// Added to `STRESS_PASSIVE_RELEASE`, by tier. [tune]
+pub(super) const LIFESTYLE_STRESS_RELEASE_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
+/// The weekly stress drain cannot pull happiness below this floor
+/// (event/incident losses still can), by tier. [tune]
+pub(super) const LIFESTYLE_HAPPINESS_FLOOR: [u8; 5] = [0, 5, 10, 15, 20];
+/// Added to the health/stress recovery of rest-type actions (`LazeAround`,
+/// `TakeBreak`), by tier. [tune]
+pub(super) const LIFESTYLE_REST_HEALING_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
+
+/// Fame at/above which living at Squat or Shared flat draws tabloid
+/// attention. [tune]
+pub(super) const LIFESTYLE_IMAGE_FAME_THRESHOLD: u8 = 60;
+/// Happiness lost per week while the image penalty holds. [tune]
+pub(super) const LIFESTYLE_IMAGE_HAPPINESS_LOSS: u8 = 2;
+
+/// Moving up: deposit of this many weeks' upkeep, on top of the first
+/// week (so 5 weeks' worth of the new tier's upkeep, total). [tune]
+pub(super) const LIFESTYLE_MOVE_UP_DEPOSIT_WEEKS: u32 = 4;
+/// One-shot happiness gain on a voluntary move up. [tune]
+pub(super) const LIFESTYLE_MOVE_UP_HAPPINESS: u8 = 10;
+/// One-shot happiness loss on a voluntary move down. [tune]
+pub(super) const LIFESTYLE_MOVE_DOWN_HAPPINESS: u8 = 15;
+
+/// Consecutive weeks with money < 0 before the landlord forces a
+/// downgrade (decided design, not [tune]).
+pub(super) const LIFESTYLE_EVICTION_WEEKS: u32 = 2;
+/// One-shot happiness loss from a forced eviction. [tune]
+pub(super) const LIFESTYLE_EVICTION_HAPPINESS: u8 = 20;
+
+// ============================================================================
+// M1: Tour economics — rig picker, length picker, itemized up-front quote
+// (docs/DESIGN-v0.7-money-cycle.md §A). Fame never re-prices a tour: it only
+// gates which rigs/lengths are selectable and how many seats a tour fills.
+// Same region + rig + length = same cost, at any fame.
+// ============================================================================
+
+/// The four tour rigs (`TourRig`, `actions/live.rs`), in ascending scale —
+/// index-aligned with every `TOUR_RIG_*` table below.
+pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
+
+/// Cost per tour week, before country travel mult and the rig's
+/// `markets.json` travel/equipment modifiers (design §A table).
+///
+/// M7 (§F): compressed from the original [150, 600, 2_500, 8_000], which —
+/// against a tour box office of only a few hundred to a few thousand — made
+/// every rig above the van a guaranteed deep loss at any fame. Paired with
+/// the `TOUR_GROSS_COEFFICIENT` bump below so a bigger rig's capacity boost
+/// can actually clear its cost: the van profits for a small act, full
+/// production only once the act is big enough to fill the rooms it books.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [120, 400, 1_200, 3_000];
+
+/// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
+pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
+
+/// The tour box-office coefficient (M7 §F): scales the whole-tour gross pot
+/// (`base_gross = sqrt(pop) × econ × audience × this`). Raised 0.06 → 0.15
+/// so that, with the capacity multiplier above and the compressed rig costs,
+/// touring is a real revenue path — a full-production rig turns a profit
+/// once the act is famous enough to fill its rooms, not a bottomless loss.
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.15;
+
+/// Wear per tour week — health lost, replacing the flat
+/// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the
+/// flat cost). The van grinds you down; the production rig has roadies.
+pub(super) const TOUR_RIG_HEALTH_COST_PER_WEEK: [u8; 4] = [5, 4, 3, 2];
+/// Wear per tour week — stress gained, replacing the flat
+/// `TOUR_STRESS_COST_PER_WEEK` for the headline tour (design §A).
+pub(super) const TOUR_RIG_STRESS_COST_PER_WEEK: [u8; 4] = [9, 8, 6, 5];
+
+/// Tour length picker bounds: 1-4 weeks (today's fame-derived length is
+/// deleted along with the fame-derived cost tier).
+pub(super) const TOUR_LENGTH_MIN_WEEKS: u8 = 1;
+pub(super) const TOUR_LENGTH_MAX_WEEKS: u8 = 4;
+/// Fame required to select each length, indexed by `weeks - 1`: 3 weeks
+/// gated at fame 40, 4 at fame 60 (design §A); 1-2 weeks are never gated.
+pub(super) const TOUR_LENGTH_FAME_GATE: [u8; 4] = [0, 0, 40, 60];
+
+/// Fame and regional-fame gains scale sublinearly with tour length — a long
+/// tour is a bigger investment, not a strictly better one (design §A,
+/// explicitly left to be picked here) — via `base * weeks.powf(exponent)`,
+/// rounded. At exponent 0.7: 1wk -> x1.0, 2wk -> x1.62, 3wk -> x2.16,
+/// 4wk -> x2.64 (roughly two-thirds of linear scaling). [tune]
+pub(super) const TOUR_FAME_GAIN_BASE: f32 = 4.0;
+pub(super) const TOUR_FAME_WEEKS_EXPONENT: f32 = 0.7;
+/// Regional fame reuses the same sublinear weeks curve; the old flat
+/// `10 + rng(0..=5)` becomes this base plus the same rng spread. [tune]
+pub(super) const TOUR_REGIONAL_FAME_GAIN_BASE: f32 = 7.0;
+pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
+
+// ============================================================================
+// M5: Label recoupment + label auto-repress
+// (docs/DESIGN-v0.7-money-cycle.md §E-2 and the §E-1 label half). The label's
+// money is a loan, not a gift: the advance at signing plus pressing and promo
+// at every release accrue to the deal's `unrecouped` ledger, and royalty
+// income pays that balance down before any of it reaches the player.
+// ============================================================================
+
+/// Per-copy pressing cost the label books against recoupment (design §E-2:
+/// $0.30/copy). Applied to the label's pressing run at each release and to
+/// every auto-repress run (§E-1 label half). [tune]
+pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.30;
+/// Recoupment cost per point of promo push the label applies in
+/// `apply_label_promo` (design §E-2: $15/point). [tune]
+pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
+
+// ============================================================================
+// M9: Deal lifecycle — term, breach, renewal window, active label
+// (docs/DESIGN-v0.7-money-cycle.md §E-4, §E-5). A contract binds both
+// directions: albums owed AND a term served — free agency at the later of
+// the two. The term expiring with albums still owed is a breach; a
+// recoupment-dependent renewal window opens before a healthy term's
+// expiry; the label leans harder on the single-cut machinery and sends
+// memos while it's owed money.
+// ============================================================================
+
+/// Contract term at signing, by tier — inclusive week ranges (design §E-4
+/// table: Boutique 52-78, Independent 78-104, Major 104-156). [tune]
+pub(super) const DEAL_TERM_BOUTIQUE_WEEKS: (u16, u16) = (52, 78);
+pub(super) const DEAL_TERM_INDEPENDENT_WEEKS: (u16, u16) = (78, 104);
+pub(super) const DEAL_TERM_MAJOR_WEEKS: (u16, u16) = (104, 156);
+
+/// Breach (design §E-4): reputation hit and the cooldown before any label
+/// makes a new offer. [tune]
+pub(super) const DEAL_BREACH_REPUTATION_HIT: u8 = 10;
+pub(super) const DEAL_BREACH_COOLDOWN_WEEKS: u16 = 26;
+
+/// The renewal window opens this many weeks before a healthy term's expiry
+/// (albums already delivered). [tune]
+pub(super) const DEAL_RENEWAL_WINDOW_WEEKS: u32 = 26;
+
+/// Renewal-window ledger thresholds (design §E-4) deciding new contract /
+/// extension / silence. "Decent" / "weak" sales read off
+/// `reputation.commercial_success`; "deep in the red" off `unrecouped`.
+/// Recouped + decent sales → new contract; deep in the red + weak sales →
+/// silence; everything else (the common case: not yet recouped) →
+/// extension. [tune]
+pub(super) const DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS: u8 = 20;
+pub(super) const DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS: u8 = 8;
+pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 10_000;
+
+/// New-contract renewal terms: royalty bump range (raw rate, i.e. 0.02 =
+/// 2pp) on top of the current deal's rate, clamped to 1.0. [tune]
+pub(super) const DEAL_NEW_CONTRACT_ROYALTY_BUMP_MIN: f32 = 0.02;
+pub(super) const DEAL_NEW_CONTRACT_ROYALTY_BUMP_MAX: f32 = 0.04;
+
+/// Extension renewal terms: one more album, a year longer, royalty
+/// unchanged, a small advance as a fraction of the old deal's advance — the
+/// label protecting its investment, not rewarding the band. [tune]
+pub(super) const DEAL_EXTENSION_ALBUMS: u8 = 1;
+pub(super) const DEAL_EXTENSION_TERM_WEEKS: u16 = 52;
+pub(super) const DEAL_EXTENSION_ADVANCE_FRACTION: f32 = 0.15;
+
+/// Recoup pressure (design §E-5): while `unrecouped > 0` the label's
+/// single-cut chance doubles and its idle-weeks gate drops (3 → 2). [tune]
+pub(super) const LABEL_CUT_CHANCE_PRESSURE_MULTIPLIER: f64 = 2.0;
+pub(super) const LABEL_CUT_IDLE_WEEKS_PRESSURED: u32 = 2;
+
+/// Label memos (design §E-5): weekly roll while a condition holds, one
+/// memo max per week. The deadline memo's stress bite applies every week
+/// the condition holds, independent of whether the memo message itself
+/// rolled — "the deadline is real pressure, not flavor". [tune]
+pub(super) const DEAL_MEMO_CHANCE: f64 = 0.25;
+pub(super) const DEAL_MEMO_IDLE_WEEKS: u32 = 4;
+pub(super) const DEAL_MEMO_DEADLINE_WINDOW_WEEKS: u32 = 12;
+pub(super) const DEAL_MEMO_DEADLINE_STRESS_PER_WEEK: u8 = 3;
+
+// ============================================================================
+// M6: indie re-press + indie distribution tiers
+// (docs/DESIGN-v0.7-money-cycle.md §E-1 indie half, §E-3). Distribution
+// channel tables are index-aligned with `DistributionChannel::ALL`
+// (`music.rs`): Mail order & gigs, Regional distributor, National
+// distributor. Re-pressing itself reuses `PRESSING_TIERS` and
+// `pressing_cost` (M1/pre-existing) — nothing new to tune there.
+// ============================================================================
+
+/// Fame required to select each channel (design §E-3 table). Only the
+/// National gate is meaningfully tunable; Mail order/Regional are ungated
+/// by design (`0`). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FAME_GATE: [u8; 3] = [0, 0, 35];
+/// Fee charged at each release under this channel (design §E-3 table). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 400, 1_500];
+/// Reach floor: effective indie reach is `max(floor, current fame formula)`
+/// (design §E-3 table). [tune]
+pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50];
+
+/// A release counts as eligible for an indie re-press once cumulative sales
+/// reach this fraction of the pressed run — "sold out (or low on stock)"
+/// (design §E-1). [tune]
+pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
+
+// ============================================================================
+// M10: player regional presence + sum-over-territories sales
+// (docs/DESIGN-v0.7-money-cycle.md §C — "Presence gates entry" and
+// "Regional sales — copies scale with presence"). The player's release
+// submits to the Local scene board (full score, home turf) and to each of
+// the four `ChartRegion::TERRITORIES` at `score × presence(territory)`, and
+// demand is the same presence sum over those four territories. Presence is
+// `reach × regional-fame factor`, where reach is the release's distribution
+// reach (label `market_reach` when signed, else the bought channel / indie
+// fame formula — M6's `reach_for`, per-release floor preserved) and the
+// regional-fame factor is how known the act is in that territory's country.
+// Local is a UK subset: full score on its board, but it never adds demand
+// of its own and never feeds Worldwide (that stays M3's rule). All numbers
+// here are [tune] — M7's sim lab calibrates them against §F targets.
+// ============================================================================
+
+/// Presence on the Local scene board — always full score. Local is home
+/// turf (design §C): the player always enters, but its sales are already UK
+/// sales, so this board never contributes demand or Worldwide.
+pub(super) const LOCAL_PRESENCE: f32 = 1.0;
+
+/// Regional fame (`0..=100`) normalizes by this into the `0..1` "how known
+/// the act is in this country" factor that multiplies reach. Touring is what
+/// raises regional fame (`actions/live.rs`), so a studio-only act reads 0
+/// abroad and sells only at home behind the UK floor. [tune]
+pub(super) const REGIONAL_FAME_PRESENCE_DIVISOR: f32 = 100.0;
 
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world

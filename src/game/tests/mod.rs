@@ -11,6 +11,8 @@ use crate::game::world::PotentialDealOffer;
 use super::constants::{self, *};
 use super::*;
 
+mod certifications;
+mod deal_lifecycle;
 mod deals;
 mod determinism;
 mod fame;
@@ -18,7 +20,9 @@ mod history;
 mod incidents;
 mod label_moves;
 mod lifestyle;
+mod recoupment;
 mod releases;
+mod repress;
 mod save_compat;
 mod shows;
 mod smoke;
@@ -46,6 +50,26 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         copies_sold: 0,
         peak_chart_position: None,
         singles_cut: 0,
+        certified: 0,
+        distribution_channel: None,
+        label_market_reach: None,
+    }
+}
+
+/// M10 (design §C): simulate a touring act's regional presence. Sales beyond
+/// the UK home floor need `regional_fame` in a territory's country (built by
+/// `action_tour`), so demand/reach tests that predate the regional model set
+/// it directly here — one region per sales-territory country — to stand in
+/// for an act that has actually toured. Without this every act's demand pins
+/// to the UK home floor and reach/channel/label differences never surface.
+fn give_regional_presence(game: &mut Game, level: u8) {
+    for key in [
+        "united_kingdom:london",
+        "europe:germany",
+        "united_states:west_coast",
+        "japan:tokyo",
+    ] {
+        game.regional_fame.insert(key.to_string(), level);
     }
 }
 
@@ -66,6 +90,18 @@ fn test_deal(market_reach: u8, royalty_rate: f32) -> band::RecordDeal {
         albums_required: 2,
         albums_delivered: 0,
         market_reach,
+        // M5: default helper deals owe nothing; recoupment tests set this
+        // explicitly (or sign through `action_accept_deal`, which seeds it
+        // from the advance).
+        unrecouped: 0,
+        // M9: `0`/`0` is the legacy sentinel (`RecordDeal::term_weeks`) —
+        // term already "served" (so albums alone still free the band, as
+        // every pre-M9 test here expects) and never breachable. Deal
+        // lifecycle tests that need a real term build their own deal (see
+        // `deal_lifecycle::signed_deal_with_real_label`) since the renewal
+        // window looks the label up by name.
+        signed_week: 0,
+        term_weeks: 0,
     }
 }
 
@@ -80,5 +116,7 @@ fn test_deal_offer(game: &Game, expires_week: Option<u32>) -> PotentialDealOffer
         albums_required: 1,
         original_label_data: label,
         expires_week,
+        term_weeks: 90,
+        carry_forward_unrecouped: 0,
     }
 }

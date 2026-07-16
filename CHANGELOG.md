@@ -4,6 +4,64 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
+## 0.7.0 — 2026-07-16
+
+The Money Cycle: where the record business gets its hooks into you. Tours
+quote before they bill, you finally have a home (with rent), the charts
+span the world and hold still long enough to climb, records go gold, and a
+label's money turns out to be a loan with a clock attached.
+
+### Added
+
+- **Tours you book, not tours that ambush you.** Touring is now two
+  choices — a **rig** (van up to full production) and a **length** (one to
+  four weeks) — with an itemized quote shown *before* you commit: cost,
+  shows, and a projected gross. Fame no longer secretly re-prices a tour;
+  the same region and rig cost the same at any fame. A bigger rig books
+  bigger rooms (more reach, more wear), and the old dead travel/equipment
+  numbers in the data finally do something.
+- **A roof over your head.** Live where you can afford to — squat, shared
+  flat, city apartment, townhouse, mansion — each with weekly rent and its
+  own pull on stress, happiness, and how well rest restores you. Moving up
+  costs a deposit and lifts the spirits; moving down stings; and if you
+  stay in the red too long the landlord decides for you. Stay in a squat
+  once you're famous and the tabloids will have opinions.
+- **Charts that span the world and actually breathe.** Four sales
+  territories — UK, Europe, America, Japan — each its own Top 100, plus a
+  home-scene Local board and a Worldwide chart that sums the territories.
+  Records now debut, **climb for a couple of weeks, peak, and slide** on a
+  gentler decay instead of blinking out — and where a record charts abroad
+  depends on your distribution reach and the regional fame you build by
+  touring there. Home sales ride your reach directly; the world you have to
+  go win.
+- **Silver, gold, platinum.** Records certify as their sales pile up —
+  a news moment, a fame and reputation bump, and a badge on the release —
+  from silver through multi-platinum.
+- **A label's money is a loan.** The advance, the pressing, the promo — a
+  signed act pays it all back out of royalties before a cent reaches the
+  band, with the running tab shown each week. The label keeps a hit in
+  stores (re-pressing on its own), and an unsigned act can now re-press a
+  sold-out record itself and buy into wider distribution tiers instead of
+  being stuck at mail-order reach.
+- **A contract with a clock.** Deals now carry a term as well as an album
+  count — you're free at the later of the two, so delivering early keeps
+  you on the roster, not out the door mid-release. Let the term lapse with
+  albums still owed and the label drops you (and remembers). Six months
+  before a healthy deal ends the label reads its ledger and makes its move:
+  a richer new contract if you've paid off and sold well, a protective
+  extension if you haven't, silence if you're deep in the red. And a label
+  that's owed money leans on you — memos asking for songs and singles, and
+  real deadline pressure as the clock runs down.
+
+### Internal
+
+- Every tunable value across the six systems is validated in the `sim.rs`
+  balance lab — now with home-body, road-dog, and indie-lifer bot
+  policies alongside the originals, and career metrics for certifications,
+  breaches, and lifestyle. Sales volume, income, tour box office, and rig
+  costs were calibrated against fifteen-year, sixty-seed sweeps; the
+  three determinism tests pass unmodified.
+
 ## 0.6.0 — 2026-07-14
 
 The Life Cycle: the four bars from the original 1989 game are back — with

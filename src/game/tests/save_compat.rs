@@ -44,6 +44,15 @@ fn saves_from_v0_4_still_load() {
     let single = &game.band.singles_released[0];
     assert_eq!(single.copies_pressed, 0, "legacy releases stay uncapped");
     assert_eq!(single.copies_sold, 0);
+    assert_eq!(
+        single.distribution_channel, None,
+        "pre-M6 releases have no chosen channel — reach falls back to Mail order & gigs"
+    );
+    assert_eq!(
+        game.current_distribution_channel,
+        crate::game::music::DistributionChannel::MailOrder,
+        "a save from before M6 has no chosen channel — defaults to Mail order & gigs"
+    );
     assert!(game.pending_deal_offers.is_empty());
 
     // And the loaded game is playable, not merely parseable.

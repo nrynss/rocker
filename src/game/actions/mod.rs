@@ -9,6 +9,9 @@ mod studio;
 use rand::Rng;
 
 use super::*;
+
+pub use live::{TourQuote, TourRig};
+
 impl Game {
     pub(super) fn execute_action(
         &mut self,
@@ -22,7 +25,9 @@ impl Game {
             GameAction::RecordSingle { pressing } => self.action_record_single(pressing, rng),
             GameAction::RecordAlbum { pressing } => self.action_record_album(pressing, rng),
             GameAction::Gig(venue_index) => self.action_play_gig(venue_index, rng),
-            GameAction::GoOnTour(region_index) => self.action_go_on_tour(region_index, rng),
+            GameAction::GoOnTour(region_index, rig, weeks) => {
+                self.action_go_on_tour(region_index, rig, weeks, rng)
+            }
             GameAction::TakeBreak => self.action_take_break(),
             GameAction::VisitDoctor => self.action_visit_doctor(),
             GameAction::AcceptDeal(index) => self.action_accept_deal(index),
@@ -32,6 +37,11 @@ impl Game {
             GameAction::StartMarketingCampaign(release_id, campaign_type) => {
                 self.action_start_marketing_campaign(release_id, campaign_type)
             }
+            GameAction::ChangeLifestyle(tier) => self.action_change_lifestyle(tier),
+            GameAction::RePress {
+                release_id,
+                pressing,
+            } => self.action_re_press(release_id, pressing),
             GameAction::Quit => {
                 self.game_over = true;
                 Ok(())
