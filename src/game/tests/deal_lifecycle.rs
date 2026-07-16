@@ -380,6 +380,46 @@ fn renewal_window_offers_an_extension_when_not_yet_recouped() {
     assert_eq!(offer.term_weeks, DEAL_EXTENSION_TERM_WEEKS);
 }
 
+/// M9 regression: an extension offer snapshots the unrecouped balance when
+/// it's generated, but the offer can sit pending for weeks while the catalog
+/// tail keeps paying the ledger down. Accepting must carry the *live* balance
+/// forward, not the stale snapshot — otherwise the new deal starts deeper in
+/// the red than the band actually owes.
+#[test]
+fn accepting_an_extension_carries_the_live_balance_not_the_stale_snapshot() {
+    let mut game = test_game();
+    game.week = 90;
+    let mut deal = signed_deal_with_real_label(&game, 0, 100);
+    deal.albums_delivered = 1;
+    deal.advance = 10_000;
+    deal.unrecouped = 3_000; // the balance when the offer is generated
+    game.band.record_deal = Some(deal);
+    game.band.reputation.commercial_success = 15; // middling → extension
+
+    let mut rng = StdRng::seed_from_u64(7);
+    let offer = game
+        .world
+        .generate_renewal_offer(&game.band, &game.data_files, &mut rng, game.week)
+        .expect("not-yet-recouped should produce an extension offer");
+    assert_eq!(offer.carry_forward_unrecouped, 3_000);
+    let extension_advance = offer.advance;
+    game.pending_deal_offers.push(offer);
+
+    // Weeks pass while the offer sits pending; the tail pays the ledger down
+    // from 3_000 to 1_000 before the player finally signs.
+    game.band.record_deal.as_mut().unwrap().unrecouped = 1_000;
+
+    game.action_accept_deal(0)
+        .expect("signing the extension succeeds");
+
+    let signed = game.band.current_deal().expect("signed the extension");
+    assert_eq!(
+        signed.unrecouped,
+        extension_advance as i32 + 1_000,
+        "carry-forward must use the live 1_000 balance, not the stale 3_000 snapshot"
+    );
+}
+
 #[test]
 fn renewal_window_stays_silent_when_deep_in_the_red_with_weak_sales() {
     let mut game = test_game();

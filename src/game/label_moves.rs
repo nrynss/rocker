@@ -115,8 +115,10 @@ impl Game {
             singles_cut: 0,
             certified: 0,
             // A label single-cut is always a signed act's release — channel
-            // is meaningless (reach is `market_reach`, M6 §E-3).
+            // is meaningless (reach is `market_reach`, M6 §E-3). Freeze that
+            // reach on the release so its tail survives the deal ending.
             distribution_channel: None,
+            label_market_reach: Some(deal_market_reach),
         };
 
         self.just_released_music.push(new_release);

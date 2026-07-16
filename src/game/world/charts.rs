@@ -116,6 +116,25 @@ impl GameWorld {
                 ));
             }
             entries.retain(|e| e.score >= CHART_FLOOR_SCORE);
+            // A player entry can also be pushed past rank 100 by a crowded
+            // board while still above the floor — those are dropped by the
+            // truncate below and would otherwise vanish silently. Report
+            // them too. Floor-dropped entries were already removed by the
+            // retain above, so there's no double-reporting.
+            let depth_dropped: Vec<&ChartEntry> = entries
+                .iter()
+                .skip(CHART_DEPTH)
+                .filter(|e| e.is_player)
+                .collect();
+            for entry in depth_dropped {
+                news.push(format!(
+                    "📉 '{}' slips off the {} chart after {} week{}.",
+                    entry.title,
+                    region.label(),
+                    entry.weeks_on_chart,
+                    if entry.weeks_on_chart == 1 { "" } else { "s" }
+                ));
+            }
             entries.truncate(CHART_DEPTH);
         }
     }

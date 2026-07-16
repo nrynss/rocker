@@ -171,7 +171,19 @@ impl Bot {
     /// applied at record time, not a `GameAction`). No-op for everyone else.
     fn pre_turn(self, game: &mut Game) {
         if self == Bot::IndieLifer {
-            game.current_distribution_channel = best_affordable_channel(game);
+            // Reserve the studio + pressing bill of the release the bot is
+            // about to attempt (an album if one's banked, else a single) so
+            // the chosen channel's fee can't push that release out of reach.
+            // Picking a channel on its fee alone could make the full bill
+            // unaffordable, and the bot would skip recording — skewing the
+            // sweep. CLUB_RUN matches the pressing tier `indie_lifer` uses.
+            let kind = if game.band.can_record_album() {
+                ReleaseType::Album
+            } else {
+                ReleaseType::Single
+            };
+            let reserve = release_bill(game, kind, Some(CLUB_RUN));
+            game.current_distribution_channel = best_affordable_channel(game, reserve);
         }
     }
 
@@ -341,13 +353,17 @@ fn label_loyalist(game: &Game) -> GameAction {
     indie_loop(game, pressing, true)
 }
 
-/// M7: the best distribution channel this act's fame and wallet allow.
-/// `DistributionChannel::ALL` is ascending in reach, so the last one that
-/// clears both its fame gate and its fee wins.
-fn best_affordable_channel(game: &Game) -> DistributionChannel {
+/// M7: the best distribution channel this act's fame and wallet allow, after
+/// reserving `reserve` for the studio + pressing cost of the release it's
+/// about to record. `DistributionChannel::ALL` is ascending in reach, so the
+/// last one that clears its fame gate and whose fee still fits alongside the
+/// reserved bill wins. Reserving the full bill (rather than weighing the fee
+/// in isolation) stops the bot from picking a channel that then makes the
+/// release unaffordable, gets it skipped, and skews the balance sweep.
+fn best_affordable_channel(game: &Game, reserve: i32) -> DistributionChannel {
     let mut best = DistributionChannel::ALL[0];
     for &channel in DistributionChannel::ALL.iter() {
-        if channel.is_available(game.band.fame) && game.player.can_afford(channel.fee()) {
+        if channel.is_available(game.band.fame) && game.player.can_afford(reserve + channel.fee()) {
             best = channel;
         }
     }
@@ -1293,7 +1309,10 @@ fn tour_profitability_by_rig_and_fame_sweep() {
     println!(
         "tour net profit (box office − cost) by rig and fame, 2-week tour, avg over 20 seeds:"
     );
-    for fame in [25u8, 55, 80] {
+    let fames = [25u8, 55, 80];
+    // (fame, rig) -> avg net, for the rigs actually available at that fame.
+    let mut avgs: Vec<(u8, TourRig, f32)> = Vec::new();
+    for fame in fames {
         for rig in TourRig::ALL {
             let nets: Vec<i64> = (1..=20u64)
                 .filter_map(|seed| net_at(seed, fame, rig, 2))
@@ -1311,6 +1330,54 @@ fn tour_profitability_by_rig_and_fame_sweep() {
                 rig.label(),
                 nets.len()
             );
+            avgs.push((fame, rig, avg));
+        }
+    }
+
+    let avg_for = |fame: u8, rig: TourRig| {
+        avgs.iter()
+            .find(|&&(f, r, _)| f == fame && r == rig)
+            .map(|&(_, _, a)| a)
+    };
+
+    // Target (design §A/§F): the van clears a profit for a small act — and
+    // keeps clearing it as the act grows. It's the reliable workhorse; if it
+    // ever loses money the low end of the touring economy is broken.
+    for fame in fames {
+        let van = avg_for(fame, TourRig::Van).expect("the van is available at every fame");
+        assert!(
+            van > 0.0,
+            "van tour should clear a profit at fame {fame}, got avg net ${van:.0}"
+        );
+    }
+
+    // Target: a full-production rig must not pay off too early. It only makes
+    // economic sense once the act is big enough to fill the far bigger rooms
+    // its capacity multiplier books — beyond the fame this sweep reaches. At
+    // fame 80 (its first available tier here) it should still be firmly in the
+    // red; if this flips, the premium rig has become profitable too early.
+    if let Some(full) = avg_for(80, TourRig::Full) {
+        assert!(
+            full < 0.0,
+            "full production should not be profitable at fame 80 yet, got avg net ${full:.0}"
+        );
+    }
+
+    // The premium rigs (truck & crew, full production) are a capacity/reach
+    // investment, not a profit play, across the whole fame range this sweep
+    // covers: the humble van out-nets them everywhere both are available. If a
+    // heavy rig ever out-earns the van here, "bigger rigs only pay off once
+    // you're big" no longer holds.
+    for fame in fames {
+        let van = avg_for(fame, TourRig::Van).expect("the van is available at every fame");
+        for rig in [TourRig::Truck, TourRig::Full] {
+            if let Some(heavy) = avg_for(fame, rig) {
+                assert!(
+                    van > heavy,
+                    "van (avg net ${van:.0}) should out-net {} (avg net ${heavy:.0}) at fame {fame}",
+                    rig.label()
+                );
+            }
         }
     }
 }
@@ -1343,6 +1410,7 @@ fn sales_tail_income_by_quality_tier_sweep() {
             singles_cut: 0,
             certified: 0,
             distribution_channel: None,
+            label_market_reach: None,
         }
     }
 

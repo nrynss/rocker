@@ -240,6 +240,9 @@ impl Game {
             } else {
                 Some(distribution_channel)
             },
+            // Freeze the label's reach on the release so its catalog tail
+            // survives the deal ending (§E-3); `None` for an indie release.
+            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -351,6 +354,9 @@ impl Game {
             } else {
                 Some(distribution_channel)
             },
+            // Freeze the label's reach on the release so its catalog tail
+            // survives the deal ending (§E-3); `None` for an indie release.
+            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);

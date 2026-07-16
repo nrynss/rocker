@@ -200,6 +200,23 @@ impl Game {
         let albums_required = offer.albums_required;
         let term_weeks = offer.term_weeks;
         let signed_week = self.week;
+        // M9: a renewal-window EXTENSION carries the old deal's unrecouped
+        // balance forward. The offer snapshotted that balance when it was
+        // generated, but the offer can sit pending for weeks while the catalog
+        // tail keeps paying the ledger down — so re-read the *live* balance now
+        // rather than carrying the stale (always higher) snapshot, which would
+        // start the new deal deeper in the red than the band actually owes.
+        // The old deal is still `current_deal()` here (before `sign_deal`
+        // replaces it). `carry_forward_unrecouped == 0` marks an ordinary
+        // signing or NEW CONTRACT renewal — those carry nothing.
+        let carry_forward_unrecouped = if offer.carry_forward_unrecouped > 0 {
+            self.band
+                .current_deal()
+                .map(|deal| deal.unrecouped.max(0))
+                .unwrap_or(0)
+        } else {
+            0
+        };
         let new_deal = band::RecordDeal {
             label_name: offer.label_name,
             label_tier: offer.label_tier,
@@ -210,12 +227,9 @@ impl Game {
             market_reach: offer.original_label_data.market_reach,
             // M5 (§E-2): the advance is not a gift. The player banks it now
             // (below), but the same amount joins the recoupment ledger — every
-            // royalty dollar pays it back before the band sees a cent. M9: a
-            // renewal-window EXTENSION carries the old deal's unrecouped
-            // balance forward on top of this offer's own advance instead of
-            // starting the ledger fresh (`carry_forward_unrecouped` is 0 for
-            // every ordinary signing and NEW CONTRACT renewal).
-            unrecouped: advance as i32 + offer.carry_forward_unrecouped,
+            // royalty dollar pays it back before the band sees a cent, on top
+            // of any renewal carry-forward computed above.
+            unrecouped: advance as i32 + carry_forward_unrecouped,
             // M9 (design §E-4): the term's clock starts now. A pre-M9
             // pending offer deserializes with `term_weeks: 0` and signs a
             // legacy-policy deal (see `RecordDeal::term_weeks`).

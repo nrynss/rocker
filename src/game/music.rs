@@ -195,4 +195,15 @@ pub struct Release {
     /// retroactively changes an old release's tail sales.
     #[serde(default)]
     pub distribution_channel: Option<DistributionChannel>,
+    /// The signing label's `market_reach`, frozen on the release at record
+    /// time. `Some(reach)` for a label release, `None` for indie releases and
+    /// pre-M6 saves. Reach is otherwise read from the band's *current* deal,
+    /// so without this a signed record's catalog tail would collapse to indie
+    /// reach the moment the act leaves the label — the record keeps the
+    /// distribution footprint it was actually released with. `None` falls back
+    /// to the live deal (so indie/legacy behaviour is unchanged), which is why
+    /// this disambiguates label releases from legacy ones that also carry
+    /// `distribution_channel: None`.
+    #[serde(default)]
+    pub label_market_reach: Option<u8>,
 }

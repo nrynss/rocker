@@ -600,7 +600,12 @@ impl Game {
             });
         }
 
-        let report = TourReport::from_rows(rows, pot.fame_gain);
+        // Cap the fame gain against the live ceiling before building the
+        // report so the Tour Report screen shows the fame actually applied
+        // to the band, not the pre-cap value.
+        let live_cap = self.live_fame_cap();
+        let fame_gain = pot.fame_gain.min(live_cap.saturating_sub(self.band.fame));
+        let report = TourReport::from_rows(rows, fame_gain);
         if report.went_very_well() {
             self.player.happiness = (self.player.happiness + TOUR_WENT_WELL_HAPPINESS_GAIN)
                 .min(constants::MAX_HAPPINESS);
@@ -620,8 +625,6 @@ impl Game {
         self.player.spend_money(pot.cost);
         self.player.earn_money(gross_sum);
 
-        let live_cap = self.live_fame_cap();
-        let fame_gain = pot.fame_gain.min(live_cap.saturating_sub(self.band.fame));
         self.band.gain_fame_capped(fame_gain, live_cap);
 
         let regional_fame_gain = pot.regional_fame_gain_base

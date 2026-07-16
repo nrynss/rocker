@@ -45,12 +45,17 @@ impl Game {
     /// capped by its own fame, floored by whatever channel it bought for
     /// this release (design §E-3, M6: `max(channel floor, fame formula)`).
     /// `channel` is ignored once signed — a label deal's `market_reach`
-    /// always wins.
-    fn distribution_multiplier(&self, channel: Option<DistributionChannel>) -> f32 {
+    /// always wins. A label release freezes that reach on itself
+    /// (`label_market_reach`) so its catalog tail keeps the label's
+    /// distribution footprint even after the deal ends; only indie/legacy
+    /// releases (no frozen reach) fall back to the live deal.
+    fn distribution_multiplier(&self, release: &Release) -> f32 {
         Self::reach_for(
             self.band.fame,
-            self.band.current_deal().map(|deal| deal.market_reach),
-            channel,
+            release
+                .label_market_reach
+                .or_else(|| self.band.current_deal().map(|deal| deal.market_reach)),
+            release.distribution_channel,
         )
     }
 
@@ -59,7 +64,8 @@ impl Game {
     /// in [`Game::process_music_releases_and_marketing`] holds a mutable
     /// borrow of `self.band` per release and cannot call back into `&self`
     /// methods, so it captures `fame`/`market_reach` once up front and calls
-    /// this directly for each release's own `distribution_channel`.
+    /// this directly for each release's own frozen `label_market_reach`
+    /// (falling back to the live deal reach) and `distribution_channel`.
     fn reach_for(fame: u8, market_reach: Option<u8>, channel: Option<DistributionChannel>) -> f32 {
         match market_reach {
             Some(reach) => 0.5 + f32::from(reach) / 100.0,
@@ -289,7 +295,7 @@ impl Game {
         // subset and adds nothing here. An act present on all four territories
         // moves ~3–4× a home-only act at the same score — which is why the §D
         // certification thresholds sit higher.
-        let reach = self.distribution_multiplier(release.distribution_channel);
+        let reach = self.distribution_multiplier(release);
         let demand_units: f32 = world::ChartRegion::TERRITORIES
             .iter()
             .map(|&territory| sales_score as f32 * self.territory_presence(territory, reach))
@@ -452,7 +458,7 @@ impl Game {
                 // aggregated Worldwide board is shown as its own tab and would
                 // understate a record's peak (a #1 UK single rarely tops the
                 // summed Worldwide 100).
-                let reach = self.distribution_multiplier(release.distribution_channel);
+                let reach = self.distribution_multiplier(&release);
                 let band_name = self.band.name.clone();
                 let mut best_position: Option<usize> = None;
 
@@ -691,14 +697,22 @@ impl Game {
                         // copies that still exist in the pressing. Reach is
                         // this release's own channel (M6), not a global
                         // scalar — a Regional/National upgrade never
-                        // retroactively boosts older stock's tail. M10 (§C):
-                        // that reach scales into a presence sum over the four
-                        // sales territories, the same model as the first run,
-                        // so a widely-toured act's back catalog keeps selling
+                        // retroactively boosts older stock's tail. A signed
+                        // release freezes its label reach
+                        // (`label_market_reach`) so it holds its distribution
+                        // footprint even after the deal ends, rather than
+                        // collapsing to indie reach; indie/legacy releases
+                        // fall back to the live deal. M10 (§C): that reach
+                        // scales into a presence sum over the four sales
+                        // territories, the same model as the first run, so a
+                        // widely-toured act's back catalog keeps selling
                         // abroad while a home-only act's tail lives on the UK
                         // floor.
-                        let reach =
-                            Self::reach_for(fame as u8, market_reach, release.distribution_channel);
+                        let reach = Self::reach_for(
+                            fame as u8,
+                            release.label_market_reach.or(market_reach),
+                            release.distribution_channel,
+                        );
                         // Mirrors `territory_presence`: the UK home market
                         // rides the act's reach directly; the three foreign
                         // territories scale by regional fame (touring).

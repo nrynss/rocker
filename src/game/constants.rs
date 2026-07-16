@@ -28,7 +28,7 @@ pub(super) const SALES_FAME_WEIGHT: f32 = 1.2;
 // Unit economics: a sales score converts into copies people want to buy,
 // bounded by how many copies actually exist.
 //
-// M7 (§F): raised 10 → 50 so real careers move enough copies for the
+// M7 (§F): raised 10 → 30 so real careers move enough copies for the
 // certification thresholds (§D: Silver 50k) to be reachable — at the old
 // rate a hit sold only hundreds–low-thousands and nobody ever certified.
 // Copies drive both certification *and* income, so `SALES_INCOME_DIVISOR`

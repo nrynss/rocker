@@ -194,6 +194,17 @@ impl App {
         // currently-selected distribution channel's fee (§E-3) — Ok(0) while
         // signed, and `plan_distribution` folds the fame-gate check in too,
         // but here we just want the floor cost, not the error.
+        //
+        // A channel the player picked while famous can become unavailable
+        // after fame decay. `plan_distribution` reports that as `Err`; if we
+        // let `unwrap_or(0)` swallow it the menu would show recording as
+        // affordable, then the action would fail with a fame error instead of
+        // the expected money error. So track availability and gate `enabled`
+        // on it too (always available while signed — the label distributes).
+        let channel_available = signed
+            || game
+                .current_distribution_channel
+                .is_available(game.band.fame);
         let (single_min, album_min) = if signed {
             (single_cost, album_cost)
         } else {
@@ -252,11 +263,17 @@ impl App {
                     "no songs written".into()
                 } else if signed {
                     format!("${} — label presses", single_cost)
+                } else if !channel_available {
+                    format!(
+                        "{} locked — need more fame",
+                        game.current_distribution_channel.label()
+                    )
                 } else {
                     format!("${} + pressing", single_cost)
                 },
                 enabled: game.player.stress < 90
                     && game.band.can_record_single()
+                    && channel_available
                     && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
             },
@@ -269,11 +286,17 @@ impl App {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
                 } else if signed {
                     format!("${} — label presses", album_cost)
+                } else if !channel_available {
+                    format!(
+                        "{} locked — need more fame",
+                        game.current_distribution_channel.label()
+                    )
                 } else {
                     format!("${} + pressing", album_cost)
                 },
                 enabled: game.player.stress < 90
                     && game.band.can_record_album()
+                    && channel_available
                     && game.player.can_afford(album_min),
                 kind: MenuKind::RecordAlbum,
             },

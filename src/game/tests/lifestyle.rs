@@ -299,7 +299,9 @@ fn tabloids_penalize_high_fame_low_rent_living_once_per_streak() {
 #[test]
 fn a_mansion_draws_no_image_penalty_regardless_of_fame() {
     let mut game = test_game();
-    game.band.fame = 0; // low fame is the case the design calls out explicitly
+    // High fame is what would trip the tabloid penalty at a low-rent tier;
+    // the Mansion must stay immune even here (§B — Image).
+    game.band.fame = 100;
     game.player.lifestyle = LifestyleTier::Mansion;
     game.player.happiness = 50;
     game.player.money = 10_000;
@@ -307,6 +309,7 @@ fn a_mansion_draws_no_image_penalty_regardless_of_fame() {
     game.update_lifestyle(&GameAction::WriteSongs);
 
     assert_eq!(game.player.tabloid_streak, 0);
+    assert_eq!(game.player.happiness, 50);
 }
 
 #[test]

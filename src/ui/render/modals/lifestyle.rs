@@ -58,7 +58,7 @@ pub(crate) fn draw_lifestyle_picker_modal(frame: &mut Frame, app: &App) {
                     style,
                 ),
                 Span::styled(
-                    format!("  Stress +{:<2}", tier.stress_release_bonus()),
+                    format!("  Stress relief +{:<2}", tier.stress_release_bonus()),
                     style,
                 ),
                 Span::styled(format!("  Floor {:<3}", tier.happiness_floor()), style),

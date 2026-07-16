@@ -60,7 +60,7 @@ seats you fill — that's it.
   `TOUR_STRESS_COST_PER_WEEK`: the van grinds you down, the production
   rig has roadies.
 - Total cost = `rig cost × tour weeks × country travel mult ×
-  region travel_cost_modifier` — the dead `markets.json` modifiers
+  rig travel_cost_modifier` — the dead `markets.json` modifiers
   finally do their job (repurposed as per-tier travel scaling on the
   **rig**, not the fame bracket; the old `touring_costs` fame-tier keys
   are re-keyed to rigs in `markets.json`).
@@ -246,7 +246,7 @@ higher):
   2 gold, 3 platinum, 4+ multi-platinum count.
 - Checked in the weekly catalog pass (`economy.rs`), one-shot per level.
 - Award moment: news line ("🏆 'Neon Nights' is certified GOLD —
-  40,000 copies."), fame +2 / +4 / +6 (capped by existing rules),
+  150,000 copies."), fame +2 / +4 / +6 (capped by existing rules),
   happiness +5 / +8 / +12, `reputation.commercial_success` +3 / +5 / +8
   [tune] for silver/gold/platinum (multi repeats platinum's bump).
 - UI: badge in the discography modal (`ui/render/modals/file.rs`):

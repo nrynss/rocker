@@ -52,6 +52,7 @@ fn test_release(id: u32, release_type: ReleaseType) -> Release {
         singles_cut: 0,
         certified: 0,
         distribution_channel: None,
+        label_market_reach: None,
     }
 }
 

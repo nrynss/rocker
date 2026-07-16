@@ -272,6 +272,42 @@ fn signed_releases_never_stamp_a_distribution_channel() {
         .last()
         .expect("the single was recorded");
     assert_eq!(release.distribution_channel, None);
+    // ...but it freezes the label's reach so its tail survives the deal
+    // ending (see the regression test below).
+    assert_eq!(release.label_market_reach, Some(70));
+}
+
+/// §E-3 (M6): a label release freezes its distribution reach on the release,
+/// so its catalog tail keeps the label's footprint even after the act leaves
+/// the label. Without this, `distribution_channel: None` is ambiguous between
+/// a label release and a legacy indie one, and reach — read from the *current*
+/// deal — would collapse to indie the moment the deal ends.
+#[test]
+fn a_label_release_keeps_its_reach_after_the_deal_ends() {
+    let mut game = test_game();
+    game.band.fame = 40;
+    give_regional_presence(&mut game, 80);
+
+    // A record put out on a high-reach label, now off the label.
+    let mut release = test_release(1, ReleaseType::Album);
+    release.copies_pressed = 0; // uncapped, so reach — not stock — drives units
+    release.distribution_channel = None; // label release: channel-blind
+    release.label_market_reach = Some(90);
+    game.band.record_deal = None; // the deal is over
+
+    let (_, label_units, _) = game.calculate_release_outcome(1_000, &release);
+
+    // The same record had it only ever been an indie mail-order release.
+    let mut indie = release.clone();
+    indie.label_market_reach = None;
+    indie.distribution_channel = Some(DistributionChannel::MailOrder);
+    let (_, indie_units, _) = game.calculate_release_outcome(1_000, &indie);
+
+    assert!(
+        label_units > indie_units,
+        "a label release's frozen reach (0.5 + 0.90) must survive the deal \
+         ending, not fall back to indie reach: {label_units} vs {indie_units}"
+    );
 }
 
 /// An old save predating M6 has no channel on its releases and no chosen
