@@ -297,10 +297,11 @@ fn a_label_release_keeps_its_reach_after_the_deal_ends() {
 
     let (_, label_units, _) = game.calculate_release_outcome(1_000, &release);
 
-    // The same record had it only ever been an indie mail-order release.
+    // The exact same channel-blind release, differing *only* in whether the
+    // label reach was frozen — so the gap isolates `label_market_reach`
+    // (both keep `distribution_channel: None`, the ambiguous legacy case).
     let mut indie = release.clone();
     indie.label_market_reach = None;
-    indie.distribution_channel = Some(DistributionChannel::MailOrder);
     let (_, indie_units, _) = game.calculate_release_outcome(1_000, &indie);
 
     assert!(
