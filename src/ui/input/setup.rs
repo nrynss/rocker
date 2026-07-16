@@ -41,11 +41,10 @@ impl App {
                 let count = MusicGenre::ALL.len();
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
-                        self.genre_selected =
-                            self.genre_selected.checked_sub(1).unwrap_or(count - 1);
+                        self.genre_selected = super::cycle_index(self.genre_selected, count, false);
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        self.genre_selected = (self.genre_selected + 1) % count;
+                        self.genre_selected = super::cycle_index(self.genre_selected, count, true);
                     }
                     KeyCode::Enter => self.finish_setup(),
                     _ => {}

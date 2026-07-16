@@ -11,10 +11,17 @@ impl Game {
         self.player.stress = self
             .player
             .stress
-            .saturating_sub(LAZE_STRESS_RELIEF + bonus);
-        self.player.creativity =
-            (self.player.creativity + LAZE_CREATIVITY_GAIN).min(constants::MAX_CREATIVITY);
-        self.player.health = (self.player.health + bonus).min(constants::MAX_HEALTH);
+            .saturating_sub(LAZE_STRESS_RELIEF.saturating_add(bonus));
+        self.player.creativity = self
+            .player
+            .creativity
+            .saturating_add(LAZE_CREATIVITY_GAIN)
+            .min(constants::MAX_CREATIVITY);
+        self.player.health = self
+            .player
+            .health
+            .saturating_add(bonus)
+            .min(constants::MAX_HEALTH);
         self.log("😴 You took it easy this week — stress down, mind wandering.");
         Ok(())
     }
@@ -23,12 +30,22 @@ impl Game {
         // v0.7 §B: the lifestyle's rest-healing bonus tops up the health gain.
         let bonus = self.player.lifestyle.rest_healing_bonus();
         self.player.stress = 0;
-        self.player.happiness =
-            (self.player.happiness + BREAK_HAPPINESS_GAIN).min(constants::MAX_HAPPINESS);
-        self.player.creativity =
-            (self.player.creativity + BREAK_CREATIVITY_GAIN).min(constants::MAX_CREATIVITY);
-        self.player.health =
-            (self.player.health + BREAK_HEALTH_GAIN + bonus).min(constants::MAX_HEALTH);
+        self.player.happiness = self
+            .player
+            .happiness
+            .saturating_add(BREAK_HAPPINESS_GAIN)
+            .min(constants::MAX_HAPPINESS);
+        self.player.creativity = self
+            .player
+            .creativity
+            .saturating_add(BREAK_CREATIVITY_GAIN)
+            .min(constants::MAX_CREATIVITY);
+        self.player.health = self
+            .player
+            .health
+            .saturating_add(BREAK_HEALTH_GAIN)
+            .saturating_add(bonus)
+            .min(constants::MAX_HEALTH);
         self.week += BREAK_WEEKS - 1;
         self.log(format!(
             "🏖️ You disappeared for {} weeks — fully recharged and healthier for it.",
@@ -75,8 +92,10 @@ impl Game {
                 }
                 self.player.spend_money(cost);
                 self.player.lifestyle = tier;
-                self.player.happiness = (self.player.happiness
-                    + constants::LIFESTYLE_MOVE_UP_HAPPINESS)
+                self.player.happiness = self
+                    .player
+                    .happiness
+                    .saturating_add(constants::LIFESTYLE_MOVE_UP_HAPPINESS)
                     .min(constants::MAX_HAPPINESS);
                 self.log(format!(
                     "🏡 You moved up to a {} — ${} up front, and it feels like the career's finally going somewhere.",

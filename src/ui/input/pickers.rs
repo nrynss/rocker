@@ -37,17 +37,16 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
                 self.screen = Screen::PressingPicker {
                     release_type,
-                    selected,
+                    selected: super::cycle_index(selected, count, false),
                     channel,
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::PressingPicker {
                     release_type,
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                     channel,
                 };
             }
@@ -55,10 +54,8 @@ impl App {
             // pressing tier, same left/right-for-the-second-axis convention
             // as the tour booking picker's rig/length split.
             KeyCode::Left | KeyCode::Char('h') => {
-                let idx = channel
-                    .ordinal()
-                    .checked_sub(1)
-                    .unwrap_or(DistributionChannel::ALL.len() - 1);
+                let idx =
+                    super::cycle_index(channel.ordinal(), DistributionChannel::ALL.len(), false);
                 self.screen = Screen::PressingPicker {
                     release_type,
                     selected,
@@ -66,7 +63,8 @@ impl App {
                 };
             }
             KeyCode::Right | KeyCode::Char('l') => {
-                let idx = (channel.ordinal() + 1) % DistributionChannel::ALL.len();
+                let idx =
+                    super::cycle_index(channel.ordinal(), DistributionChannel::ALL.len(), true);
                 self.screen = Screen::PressingPicker {
                     release_type,
                     selected,
@@ -120,12 +118,13 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::RePressPicker { selected };
+                self.screen = Screen::RePressPicker {
+                    selected: super::cycle_index(selected, count, false),
+                };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::RePressPicker {
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                 };
             }
             KeyCode::Enter => {
@@ -152,16 +151,15 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::RePressPicker { selected: 0 },
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
                 self.screen = Screen::RePressTierPicker {
                     release_id,
-                    selected,
+                    selected: super::cycle_index(selected, count, false),
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::RePressTierPicker {
                     release_id,
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                 };
             }
             KeyCode::Enter => {
@@ -183,12 +181,13 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::VenuePicker { selected };
+                self.screen = Screen::VenuePicker {
+                    selected: super::cycle_index(selected, count, false),
+                };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::VenuePicker {
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                 };
             }
             KeyCode::Enter => {
@@ -219,12 +218,13 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::RegionPicker { selected };
+                self.screen = Screen::RegionPicker {
+                    selected: super::cycle_index(selected, count, false),
+                };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::RegionPicker {
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                 };
             }
             KeyCode::Enter => {
@@ -274,8 +274,7 @@ impl App {
                 }
             }
             KeyCode::Up | KeyCode::Char('k') => {
-                let count = TourRig::ALL.len();
-                let idx = rig.ordinal().checked_sub(1).unwrap_or(count - 1);
+                let idx = super::cycle_index(rig.ordinal(), TourRig::ALL.len(), false);
                 self.screen = Screen::TourBookingPicker {
                     region_index,
                     rig: TourRig::ALL[idx],
@@ -283,7 +282,7 @@ impl App {
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let idx = (rig.ordinal() + 1) % TourRig::ALL.len();
+                let idx = super::cycle_index(rig.ordinal(), TourRig::ALL.len(), true);
                 self.screen = Screen::TourBookingPicker {
                     region_index,
                     rig: TourRig::ALL[idx],

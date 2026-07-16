@@ -16,12 +16,13 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Up | KeyCode::Char('k') => {
-                let selected = selected.checked_sub(1).unwrap_or(count - 1);
-                self.screen = Screen::LifestylePicker { selected };
+                self.screen = Screen::LifestylePicker {
+                    selected: super::cycle_index(selected, count, false),
+                };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::LifestylePicker {
-                    selected: (selected + 1) % count,
+                    selected: super::cycle_index(selected, count, true),
                 };
             }
             KeyCode::Enter => {

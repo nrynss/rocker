@@ -81,13 +81,9 @@ impl LifestyleTier {
     }
 
     fn index(&self) -> usize {
-        match self {
-            LifestyleTier::Squat => 0,
-            LifestyleTier::SharedFlat => 1,
-            LifestyleTier::CityApartment => 2,
-            LifestyleTier::Townhouse => 3,
-            LifestyleTier::Mansion => 4,
-        }
+        // Fieldless enum in ladder order (see the type doc), so the
+        // discriminant is the index into the `LIFESTYLE_*` tune tables.
+        *self as usize
     }
 
     /// Weekly upkeep, deducted in the lifestyle tick (§B — tune table).
