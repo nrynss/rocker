@@ -306,7 +306,10 @@ impl Game {
         let capacity = venue.capacity;
 
         self.player.earn_money(earnings);
-        self.band
+        // Report the fame actually applied (comeback doubling, caps), not
+        // the raw pre-multiplier gain.
+        let fame_applied = self
+            .band
             .gain_fame_capped(fame_gain, venue_ceiling.min(live_cap));
 
         self.player.stress = (self.player.stress + GIG_STRESS_COST).min(constants::MAX_STRESS);
@@ -322,10 +325,10 @@ impl Game {
                 capacity,
                 take: earnings,
             }],
-            fame_gain,
+            fame_applied,
         ));
 
-        if fame_gain > 0 {
+        if fame_applied > 0 {
             self.log(format!(
                 "🎤 Played '{}' — a {} night, sold {}/{} tickets, earned ${}, fame +{}.",
                 venue_name,
@@ -333,7 +336,7 @@ impl Game {
                 attendance,
                 capacity,
                 earnings,
-                fame_gain
+                fame_applied
             ));
         } else if self.band.fame >= live_cap {
             self.log(format!(
@@ -600,12 +603,14 @@ impl Game {
             });
         }
 
-        // Cap the fame gain against the live ceiling before building the
-        // report so the Tour Report screen shows the fame actually applied
-        // to the band, not the pre-cap value.
+        // Cap the fame gain against the live ceiling and apply it before
+        // building the report, so the Tour Report screen and the 🚌 line
+        // both show the fame actually applied to the band — comeback
+        // doubling and caps included, not the pre-cap request.
         let live_cap = self.live_fame_cap();
         let fame_gain = pot.fame_gain.min(live_cap.saturating_sub(self.band.fame));
-        let report = TourReport::from_rows(rows, fame_gain);
+        let fame_applied = self.band.gain_fame_capped(fame_gain, live_cap);
+        let report = TourReport::from_rows(rows, fame_applied);
         if report.went_very_well() {
             self.player.happiness = (self.player.happiness + TOUR_WENT_WELL_HAPPINESS_GAIN)
                 .min(constants::MAX_HAPPINESS);
@@ -625,12 +630,13 @@ impl Game {
         self.player.spend_money(pot.cost);
         self.player.earn_money(gross_sum);
 
-        self.band.gain_fame_capped(fame_gain, live_cap);
-
         let regional_fame_gain = pot.regional_fame_gain_base
             + rng.gen_range(0..=TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD as u16);
         let new_regional_fame =
             (pot.regional_fame_current as u16 + regional_fame_gain).min(100) as u8;
+        // The 100-cap can eat part of the rolled gain — report the delta
+        // that actually landed, not the roll.
+        let regional_fame_applied = new_regional_fame - pot.regional_fame_current;
         self.regional_fame
             .insert(pot.regional_fame_key.clone(), new_regional_fame);
 
@@ -648,9 +654,9 @@ impl Game {
             avg_verdict.label(),
             gross_sum,
             pot.cost,
-            fame_gain,
+            fame_applied,
             new_regional_fame,
-            regional_fame_gain
+            regional_fame_applied
         ));
         if report.went_very_well() {
             self.log("🌟 The tour went very well — spirits (and inspiration) are high.");

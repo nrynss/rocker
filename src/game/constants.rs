@@ -48,9 +48,23 @@ pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
 // Living sales tail: post-launch decay and influence [tune].
-pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 3;
+//
+// The decay step (3 → 4) and the tail unit rate (a magic `/ 5` in the tail
+// loop → the named `/ 3` below) were retuned together when the weekly sales
+// pass gained its once-per-week guard: instant actions had been re-running
+// the tail at the same week's (early, high) rate without advancing the decay
+// clock, and the §D/§F certification balance — median signed 15-year career
+// reaches 1–3 silvers; a home-market act can reach Silver at all — was
+// unknowingly calibrated on that bonus volume. These put the legitimate
+// weekly tail where the exploit-inflated one effectively was: the sweep's
+// label-loyalist lands med 3 certs (was 5 with the exploit, 0 without the
+// retune). Re-check that sweep column before moving either. [tune]
+pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 4;
 pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
+/// The tail moves this fraction (1/N) of the first-run per-week unit rate.
+/// Retuned with `TAIL_DIVISOR_WEEKS_PER_STEP` above. [tune]
+pub(super) const TAIL_UNITS_DIVISOR: u32 = 3;
 
 // Pressing runs. Independents choose a run and pay setup plus per-copy
 // costs; a label presses to the size of its network and your name. The
@@ -69,10 +83,31 @@ pub const PRESSING_TIERS: [(&str, u32); 4] = [
 ];
 pub(super) const PRESSING_SETUP_SINGLE: f32 = 25.0;
 pub(super) const PRESSING_SETUP_ALBUM: f32 = 100.0;
-pub(super) const PRESSING_PER_COPY_SINGLE: f32 = 0.10;
-pub(super) const PRESSING_PER_COPY_ALBUM: f32 = 0.50;
-pub(super) const LABEL_PRESSING_PER_REACH: u32 = 100;
-pub(super) const LABEL_PRESSING_PER_FAME: u32 = 50;
+// Per-copy pressing costs are COUPLED to the M7 sales rescale, the same way
+// as `LABEL_RECOUP_PRESSING_PER_COPY` below (issue #20's bug class): M7
+// tripled the copies a score moves (`UNITS_PER_SCORE_POINT`) while
+// `SALES_INCOME_DIVISOR` kept income dollars flat, so an indie now presses
+// 3× the copies for the same money and the per-copy bill must divide by the
+// same ratio. At the pre-M7 $0.50/album the margin went negative in every
+// era with `recording_cost_modifier > 4/3` — a sold-out album run lost money
+// unconditionally. Dividing restores the pre-M7 economics exactly (a Garage
+// album's bill lands back on v0.6's $350 × era mod against the same capped
+// income). If `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again,
+// carry these along. [tune]
+pub(super) const PRESSING_PER_COPY_SINGLE: f32 = 0.10 / SALES_INCOME_DIVISOR as f32;
+pub(super) const PRESSING_PER_COPY_ALBUM: f32 = 0.50 / SALES_INCOME_DIVISOR as f32;
+// Label pressing run sizes are COUPLED to the M7 sales rescale like the
+// per-copy dollar constants above: `UNITS_PER_SCORE_POINT` tripled the
+// copies a sales score demands, and a run is denominated in copies, so the
+// run a label presses must triple with it (100/50 → 300/150). Left on the
+// old scale, a signed act's first run nearly always sold out and the
+// over-cap demand was silently discarded — a fame-100 act's hit leaked most
+// of its first-week sales, which is why no signed career could accumulate
+// the 50k copies Silver asks for (§D/§F) once the once-per-week sales-pass
+// guard stopped instant actions from minting bonus tail weeks. If
+// `UNITS_PER_SCORE_POINT` moves again, carry these along. [tune]
+pub(super) const LABEL_PRESSING_PER_REACH: u32 = 300;
+pub(super) const LABEL_PRESSING_PER_FAME: u32 = 150;
 
 // Distribution model: how much of a release's potential audience you can
 // actually reach. Labels bring their market_reach; independents are capped
@@ -459,9 +494,28 @@ pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 // ============================================================================
 
 /// Per-copy pressing cost the label books against recoupment (design §E-2:
-/// $0.30/copy). Applied to the label's pressing run at each release and to
-/// every auto-repress run (§E-1 label half). [tune]
-pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.30;
+/// $0.30/copy at the pre-M7 10-units-per-point scale). Applied to the label's
+/// pressing run at each release and to every auto-repress run (§E-1 label
+/// half).
+///
+/// COUPLED to the M7 sales rescale: `UNITS_PER_SCORE_POINT` tripled the
+/// copies a score moves while `SALES_INCOME_DIVISOR` kept royalty dollars
+/// flat, so this per-copy charge must divide by at least the same ratio
+/// ($0.30 ÷ 3 = $0.10). Left at $0.30 it outran every royalty below 30% and
+/// recoupment was structurally impossible (issue #20).
+///
+/// Then halved once more to $0.05 (break-even at a 5% royalty — majors net
+/// $0.05–0.07/copy after pressing, indies far more): issue #20's $0.10
+/// suggestion was calibrated while instant actions still re-ran the weekly
+/// sales pass, inflating catalog royalty velocity; with that double-count
+/// fixed, $0.10 left the median first deal recouping at ~58% of its term,
+/// missing the §F target ("median signed act recoups the advance before the
+/// term's halfway mark" — asserted by
+/// `median_signed_act_recoups_the_advance_before_the_terms_halfway_mark`,
+/// which is the number to re-check first if this moves). If
+/// `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again, carry this
+/// constant along. [tune]
+pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.05;
 /// Recoupment cost per point of promo push the label applies in
 /// `apply_label_promo` (design §E-2: $15/point). [tune]
 pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
