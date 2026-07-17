@@ -46,7 +46,7 @@ for their bug classes turned up.
   old demand scale, so a signed act's first run nearly always sold out
   and the over-cap demand silently evaporated — runs now press 3× (the
   same coupling as the other per-copy fixes). And with the bonus-sales
-  exploit closed, the certification balance it had been propping up is
+  exploit closed, the certification balance previously propped up by that exploit is
   retuned through the catalog tail (gentler decay, higher weekly rate):
   a signed 15-year career medians 3 certifications in the balance sweep,
   inside the design's 1–3 target, where the exploit-free game previously
