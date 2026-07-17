@@ -4,6 +4,44 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
+## 0.7.1 — 2026-07-17
+
+Money Cycle repairs: two reported bugs (#20, #21) plus everything a sweep
+for their bug classes turned up.
+
+### Fixed
+
+- **Label recoupment is possible again** (#20). The M7 sales rescale
+  tripled the copies every pressing charged to the recoupment ledger while
+  royalty dollars stayed flat, so below a 30% royalty the advance could
+  mathematically never be repaid — every major and most indies. The
+  per-copy ledger charge is rescaled (and then tuned to $0.05/copy) so the
+  median signed act recoups its advance before the term's halfway mark —
+  now asserted in the sim lab so it can't silently regress again.
+- **Indie pressing pays for itself again.** The same rescale miss on the
+  player's side: per-copy pressing bills were still on the pre-M7 scale, so
+  a sold-out album run *lost* money outright in every era with a recording
+  cost modifier above 4/3 — five of the ten. Per-copy costs now divide by
+  the income divisor, restoring the pre-M7 margins; a new test pins a
+  fully-sold run out-earning its bill in every era.
+- **Sell-out news reads in order** (#21). The sold-out line now reports
+  the run that actually sold out (not the ledger-inflated post-restock
+  count), and the label's fresh-run announcement follows the sell-out it
+  reacts to instead of preceding it. First-run certification news got the
+  same treatment: sales line, then the award, then the restock.
+- **Instant actions no longer mint bonus sales weeks.** The weekly sales
+  pass ran after every action — including instant ones (marketing,
+  lifestyle moves, re-presses, deal responses) that don't advance the
+  calendar — so each one re-sold a full catalog-tail week: free copies,
+  income, recoupment paydown, and certification progress. The pass now
+  resolves at most once per game week.
+- **"Fame +N" tells the truth.** Gig, tour, support-slot, and record-sales
+  lines all reported the pre-multiplier fame gain: during a comeback the
+  band actually gained double what the log said, and at a cap it gained
+  less. The log (and the tour report) now show the fame actually applied.
+  Same for a tour's regional fame line when the 100-cap eats part of the
+  rolled gain.
+
 ## 0.7.0 — 2026-07-16
 
 The Money Cycle: where the record business gets its hooks into you. Tours
