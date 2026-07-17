@@ -112,7 +112,9 @@ impl Game {
                 }
             }
             _ => match rng.gen_range(0..3) {
-                0 => self.band.gain_fame(1),
+                0 => {
+                    self.band.gain_fame(1);
+                }
                 1 => self.player.money += rng.gen_range(50..200),
                 _ => {
                     self.band.reputation.critical_acclaim =

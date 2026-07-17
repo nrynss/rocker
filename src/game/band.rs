@@ -215,14 +215,19 @@ impl Band {
     /// peak it has already reached, the gain is doubled (the comeback rule,
     /// design §C); the result is clamped to `MAX_FAME` and the peak updated.
     /// Fame *losses* (idle decay, bad events) must not route through here.
-    pub fn gain_fame(&mut self, amount: u8) {
-        self.gain_fame_capped(amount, crate::game::constants::MAX_FAME);
+    pub fn gain_fame(&mut self, amount: u8) -> u8 {
+        self.gain_fame_capped(amount, crate::game::constants::MAX_FAME)
     }
 
     /// Like [`Band::gain_fame`], but the result also respects a ceiling —
     /// the live-fame caps: comeback doubling never carries fame past `cap`.
     /// A cap already at or below current fame never reduces fame.
-    pub fn gain_fame_capped(&mut self, amount: u8, cap: u8) {
+    ///
+    /// Returns the fame actually applied — after comeback doubling and the
+    /// caps — which is what any "fame +N" log line must report: the raw
+    /// `amount` understates a comeback gain 2× and overstates a capped one.
+    pub fn gain_fame_capped(&mut self, amount: u8, cap: u8) -> u8 {
+        let before = self.fame;
         let ceiling = cap.max(self.fame);
         let peak = self.effective_peak_fame();
         let multiplier = if self.fame < peak {
@@ -235,6 +240,7 @@ impl Band {
             .min(u16::from(ceiling))
             .min(u16::from(crate::game::constants::MAX_FAME)) as u8;
         self.peak_fame = peak.max(self.fame);
+        self.fame - before
     }
 
     pub fn get_fame_level(&self) -> &str {

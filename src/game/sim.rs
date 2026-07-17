@@ -92,6 +92,7 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         turn_log: Vec::new(),
         rockstar_achieved: false,
         current_distribution_channel: music::DistributionChannel::default(),
+        last_sales_pass_week: None,
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
@@ -495,6 +496,13 @@ struct Career {
     /// did they actually make it").
     weeks_to_rockstar: Option<u32>,
     first_deal_week: Option<u32>,
+    /// Term length of the first deal signed (§E-4), stamped alongside
+    /// `first_deal_week`.
+    first_deal_term_weeks: Option<u16>,
+    /// Week the first deal's recoupment ledger (§E-2) first cleared — the
+    /// §F target reads this against the term's halfway mark. `None` if that
+    /// deal never recouped inside the horizon.
+    first_deal_recoup_week: Option<u32>,
     deals_signed: u32,
     sell_outs: u32,
     /// M7 (§E-4): contract breaches — a term ran out with albums owed.
@@ -535,6 +543,8 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
         weeks_to_fame_50: None,
         weeks_to_rockstar: None,
         first_deal_week: None,
+        first_deal_term_weeks: None,
+        first_deal_recoup_week: None,
         deals_signed: 0,
         sell_outs: 0,
         breaches: 0,
@@ -618,7 +628,18 @@ fn observe(career: &mut Career, game: &Game, had_deal: &mut bool) {
         career.deals_signed += 1;
         if career.first_deal_week.is_none() {
             career.first_deal_week = Some(game.week);
+            career.first_deal_term_weeks = game.band.current_deal().map(|deal| deal.term_weeks);
         }
+    }
+    // §F recoupment target: the week the FIRST deal's ledger clears. Only
+    // watched while that first deal is still the active one — a later deal's
+    // fresh (smaller) ledger must not masquerade as the first recouping.
+    if signed
+        && career.deals_signed == 1
+        && career.first_deal_recoup_week.is_none()
+        && game.band.current_deal().is_some_and(|deal| deal.unrecouped <= 0)
+    {
+        career.first_deal_recoup_week = Some(game.week);
     }
     *had_deal = signed;
     while career.fame_by_year.len() < (game.week / constants::WEEKS_PER_YEAR) as usize {
@@ -855,6 +876,50 @@ fn no_bot_panics_or_stalls_inside_five_years() {
             );
         }
     }
+}
+
+/// §F: "Median signed act recoups the advance before the term's halfway
+/// mark." This is the assertion whose absence let issue #20 slide: the M7
+/// sales rescale tripled the copies every pressing charges to the ledger
+/// while `SALES_INCOME_DIVISOR` kept royalty dollars flat, so below a 30%
+/// royalty the ledger grew monotonically and no signed act could ever
+/// recoup — and no test noticed. Label-loyalist careers, first deal each:
+/// the median ledger-clear point must land before 50% of the term. A deal
+/// that never recoups inside the horizon stays in the sample at an
+/// over-the-horizon percentage, dragging the median honestly instead of
+/// silently vanishing.
+#[test]
+fn median_signed_act_recoups_the_advance_before_the_terms_halfway_mark() {
+    // 8 years, not the 5-year smoke horizon: a first deal signed in year
+    // 3-4 needs its full term (up to 156 weeks) inside the window, or a
+    // healthy deal gets counted as "never recouped" purely because the
+    // clock ran out on the measurement.
+    const HORIZON: u32 = 8 * constants::WEEKS_PER_YEAR;
+    const SEEDS: u64 = 12;
+    let mut recoup_pct: Vec<u32> = Vec::new();
+    for seed in 1..=SEEDS {
+        let career = run_career(Bot::LabelLoyalist, seed, HORIZON);
+        let (Some(signed_week), Some(term)) = (career.first_deal_week, career.first_deal_term_weeks)
+        else {
+            continue;
+        };
+        let term = u32::from(term.max(1));
+        let recoup_week = career.first_deal_recoup_week.unwrap_or(HORIZON + term);
+        recoup_pct.push(recoup_week.saturating_sub(signed_week) * 100 / term);
+    }
+    assert!(
+        recoup_pct.len() >= SEEDS as usize * 2 / 3,
+        "the label-loyalist should sign on most seeds inside eight years; only {}/{SEEDS} did",
+        recoup_pct.len()
+    );
+    recoup_pct.sort_unstable();
+    println!("first-deal recoup points as % of term ({SEEDS} seeds): {recoup_pct:?}");
+    let median_pct = recoup_pct[recoup_pct.len() / 2];
+    assert!(
+        median_pct < 50,
+        "§F target: the median signed act must recoup the advance before the term's \
+         halfway mark; median recoup point was {median_pct}% of the term ({recoup_pct:?})"
+    );
 }
 
 /// With both story-event taps silenced (they can hand out fame), a band

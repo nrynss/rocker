@@ -249,6 +249,18 @@ fn certification_triggers_a_label_auto_repress() {
             .any(|m| m.contains("fresh run") && m.contains("certified")),
         "the auto-repress is announced as a certification restock"
     );
+    // Story order (issue #21's bug class): the sales line, then the award it
+    // earned, then the restock reacting to the award.
+    let position = |needle: &str| game.turn_log.iter().position(|m| m.contains(needle));
+    let sales = position("💿").expect("the sales line fires");
+    let cert = position("🏆").expect("the certification line fires");
+    let restock = position("fresh run").expect("the restock line fires");
+    assert!(
+        sales < cert && cert < restock,
+        "story order is sales → certified → restock; got 💿 at {sales}, 🏆 at {cert}, \
+         🏭 at {restock}: {:?}",
+        game.turn_log
+    );
 }
 
 /// The structural point of §E-1: a signed release with strong sustained tail
@@ -263,7 +275,11 @@ fn signed_release_re_presses_on_the_tail_and_can_certify() {
     // moves real volume across territories and can cross Silver.
     give_regional_presence(&mut game, 80);
     let mut deal = test_deal(90, 0.12);
-    deal.unrecouped = 0; // already recouped — watch the ledger grow with represses
+    // Deep in the red so the ledger never clears mid-test: the final balance
+    // then isolates the repress outlays exactly (start − royalties + outlays),
+    // instead of depending on whether that week's royalty out-earned that
+    // week's fresh run — which is tuning, not the mechanism under test.
+    deal.unrecouped = 1_000_000;
     game.band.record_deal = Some(deal);
 
     let first_run = 90 * LABEL_PRESSING_PER_REACH + 70 * LABEL_PRESSING_PER_FAME;
@@ -305,9 +321,17 @@ fn signed_release_re_presses_on_the_tail_and_can_certify() {
         "and it therefore certifies (level {})",
         release.certified
     );
+    // Every royalty dollar went to the ledger (still deep in the red), so
+    // without the repress outlays the balance would sit at exactly
+    // `start − royalties`; sitting strictly above that is the fresh runs'
+    // pressing costs having joined the ledger.
+    let royalties = release.total_income_generated as i32;
     assert!(
-        game.band.current_deal().unwrap().unrecouped > 0,
-        "each fresh run's pressing cost joined the recoupment ledger"
+        game.band.current_deal().unwrap().unrecouped > 1_000_000 - royalties,
+        "each fresh run's pressing cost joined the recoupment ledger on top of \
+         the royalty paydown: balance {} vs {} without outlays",
+        game.band.current_deal().unwrap().unrecouped,
+        1_000_000 - royalties
     );
 }
 

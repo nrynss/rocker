@@ -131,6 +131,16 @@ pub struct Game {
     /// the exact reach the old, single indie formula already gave.
     #[serde(default)]
     pub current_distribution_channel: DistributionChannel,
+    /// The last week the weekly sales pass
+    /// (`process_music_releases_and_marketing`) resolved. The pass fires
+    /// after EVERY action, but instant actions (marketing, lifestyle,
+    /// re-press, deal responses) don't advance the calendar — without this
+    /// guard each one re-sold a full catalog-tail week inside the same game
+    /// week: bonus copies, income, recoupment paydown, and certification
+    /// progress per instant action. `#[serde(default)]` (`None`) so an old
+    /// save's first pass after load runs normally.
+    #[serde(default)]
+    pub(super) last_sales_pass_week: Option<u32>,
 }
 
 impl Game {
@@ -173,6 +183,7 @@ impl Game {
             turn_log,
             rockstar_achieved: false,
             current_distribution_channel: DistributionChannel::default(),
+            last_sales_pass_week: None,
         })
     }
 

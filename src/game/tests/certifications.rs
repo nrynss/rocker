@@ -34,7 +34,7 @@ fn crossing_silver_threshold_awards_certification() {
     assert_eq!(cert_level, 1, "50,000 copies should be SILVER (level 1)");
 
     // Manually apply the awards to verify the bumps.
-    game.apply_certification_awards(0, 1, "Test Release", 50_000);
+    let _ = game.apply_certification_awards(0, 1, "Test Release", 50_000);
 
     // Check the bumps were applied.
     assert_eq!(
@@ -112,7 +112,7 @@ fn certification_bumps_are_correct_magnitude() {
     let initial_commercial = game.band.reputation.commercial_success;
 
     // Apply silver (level 0→1) awards
-    game.apply_certification_awards(0, 1, "Test Release", 50_000);
+    let _ = game.apply_certification_awards(0, 1, "Test Release", 50_000);
     assert_eq!(
         game.player.happiness,
         initial_happiness + 5,
@@ -128,7 +128,7 @@ fn certification_bumps_are_correct_magnitude() {
     let happiness_after_silver = game.player.happiness;
     let commercial_after_silver = game.band.reputation.commercial_success;
 
-    game.apply_certification_awards(1, 2, "Test Release", 150_000);
+    let _ = game.apply_certification_awards(1, 2, "Test Release", 150_000);
     assert_eq!(
         game.player.happiness,
         happiness_after_silver + 8,
@@ -144,7 +144,7 @@ fn certification_bumps_are_correct_magnitude() {
     let happiness_after_gold = game.player.happiness;
     let commercial_after_gold = game.band.reputation.commercial_success;
 
-    game.apply_certification_awards(2, 3, "Test Release", 400_000);
+    let _ = game.apply_certification_awards(2, 3, "Test Release", 400_000);
     assert_eq!(
         game.player.happiness,
         happiness_after_gold + 12,
@@ -165,7 +165,12 @@ fn multiplatinum_repeats_platinum_bumps() {
 
     // Apply platinum and then multi-platinum (×2 at 800k).
     // Levels 0 → 4 should include: silver (1), gold (2), platinum (3), then multi-platinum tier.
-    game.apply_certification_awards(0, 4, "Test Release", 800_000);
+    let lines = game.apply_certification_awards(0, 4, "Test Release", 800_000);
+    assert_eq!(
+        lines.len(),
+        4,
+        "one 🏆 line per level crossed: silver, gold, platinum, ×2 tier"
+    );
 
     // Silver: +5, Gold: +8, Platinum: +12, Multi-platinum ×1 tier: +12
     // Total: 5 + 8 + 12 + 12 = 37
@@ -191,7 +196,12 @@ fn incremental_multiplatinum_awards_one_tier_per_step() {
     let happiness = game.player.happiness;
     let commercial = game.band.reputation.commercial_success;
 
-    game.apply_certification_awards(4, 5, "Test Release", 1_200_000);
+    let lines = game.apply_certification_awards(4, 5, "Test Release", 1_200_000);
+    assert_eq!(
+        lines.len(),
+        1,
+        "×2 → ×3 crosses one tier: one 🏆 line, not two"
+    );
 
     assert_eq!(
         game.player.happiness,
@@ -214,7 +224,7 @@ fn happiness_and_reputation_cap_at_100() {
     game.band.reputation.commercial_success = 100;
 
     // Apply a certification bump (should stay at 100, not overflow)
-    game.apply_certification_awards(0, 3, "Test Release", 400_000);
+    let _ = game.apply_certification_awards(0, 3, "Test Release", 400_000);
 
     assert_eq!(game.player.happiness, 100, "Happiness should cap at 100");
     assert_eq!(

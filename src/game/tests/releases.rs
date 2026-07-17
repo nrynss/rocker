@@ -288,3 +288,117 @@ fn post_launch_marketing_increases_catalog_tail_sales() {
         income_without_marketing
     );
 }
+
+/// Issue #21: when a signed first run sells out, the log must read in story
+/// order — 💿 sales → 📦 sold out → 🏭 restock — and the 📦 line must report
+/// the run that actually sold out, not the ledger-inflated post-re-press
+/// count (the auto-repress mutates `copies_pressed` before the lines are
+/// emitted).
+#[test]
+fn sold_out_log_reports_the_first_run_and_precedes_the_restock() {
+    let mut game = test_game();
+    game.band.fame = 60;
+    // M10: a touring act's regional presence so demand blows past a tiny run.
+    give_regional_presence(&mut game, 80);
+    game.band.record_deal = Some(test_deal(70, 0.12));
+
+    let mut release = test_release(1, ReleaseType::Single);
+    release.release_quality = 90;
+    release.week_released = 0;
+    release.copies_pressed = 500; // tiny run — demand will blow past it
+    game.just_released_music.push(release);
+
+    game.week = INITIAL_SALES_WINDOW_WEEKS;
+    game.process_music_releases_and_marketing();
+
+    let position = |needle: &str| game.turn_log.iter().position(|m| m.contains(needle));
+    let sales = position("💿").expect("the sales line fires");
+    let sold_out = position("📦").expect("the sold-out line fires");
+    let restock = position("fresh run").expect("the restock line fires");
+    assert!(
+        game.turn_log[sold_out].contains("all 500 copies gone"),
+        "📦 reports the run that sold out, not the post-re-press total: {}",
+        game.turn_log[sold_out]
+    );
+    assert!(
+        sales < sold_out && sold_out < restock,
+        "story order is sales → sold out → restock; got 💿 at {sales}, 📦 at {sold_out}, \
+         🏭 at {restock}: {:?}",
+        game.turn_log
+    );
+}
+
+/// Issue #20's bug class, player side: the per-copy pressing bill must stay
+/// coupled to the M7 sales rescale. A fully-sold pressing run — any tier,
+/// single or album — must out-earn its own bill in EVERY era, no matter the
+/// era's `recording_cost_modifier`. Before the fix, `PRESSING_PER_COPY_ALBUM`
+/// was still on the pre-M7 scale ($0.50 against $0.667/copy income), so a
+/// sold-out album run lost money unconditionally in every era with a cost
+/// modifier above 4/3 — five of the ten.
+#[test]
+fn a_fully_sold_pressing_run_out_earns_its_bill_in_every_era() {
+    let game = test_game();
+    for era in game.timeline.eras.values() {
+        let modifier = era.recording_cost_modifier;
+        for (tier, copies) in PRESSING_TIERS {
+            for (kind, setup, per_copy) in [
+                ("single", PRESSING_SETUP_SINGLE, PRESSING_PER_COPY_SINGLE),
+                ("album", PRESSING_SETUP_ALBUM, PRESSING_PER_COPY_ALBUM),
+            ] {
+                let bill = (setup + per_copy * copies as f32) * modifier;
+                // The most a run can ever earn: every pressed copy sold, at
+                // indie per-copy income after the M7 divisor.
+                let max_income = (copies * INDIE_INCOME_PER_COPY / SALES_INCOME_DIVISOR) as f32;
+                assert!(
+                    max_income > bill,
+                    "a fully-sold {kind} {tier} must out-earn its pressing bill in '{}' \
+                     (cost modifier {modifier}): income ${max_income} vs bill ${bill}",
+                    era.era_name
+                );
+            }
+        }
+    }
+}
+
+/// The weekly sales pass runs after EVERY action, but instant actions
+/// (marketing, lifestyle, re-press, deal responses) don't advance the
+/// calendar — a second pass in the same week must be a no-op, or every
+/// instant action mints a bonus catalog-tail week: free copies, income,
+/// recoupment paydown, and certification progress.
+#[test]
+fn the_sales_pass_resolves_at_most_once_per_week() {
+    let mut game = test_game();
+    game.band.fame = 50;
+    give_regional_presence(&mut game, 80);
+
+    let mut release = test_release(1, ReleaseType::Single);
+    release.week_released = 1;
+    release.initial_sales_score = 500; // a healthy tail
+    release.copies_pressed = 0; // uncapped
+    game.band.singles_released.push(release);
+
+    game.week = 10;
+    game.process_music_releases_and_marketing();
+    let sold_after_first = game.band.singles_released[0].copies_sold;
+    let income_after_first = game.band.singles_released[0].total_income_generated;
+    assert!(sold_after_first > 0, "the tail moved copies on the first pass");
+
+    // Same week again — the instant-action path. Nothing may move.
+    game.process_music_releases_and_marketing();
+    assert_eq!(
+        game.band.singles_released[0].copies_sold, sold_after_first,
+        "a second pass in the same week must not sell more copies"
+    );
+    assert_eq!(
+        game.band.singles_released[0].total_income_generated, income_after_first,
+        "a second pass in the same week must not mint more income"
+    );
+
+    // Next week the tail sells again.
+    game.week = 11;
+    game.process_music_releases_and_marketing();
+    assert!(
+        game.band.singles_released[0].copies_sold > sold_after_first,
+        "the following week's pass still sells"
+    );
+}

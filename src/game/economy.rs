@@ -222,13 +222,15 @@ impl Game {
     /// `plan_pressing` would hand it — restocking the catalog tail. The new
     /// pressing cost joins the recoupment ledger (§E-2). The indie,
     /// player-initiated re-press is M6's job, not this.
-    fn label_auto_repress(&mut self, release: &mut Release, reason: &str) {
-        let Some(deal) = self.band.current_deal() else {
-            return;
-        };
+    ///
+    /// Returns the restock announcement instead of logging it, so the caller
+    /// can emit it in story order — after the sales/sold-out lines it reacts
+    /// to, not before them (issue #21).
+    fn label_auto_repress(&mut self, release: &mut Release, reason: &str) -> Option<String> {
+        let deal = self.band.current_deal()?;
         let fresh_run = self.label_pressing_size(deal);
         if fresh_run == 0 {
-            return;
+            return None;
         }
         let label_name = deal.label_name.clone();
         release.copies_pressed = release.copies_pressed.saturating_add(fresh_run);
@@ -236,11 +238,10 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
-        let release_name = release.name.clone();
-        self.log(format!(
+        Some(format!(
             "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
-            label_name, release_name, reason, fresh_run
-        ));
+            label_name, release.name, reason, fresh_run
+        ))
     }
 
     /// M5 (§E-1, label half — tail path): [`Game::label_auto_repress`] for a
@@ -354,13 +355,20 @@ impl Game {
     }
 
     /// Apply the certification awards to the game state for a given level transition.
+    ///
+    /// Returns the 🏆 announcement lines instead of logging them, so each
+    /// caller can emit them in story order — the first-run path holds them
+    /// until after the 💿/📦 sales lines the certification reacts to (the
+    /// same deferral as the 🏭 restock line, issue #21's bug class).
+    #[must_use]
     pub(crate) fn apply_certification_awards(
         &mut self,
         old_level: u8,
         new_level: u8,
         release_name: &str,
         copies_sold: u32,
-    ) {
+    ) -> Vec<String> {
+        let mut lines = Vec::new();
         // Award bumps for each level from the old to the new (shouldn't normally skip).
         // Index into the bumps arrays (silver=0, gold=1, platinum=2).
         for level in (old_level + 1)..=new_level.min(3) {
@@ -372,8 +380,7 @@ impl Game {
                 _ => unreachable!(),
             };
 
-            // Log the achievement.
-            self.log(format!(
+            lines.push(format!(
                 "🏆 '{}' is certified {} — {} copies sold.",
                 release_name, level_name, copies_sold
             ));
@@ -408,7 +415,7 @@ impl Game {
             let multiplatinum_count = new_level - old_level.max(3);
             for _ in 0..multiplatinum_count {
                 // Award platinum bumps again for each multi-platinum tier.
-                self.log(format!(
+                lines.push(format!(
                     "🏆 '{}' is certified PLATINUM — {} copies sold.",
                     release_name, copies_sold
                 ));
@@ -426,9 +433,19 @@ impl Game {
                     .min(100);
             }
         }
+        lines
     }
 
     pub(super) fn process_music_releases_and_marketing(&mut self) {
+        // One sales week per calendar week. This pass runs after every
+        // action, but instant actions don't advance `self.week` — re-running
+        // the catalog tail for a week that already sold would mint bonus
+        // copies, income, recoupment paydown, and certification progress on
+        // every instant action.
+        if self.last_sales_pass_week == Some(self.week) {
+            return;
+        }
+        self.last_sales_pass_week = Some(self.week);
         let current_week = self.week;
 
         // M5 (§E-2): snapshot the recoupment ledger so the weekly status line
@@ -512,13 +529,17 @@ impl Game {
                 let to_player = self.apply_recoupment(income);
                 self.player.earn_money(to_player);
 
-                // Check for certification milestones (§D).
+                // Check for certification milestones (§D). The 🏆 lines are
+                // held back like the 🏭 restock below: the award's mechanics
+                // (fame bump sizes the fresh run) stay here, but its news
+                // must follow the 💿/📦 sales lines that caused it.
                 let mut certified_this_pass = false;
+                let mut cert_lines = Vec::new();
                 if let Some((old_level, new_level)) = Self::compute_certification_awards(&release) {
                     let release_name = release.name.clone();
                     let copies_sold = release.copies_sold;
                     release.certified = new_level;
-                    self.apply_certification_awards(
+                    cert_lines = self.apply_certification_awards(
                         old_level,
                         new_level,
                         &release_name,
@@ -532,11 +553,17 @@ impl Game {
                 // cost joins the ledger, §E-2). Sold-out takes priority — a
                 // sold-out record can't also have certified this same pass
                 // without more stock, and a single fresh run answers both.
+                // The 📦 line must report the run that actually sold out, and
+                // the 🏭 restock must be announced after it (issue #21) — so
+                // the pre-re-press count is captured here and the restock
+                // line is held back until the sales beats have logged.
+                let first_run_pressed = release.copies_pressed;
+                let mut repress_log = None;
                 if self.band.current_deal().is_some() {
                     if sold_out {
-                        self.label_auto_repress(&mut release, "sold out");
+                        repress_log = self.label_auto_repress(&mut release, "sold out");
                     } else if certified_this_pass {
-                        self.label_auto_repress(&mut release, "certified");
+                        repress_log = self.label_auto_repress(&mut release, "certified");
                     }
                 }
 
@@ -553,11 +580,13 @@ impl Game {
                 } else {
                     (sales_score / 300).min(4) as u8
                 };
-                self.band.gain_fame(fame_gain);
-                if fame_gain > 0 {
+                // Log the fame actually applied (comeback doubling, caps),
+                // not the raw pre-multiplier gain.
+                let fame_applied = self.band.gain_fame(fame_gain);
+                if fame_applied > 0 {
                     self.log(format!(
                         "💿 '{}' {} — moved {} copies, first-run earnings: ${}, fame +{}.",
-                        release.name, verdict, units_sold, income, fame_gain
+                        release.name, verdict, units_sold, income, fame_applied
                     ));
                 } else {
                     self.log(format!(
@@ -568,8 +597,14 @@ impl Game {
                 if sold_out {
                     self.log(format!(
                         "📦 '{}' sold out — all {} copies gone; demand was there for more.",
-                        release.name, release.copies_pressed
+                        release.name, first_run_pressed
                     ));
+                }
+                for line in cert_lines {
+                    self.log(line);
+                }
+                if let Some(line) = repress_log {
+                    self.log(line);
                 }
 
                 let release_genre = release.genre.clone();
@@ -729,7 +764,7 @@ impl Game {
                         let wanted = (ongoing_sales_score as f32
                             * presence_sum
                             * UNITS_PER_SCORE_POINT) as u32
-                            / 5;
+                            / TAIL_UNITS_DIVISOR;
                         let mut units = wanted;
                         let mut stock_capped = false;
                         if release.copies_pressed > 0 {
@@ -787,9 +822,15 @@ impl Game {
             }
         }
 
-        // Apply all collected certifications.
+        // Apply all collected certifications. On the tail path the 🏆 lines
+        // log right away — the sales that earned them happened in earlier
+        // weeks, so there is no same-pass cause line to wait for.
         for (release_name, old_level, new_level, copies_sold) in certifications_to_award {
-            self.apply_certification_awards(old_level, new_level, &release_name, copies_sold);
+            let lines =
+                self.apply_certification_awards(old_level, new_level, &release_name, copies_sold);
+            for line in lines {
+                self.log(line);
+            }
         }
 
         // M5 (§E-1, label half — tail path): re-press the signed releases that

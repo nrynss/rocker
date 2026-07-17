@@ -295,16 +295,21 @@ impl Game {
             .player
             .health
             .saturating_sub(constants::TOUR_HEALTH_COST_PER_WEEK.saturating_mul(weeks));
-        self.band.gain_fame(offer.fame_gain);
+        // Report the fame actually applied (comeback doubling, caps), not
+        // the offer's raw number.
+        let fame_applied = self.band.gain_fame(offer.fame_gain);
         self.week += offer.weeks;
         self.log(format!(
             "🎟️ Opened for {} for {} weeks — ${} and a taste of the big stage (fame +{}).",
-            offer.host_band, offer.weeks, offer.pay, offer.fame_gain
+            offer.host_band, offer.weeks, offer.pay, fame_applied
         ));
 
         if rng.gen_bool(0.25) {
-            self.band.gain_fame(2);
-            self.log("🔥 Their crowd adopted you — encores every night (+2 fame).");
+            let encore_fame = self.band.gain_fame(2);
+            self.log(format!(
+                "🔥 Their crowd adopted you — encores every night (+{} fame).",
+                encore_fame
+            ));
         }
         Ok(())
     }
