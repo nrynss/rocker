@@ -637,7 +637,10 @@ fn observe(career: &mut Career, game: &Game, had_deal: &mut bool) {
     if signed
         && career.deals_signed == 1
         && career.first_deal_recoup_week.is_none()
-        && game.band.current_deal().is_some_and(|deal| deal.unrecouped <= 0)
+        && game
+            .band
+            .current_deal()
+            .is_some_and(|deal| deal.unrecouped <= 0)
     {
         career.first_deal_recoup_week = Some(game.week);
     }
@@ -899,7 +902,8 @@ fn median_signed_act_recoups_the_advance_before_the_terms_halfway_mark() {
     let mut recoup_pct: Vec<u32> = Vec::new();
     for seed in 1..=SEEDS {
         let career = run_career(Bot::LabelLoyalist, seed, HORIZON);
-        let (Some(signed_week), Some(term)) = (career.first_deal_week, career.first_deal_term_weeks)
+        let (Some(signed_week), Some(term)) =
+            (career.first_deal_week, career.first_deal_term_weeks)
         else {
             continue;
         };

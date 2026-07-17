@@ -261,15 +261,17 @@ fn post_launch_marketing_increases_catalog_tail_sales() {
     game.process_music_releases_and_marketing();
     let income_without_marketing = game.band.singles_released[0].total_income_generated;
 
-    // Reset income and copies sold for second test.
+    // Reset income and copies sold for the second pass, and re-arm the
+    // once-per-week guard so the SAME week replays with marketing — an
+    // adjacent-week comparison would confound the marketing bonus with the
+    // tail's own weekly decay whenever a divisor step lands between the two.
     game.band.singles_released[0].total_income_generated = 0;
     game.band.singles_released[0].copies_sold = 0;
+    game.last_sales_pass_week = None;
 
-    // Now add an active marketing campaign and run week 11.
-    game.week = 11;
     let campaign = music::ActiveMarketingCampaign {
         campaign_type: music::MarketingCampaignType::BasicPress,
-        start_week: 11,
+        start_week: 10,
         end_week: 15,
         effectiveness_bonus: 10,
     };
@@ -381,7 +383,10 @@ fn the_sales_pass_resolves_at_most_once_per_week() {
     game.process_music_releases_and_marketing();
     let sold_after_first = game.band.singles_released[0].copies_sold;
     let income_after_first = game.band.singles_released[0].total_income_generated;
-    assert!(sold_after_first > 0, "the tail moved copies on the first pass");
+    assert!(
+        sold_after_first > 0,
+        "the tail moved copies on the first pass"
+    );
 
     // Same week again — the instant-action path. Nothing may move.
     game.process_music_releases_and_marketing();

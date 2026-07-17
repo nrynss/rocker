@@ -48,12 +48,23 @@ pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
 // Living sales tail: post-launch decay and influence [tune].
-pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 3;
+//
+// The decay step (3 → 4) and the tail unit rate (a magic `/ 5` in the tail
+// loop → the named `/ 3` below) were retuned together when the weekly sales
+// pass gained its once-per-week guard: instant actions had been re-running
+// the tail at the same week's (early, high) rate without advancing the decay
+// clock, and the §D/§F certification balance — median signed 15-year career
+// reaches 1–3 silvers; a home-market act can reach Silver at all — was
+// unknowingly calibrated on that bonus volume. These put the legitimate
+// weekly tail where the exploit-inflated one effectively was: the sweep's
+// label-loyalist lands med 3 certs (was 5 with the exploit, 0 without the
+// retune). Re-check that sweep column before moving either. [tune]
+pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 4;
 pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
-/// The tail moves this fraction (1/N) of the first-run per-week unit rate
-/// (was a magic `/ 5` in the tail loop). [tune]
-pub(super) const TAIL_UNITS_DIVISOR: u32 = 5;
+/// The tail moves this fraction (1/N) of the first-run per-week unit rate.
+/// Retuned with `TAIL_DIVISOR_WEEKS_PER_STEP` above. [tune]
+pub(super) const TAIL_UNITS_DIVISOR: u32 = 3;
 
 // Pressing runs. Independents choose a run and pay setup plus per-copy
 // costs; a label presses to the size of its network and your name. The
@@ -85,8 +96,18 @@ pub(super) const PRESSING_SETUP_ALBUM: f32 = 100.0;
 // carry these along. [tune]
 pub(super) const PRESSING_PER_COPY_SINGLE: f32 = 0.10 / SALES_INCOME_DIVISOR as f32;
 pub(super) const PRESSING_PER_COPY_ALBUM: f32 = 0.50 / SALES_INCOME_DIVISOR as f32;
-pub(super) const LABEL_PRESSING_PER_REACH: u32 = 100;
-pub(super) const LABEL_PRESSING_PER_FAME: u32 = 50;
+// Label pressing run sizes are COUPLED to the M7 sales rescale like the
+// per-copy dollar constants above: `UNITS_PER_SCORE_POINT` tripled the
+// copies a sales score demands, and a run is denominated in copies, so the
+// run a label presses must triple with it (100/50 → 300/150). Left on the
+// old scale, a signed act's first run nearly always sold out and the
+// over-cap demand was silently discarded — a fame-100 act's hit leaked most
+// of its first-week sales, which is why no signed career could accumulate
+// the 50k copies Silver asks for (§D/§F) once the once-per-week sales-pass
+// guard stopped instant actions from minting bonus tail weeks. If
+// `UNITS_PER_SCORE_POINT` moves again, carry these along. [tune]
+pub(super) const LABEL_PRESSING_PER_REACH: u32 = 300;
+pub(super) const LABEL_PRESSING_PER_FAME: u32 = 150;
 
 // Distribution model: how much of a release's potential audience you can
 // actually reach. Labels bring their market_reach; independents are capped

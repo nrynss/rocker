@@ -41,6 +41,16 @@ for their bug classes turned up.
   less. The log (and the tour report) now show the fame actually applied.
   Same for a tour's regional fame line when the 100-cap eats part of the
   rolled gain.
+- **Label pressing runs carry the M7 rescale, and certifications are
+  honestly reachable again.** Label run sizes were still sized for the
+  old demand scale, so a signed act's first run nearly always sold out
+  and the over-cap demand silently evaporated — runs now press 3× (the
+  same coupling as the other per-copy fixes). And with the bonus-sales
+  exploit closed, the certification balance it had been propping up is
+  retuned through the catalog tail (gentler decay, higher weekly rate):
+  a signed 15-year career medians 3 certifications in the balance sweep,
+  inside the design's 1–3 target, where the exploit-free game previously
+  allowed none — for anyone, ever.
 
 ## 0.7.0 — 2026-07-16
 
