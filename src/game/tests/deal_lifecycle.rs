@@ -25,6 +25,9 @@ fn signed_deal_with_real_label(game: &Game, signed_week: u32, term_weeks: u16) -
         unrecouped: 0,
         signed_week,
         term_weeks,
+        // L-ENTITY: these tests exercise the deal lifecycle, not the label
+        // ledger; the ledger falls back to a name match, so `None` is fine.
+        label_id: None,
     }
 }
 

@@ -233,6 +233,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the pressing + promo outlay that just accrued to the
+        // recoupment ledger also leaves the label's balance sheet.
+        self.credit_label_capital(-i64::from(outlay));
     }
 
     /// M5 (§E-2): route a signed act's royalty through the label's recoupment
@@ -250,6 +253,55 @@ impl Game {
         let applied = (royalty as i32).min(deal.unrecouped);
         deal.unrecouped -= applied;
         royalty - applied as u32
+    }
+
+    /// L-ENTITY (§A): the `GameWorld::labels` id of the player's current label,
+    /// if signed. Prefers the deal's stamped `label_id` (`action_accept_deal`),
+    /// falling back to a unique-name match for a deal signed before that field
+    /// existed (an old save). `None` when unsigned or when labels aren't seeded.
+    fn player_label_id(&self) -> Option<u32> {
+        let deal = self.band.current_deal()?;
+        if let Some(id) = deal.label_id {
+            return Some(id);
+        }
+        self.world
+            .labels
+            .iter()
+            .find(|(_, label)| label.name == deal.label_name)
+            .map(|(id, _)| *id)
+    }
+
+    /// L-ENTITY (§A): book `delta` dollars to the player's label's balance
+    /// sheet — positive is wholesale margin earned, negative is money spent.
+    /// The single entry point every label-capital move in the money pipeline
+    /// goes through. A no-op when unsigned or when the label isn't in the world
+    /// (a pre-0.8 save with no seeded labels), so it can never touch the
+    /// player's income or recoupment — it only ADDS the label's side (§A).
+    fn credit_label_capital(&mut self, delta: i64) {
+        if delta == 0 {
+            return;
+        }
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        if let Some(label) = self.world.labels.get_mut(&id) {
+            label.book(delta);
+        }
+    }
+
+    /// L-ENTITY (§A): the label's wholesale margin on `copies` sold, given the
+    /// royalty that actually reached the artist for this batch
+    /// (`royalty_to_artist` — the recoupment-netted `to_player`). The label
+    /// collects wholesale and pays manufacturing + mechanical on every copy;
+    /// the artist is paid only what recoupment lets through, so a
+    /// still-unrecouped act's retained royalty stays here as the label's margin
+    /// (design §A — "recoupment retains the player's royalty to the label, it
+    /// does not delete money"). `manufacturing` is the sold-copy COGS; the run's
+    /// pressing cash is a separate release-time debit (see the constant's note).
+    fn label_wholesale_margin(copies: u32, royalty_to_artist: u32) -> i64 {
+        let per_copy =
+            LABEL_WHOLESALE_PER_COPY - LABEL_MANUFACTURING_PER_COPY - LABEL_MECHANICAL_PER_COPY;
+        (copies as f32 * per_copy) as i64 - i64::from(royalty_to_artist)
     }
 
     /// M5 (§E-1, label half): a signed act's release that sold out or crossed
@@ -273,6 +325,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the fresh run's pressing cost leaves the label's
+        // balance sheet, same as it accrues to the recoupment ledger.
+        self.credit_label_capital(-i64::from(outlay));
         Some(format!(
             "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
             label_name, release.name, reason, fresh_run
@@ -311,6 +366,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the tail-path fresh run's pressing cost also leaves
+        // the label's balance sheet.
+        self.credit_label_capital(-i64::from(outlay));
         self.log(format!(
             "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
             label_name, release_name, reason, fresh_run
@@ -618,6 +676,18 @@ impl Game {
                 let to_player = self.apply_recoupment(income);
                 self.player.earn_money(to_player);
 
+                // L-ENTITY (§A): book the label's wholesale margin on this
+                // release's first-run copies. Conserved single accounting —
+                // the label kept the spread on every copy, and the royalty the
+                // player did NOT receive (retained while unrecouped) stays with
+                // the label as margin. Player income/recoupment above is
+                // untouched; this only ADDS the label's side. Scene-band roster
+                // P&L is L-ROSTER's hook (§D) — this books only the player's.
+                if self.band.current_deal().is_some() {
+                    let margin = Self::label_wholesale_margin(units_sold, to_player);
+                    self.credit_label_capital(margin);
+                }
+
                 // Check for certification milestones (§D). The 🏆 lines are
                 // held back like the 🏭 restock below: the award's mechanics
                 // (fame bump sizes the fresh run) stay here, but its news
@@ -781,6 +851,10 @@ impl Game {
         // mutable borrow of `self.band`), so M5's recoupment paydown and the
         // player payout both happen once, after the loop.
         let mut catalog_gross_this_week: u32 = 0;
+        // L-ENTITY (§A): copies the catalog tail sells this week, summed across
+        // releases, so the label's wholesale margin is booked once after the
+        // loop (which holds a `&mut self.band` and can't touch `self.world`).
+        let mut catalog_copies_sold_this_week: u32 = 0;
 
         // Collect certifications to apply after the loop (to avoid borrow checker issues).
         let mut certifications_to_award: Vec<(String, u8, u8, u32)> = Vec::new();
@@ -895,6 +969,7 @@ impl Game {
                             continue;
                         }
                         release.copies_sold += units;
+                        catalog_copies_sold_this_week += units;
                         let gross = units * income_per_copy;
                         // M7 (§F) → L-SCALE (§B): same `SALES_INCOME_DIVISOR`
                         // as the first-run payout — retired to 1 by L-SCALE, so
@@ -975,6 +1050,16 @@ impl Game {
                 "💵 Catalog royalties trickle in: ${}.",
                 catalog_to_player
             ));
+        }
+        // L-ENTITY (§A): book the label's wholesale margin on the catalog
+        // tail's copies (same conserved model as the first-run path above).
+        // `royalty_rate` is `Some` exactly when signed, so this books only
+        // under a deal; retained royalty (paid down against the ledger) stays
+        // with the label as margin.
+        if royalty_rate.is_some() {
+            let margin =
+                Self::label_wholesale_margin(catalog_copies_sold_this_week, catalog_to_player);
+            self.credit_label_capital(margin);
         }
 
         // M5 (§E-2): one aggregated status line per week — never once per

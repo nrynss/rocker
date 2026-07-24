@@ -259,6 +259,7 @@ mod tests {
             unrecouped: 0,
             signed_week: 0,
             term_weeks: 0,
+            label_id: None,
         });
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
         app.game.band.record_deal = None;

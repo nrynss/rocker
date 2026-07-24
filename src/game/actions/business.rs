@@ -200,6 +200,17 @@ impl Game {
         let albums_required = offer.albums_required;
         let term_weeks = offer.term_weeks;
         let signed_week = self.week;
+        // L-ENTITY (§A): link the deal to its `Label` world entity so the
+        // weekly wholesale ledger books its margin to the right balance sheet.
+        // Label names are unique across the seed data, so a name match is a
+        // stable resolve; `None` only when labels aren't seeded (a pre-0.8
+        // save), in which case the ledger simply books nothing.
+        let label_id = self
+            .world
+            .labels
+            .iter()
+            .find(|(_, label)| label.name == label_name)
+            .map(|(id, _)| *id);
         // M9: a renewal-window EXTENSION carries the old deal's unrecouped
         // balance forward. The offer snapshotted that balance when it was
         // generated, but the offer can sit pending for weeks while the catalog
@@ -235,9 +246,21 @@ impl Game {
             // legacy-policy deal (see `RecordDeal::term_weeks`).
             signed_week,
             term_weeks,
+            // L-ENTITY (§A): resolved above; the ledger books to this id.
+            label_id,
         };
         self.band.sign_deal(new_deal);
         self.player.earn_money(advance);
+        // L-ENTITY (§A): the advance leaves the label's balance sheet — the
+        // same event that seeds the deal's `unrecouped` ledger now also moves
+        // the label's real money (design: "every dollar a label spends leaves
+        // its capital"). The player's advance/recoupment is unchanged; this
+        // only debits the label's side.
+        if let Some(id) = label_id
+            && let Some(label) = self.world.labels.get_mut(&id)
+        {
+            label.book(-(advance as i64));
+        }
         self.pending_deal_offers.clear();
         self.log(format!(
             "✍️ Signed with {}! ${} advance in the bank — you owe them {} album{} over {} weeks.",

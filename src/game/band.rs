@@ -59,6 +59,15 @@ pub struct RecordDeal {
     /// The label's distribution muscle (0-100), taken from the label data.
     #[serde(default = "default_market_reach")]
     pub market_reach: u8,
+    /// Which `GameWorld::labels` entity this deal is with (L-ENTITY, design
+    /// §A). Stamped at signing (`action_accept_deal`) by matching the offer's
+    /// `label_name` to a seeded `Label`, so the weekly wholesale ledger can
+    /// book the deal's margin to the right label's `capital`. `#[serde(default)]`
+    /// → `None` on a pre-0.8 save (or a deal signed before this field existed);
+    /// the ledger then falls back to matching by `label_name`, and a save with
+    /// no seeded labels at all simply books nothing (income is unchanged).
+    #[serde(default)]
+    pub label_id: Option<u32>,
     /// Label recoupment ledger (design §E-2). The label's outlay the player
     /// must repay out of royalties before a cent reaches the band: the advance
     /// at signing, then pressing + promo at every release under the deal.

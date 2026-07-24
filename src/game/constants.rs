@@ -719,6 +719,40 @@ pub(super) const REGIONAL_FAME_PRESENCE_DIVISOR: f32 = 100.0;
 /// Touring's regional fame still stacks on top. [tune]
 pub(super) const LABEL_INTERNATIONAL_PRESENCE_COEFF: f32 = 0.9;
 
+// ============================================================================
+// L-ENTITY (v0.8 §A): the label balance sheet — seed capital + the weekly
+// wholesale ledger. A label is now a world entity with `capital` that rises on
+// the wholesale margin its roster sells and falls on what it spends. All
+// numbers here are at the era-real L-SCALE scale (§B) and [tune] — L-SIM (§I)
+// validates them against the "Gold nets low-six-figures / Platinum catalogue →
+// millions" target and 15-year label solvency.
+// ============================================================================
+
+/// Seed `capital` = `financial_power³ × this`. Cubed so majors start flush and
+/// boutiques lean (see `world::labels::seed_capital` for the reference points).
+/// [tune] — sized so a major can front its top advance several times over
+/// without being effectively infinite; L-SIM referees it.
+pub(super) const LABEL_CAPITAL_PER_FP_CUBED: i64 = 15;
+
+/// The label's per-copy wholesale ledger (design §A):
+/// `margin_per_copy = wholesale − manufacturing − mechanical − artist_royalty`.
+/// The artist royalty is NOT a constant here — it reuses the royalty the player
+/// is actually paid (`LABEL_INCOME_PER_COPY × royalty_rate`, netted through
+/// recoupment), so a still-unrecouped act's retained royalty stays with the
+/// label as margin (the Albini asymmetry, §A). Era-real 1970s LP economics:
+/// wholesale ~$4, manufacturing ~$1, mechanical (songwriter/publisher) ~$0.30.
+///
+/// NOTE (accounting seam, flagged for L-SIM): `manufacturing` here is the COGS
+/// of a *sold* copy, while the pressing outlay debited to `capital` at release
+/// (`LABEL_RECOUP_PRESSING_PER_COPY`, $0.15/copy *pressed* — the same figure
+/// that accrues to the deal's `unrecouped` ledger) is the recoup-coupled cash
+/// the label fronts for the run. Both are per the §A/task spec; their
+/// magnitudes differ ($1.00 vs $0.15), so they are not one accounting line.
+/// L-SIM owns reconciling/tuning the pair. [tune]
+pub(super) const LABEL_WHOLESALE_PER_COPY: f32 = 4.0;
+pub(super) const LABEL_MANUFACTURING_PER_COPY: f32 = 1.0;
+pub(super) const LABEL_MECHANICAL_PER_COPY: f32 = 0.30;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

@@ -19,6 +19,7 @@ mod fame;
 mod history;
 mod incidents;
 mod label_moves;
+mod labels;
 mod lifestyle;
 mod recoupment;
 mod releases;
@@ -102,6 +103,9 @@ fn test_deal(market_reach: u8, royalty_rate: f32) -> band::RecordDeal {
         // window looks the label up by name.
         signed_week: 0,
         term_weeks: 0,
+        // L-ENTITY: the "Test Records" placeholder isn't a seeded world label,
+        // so the wholesale ledger resolves nothing and books nothing here.
+        label_id: None,
     }
 }
 
