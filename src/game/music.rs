@@ -44,34 +44,38 @@ impl MarketingCampaignType {
     ];
 
     pub fn spec(&self) -> CampaignSpec {
+        // L-SCALE (v0.8 §B): campaign `cost` values ×3 to the one honest
+        // era-real money scale (was 100 / 300 / 500 / 750 / 2000), in lockstep
+        // with the ×3 record income a self-releasing act markets against.
+        // `duration_weeks` and `effectiveness_bonus` are not dollars — unchanged.
         match self {
             MarketingCampaignType::BasicPress => CampaignSpec {
                 name: "Basic Press",
-                cost: 100,
+                cost: 300,
                 duration_weeks: 4,
                 effectiveness_bonus: 5,
             },
             MarketingCampaignType::MagazineSpread => CampaignSpec {
                 name: "Magazine Spread",
-                cost: 300,
+                cost: 900,
                 duration_weeks: 4,
                 effectiveness_bonus: 10,
             },
             MarketingCampaignType::RadioPromotion => CampaignSpec {
                 name: "Radio Promotion",
-                cost: 500,
+                cost: 1500,
                 duration_weeks: 6,
                 effectiveness_bonus: 15,
             },
             MarketingCampaignType::SocialMediaBlitz => CampaignSpec {
                 name: "Street Team Blitz",
-                cost: 750,
+                cost: 2250,
                 duration_weeks: 4,
                 effectiveness_bonus: 20,
             },
             MarketingCampaignType::MusicVideo => CampaignSpec {
                 name: "Promo Film",
-                cost: 2000,
+                cost: 6000,
                 duration_weeks: 8,
                 effectiveness_bonus: 30,
             },

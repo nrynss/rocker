@@ -31,26 +31,29 @@ pub(super) const SALES_FAME_WEIGHT: f32 = 1.2;
 // M7 (§F): raised 10 → 30 so real careers move enough copies for the
 // certification thresholds (§D: Silver 50k) to be reachable — at the old
 // rate a hit sold only hundreds–low-thousands and nobody ever certified.
-// Copies drive both certification *and* income, so `SALES_INCOME_DIVISOR`
-// divides income back down by the same factor: certifications climb to the
-// designed 50k/150k/400k scale while per-release income stays where the
-// (already-balanced) v0.6 economy had it.
+// Copies are a *count*, not a dollar, so L-SCALE (§B) left this at 30. It once
+// coupled with `SALES_INCOME_DIVISOR` to hold per-release income flat while
+// copies climbed to the 50k/150k/400k scale; L-SCALE has since retired that
+// divisor (below), so copies now drive certification and — at the era-real
+// per-copy royalty — income together.
 pub(super) const UNITS_PER_SCORE_POINT: f32 = 30.0;
-/// Divides record income after the `UNITS_PER_SCORE_POINT` bump so raising
-/// copies-sold for certification (§D) doesn't inflate the money economy
-/// (M7 §F). Kept in step with the ratio `UNITS_PER_SCORE_POINT / 10`, so an
-/// *uncapped* release earns exactly what the v0.6 economy gave it. A release
-/// capped by a small pressing run earns `run / divisor` — which is why the
-/// Garage run below is sized to `500 × divisor`, holding a garage-run act's
-/// income where it was.
+/// Divided record income after the `UNITS_PER_SCORE_POINT` bump so that raising
+/// copies-sold for certification (§D) didn't inflate the compressed v0.6/v0.7
+/// money economy (M7 §F).
 ///
-/// L-SCALE (v0.8 §B) will **retire** this (set to 1) as the first step of the
-/// one-honest-scale decompression — but only in lockstep with the uniform ×3
-/// of every *other* dollar in the game (see the HANDOFF L-SCALE Notes for the
-/// full inventory). Retiring it alone triples record income while tour/gig
-/// income stay flat, skewing the balance toward records — so it is left at 3
-/// until L-SCALE lands the whole renumbering together.
-pub(super) const SALES_INCOME_DIVISOR: u32 = 3;
+/// L-SCALE (v0.8 §B) **retired** this — 3 → 1 — as the first step of the
+/// one-honest-scale decompression: record income rises ×3 to meet the already
+/// era-real copy counts, in lockstep with the uniform ×3 of every *other*
+/// dollar in the game (recording/pressing/tour/gig/support/advance costs and
+/// incomes), so ratios are preserved while magnitude triples. Retiring it
+/// *alone* would triple record income while tour/gig income stayed flat and
+/// skew the balance toward records — hence the whole-economy ×3.
+///
+/// Kept as a named constant (now `1`) rather than deleted so the
+/// divisor-coupled `PRESSING_PER_COPY_*` literals below stay legible and
+/// auto-track it (0.10/1, 0.50/1 — themselves ×3 vs the v0.7 values, the
+/// pressing side of the same rescale).
+pub(super) const SALES_INCOME_DIVISOR: u32 = 1;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
@@ -88,19 +91,19 @@ pub const PRESSING_TIERS: [(&str, u32); 4] = [
     ("Regional run", 10_000),
     ("National run", 50_000),
 ];
-pub(super) const PRESSING_SETUP_SINGLE: f32 = 25.0;
-pub(super) const PRESSING_SETUP_ALBUM: f32 = 100.0;
-// Per-copy pressing costs are COUPLED to the M7 sales rescale, the same way
-// as `LABEL_RECOUP_PRESSING_PER_COPY` below (issue #20's bug class): M7
-// tripled the copies a score moves (`UNITS_PER_SCORE_POINT`) while
-// `SALES_INCOME_DIVISOR` kept income dollars flat, so an indie now presses
-// 3× the copies for the same money and the per-copy bill must divide by the
-// same ratio. At the pre-M7 $0.50/album the margin went negative in every
-// era with `recording_cost_modifier > 4/3` — a sold-out album run lost money
-// unconditionally. Dividing restores the pre-M7 economics exactly (a Garage
-// album's bill lands back on v0.6's $350 × era mod against the same capped
-// income). If `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again,
-// carry these along. [tune]
+// L-SCALE (§B): pressing setup ×3 with the rest of the economy (was 25 / 100).
+pub(super) const PRESSING_SETUP_SINGLE: f32 = 75.0;
+pub(super) const PRESSING_SETUP_ALBUM: f32 = 300.0;
+// Per-copy pressing costs are COUPLED to the sales rescale, the same way as
+// `LABEL_RECOUP_PRESSING_PER_COPY` below (issue #20's bug class): M7 tripled
+// the copies a score moves (`UNITS_PER_SCORE_POINT`) while `SALES_INCOME_
+// DIVISOR` kept income dollars flat, so an indie pressed 3× the copies for
+// the same money and the per-copy bill had to divide by the same ratio.
+// L-SCALE (§B) has now retired that divisor (set to 1), so these literals
+// evaluate to $0.10/single and $0.50/album — themselves ×3 vs the v0.7
+// values, exactly the per-copy dollar rescale L-SCALE applies everywhere
+// else. The coupling is kept in the expression so the arithmetic stays
+// legible and tracks the divisor if it ever moves again. [tune]
 pub(super) const PRESSING_PER_COPY_SINGLE: f32 = 0.10 / SALES_INCOME_DIVISOR as f32;
 pub(super) const PRESSING_PER_COPY_ALBUM: f32 = 0.50 / SALES_INCOME_DIVISOR as f32;
 // Label pressing run sizes are COUPLED to the M7 sales rescale like the
@@ -417,7 +420,9 @@ pub const TOUR_HEALTH_GUARD: u8 = 30;
 // ============================================================================
 
 /// Weekly rent, by tier. [tune]
-pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
+/// L-SCALE (§B): ×3 to the era-real scale (was [0, 40, 180, 700, 2_800]).
+/// `move_up_cost` derives from this, so lifestyle deposits scale in lockstep.
+pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 120, 540, 2_100, 8_400];
 /// Added to `STRESS_PASSIVE_RELEASE`, by tier. [tune]
 pub(super) const LIFESTYLE_STRESS_RELEASE_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
 /// The weekly stress drain cannot pull happiness below this floor
@@ -467,7 +472,11 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 /// the `TOUR_GROSS_COEFFICIENT` bump below so a bigger rig's capacity boost
 /// can actually clear its cost: the van profits for a small act, full
 /// production only once the act is big enough to fill the rooms it books.
-pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [120, 400, 1_200, 3_000];
+///
+/// L-SCALE (§B): ×3 to the era-real scale (was [120, 400, 1_200, 3_000]), in
+/// lockstep with the ×3 on `TOUR_GROSS_COEFFICIENT` — box office and rig cost
+/// both triple, so every rig's profit/loss sign and ordering are preserved.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 3_600, 9_000];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
 pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
@@ -477,7 +486,13 @@ pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
 /// so that, with the capacity multiplier above and the compressed rig costs,
 /// touring is a real revenue path — a full-production rig turns a profit
 /// once the act is famous enough to fill its rooms, not a bottomless loss.
-pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.15;
+///
+/// L-SCALE (§B): ×3 to the era-real scale (0.15 → 0.45) — this is the tour
+/// income lever, tripling box office in lockstep with `TOUR_RIG_COST_PER_WEEK`
+/// so touring's profitability ratios (§F: van profitable, heavy rigs a
+/// capacity bet) hold while magnitude triples. Missing it would leave touring
+/// bots (road-dog) flat against the ×3 record economy.
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.45;
 
 /// Wear per tour week — health lost, replacing the flat
 /// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the
@@ -537,10 +552,23 @@ pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 /// which is the number to re-check first if this moves). If
 /// `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again, carry this
 /// constant along. [tune]
-pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.05;
+///
+/// L-SCALE (§B): `SALES_INCOME_DIVISOR` did move (retired, 3 → 1), so this
+/// per-copy charge ×3 (0.05 → 0.15) to keep the recoup coupling — the ledger's
+/// pressing accrual triples alongside the ×3 royalty income, so the recoupment
+/// *trajectory in weeks* is unchanged and the §F "recoup before halfway" target
+/// holds exactly as it did at the v0.7 scale.
+pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.15;
 /// Recoupment cost per point of promo push the label applies in
-/// `apply_label_promo` (design §E-2: $15/point). [tune]
-pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
+/// `apply_label_promo` (design §E-2: $15/point).
+///
+/// L-SCALE (§B): ×3 (15 → 45) — a dollar in the recoupment ledger, tripled
+/// alongside the advance, the pressing accrual, and royalty income so the
+/// recoup ratio is preserved. Beyond the task's explicit cost list, but the
+/// "every dollar ×3, ratios preserved" directive covers it: leaving it flat
+/// would make the promo slice of the ledger recoup ~3× faster relative to the
+/// tripled income. [tune]
+pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 45;
 
 // ============================================================================
 // M9: Deal lifecycle — term, breach, renewal window, active label
@@ -575,7 +603,14 @@ pub(super) const DEAL_RENEWAL_WINDOW_WEEKS: u32 = 26;
 /// extension. [tune]
 pub(super) const DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS: u8 = 20;
 pub(super) const DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS: u8 = 8;
-pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 10_000;
+/// L-SCALE (§B): ×3 (10_000 → 30_000) — this is a dollar threshold on the
+/// `unrecouped` ledger, whose balances all tripled (advance + pressing/promo
+/// accrual). Tripling it keeps "deep in the red" the same *proportion* of a
+/// deal, so renewal behaviour (new contract / extension / silence) is
+/// preserved in shape. Beyond the task's explicit cost list, but required by
+/// the "ratios preserved" directive (the two sales-threshold constants above
+/// are unitless reputation points, so they stay). [tune]
+pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 30_000;
 
 /// New-contract renewal terms: royalty bump range (raw rate, i.e. 0.02 =
 /// 2pp) on top of the current deal's rate, clamped to 1.0. [tune]
@@ -616,8 +651,10 @@ pub(super) const DEAL_MEMO_DEADLINE_STRESS_PER_WEEK: u8 = 3;
 /// National gate is meaningfully tunable; Mail order/Regional are ungated
 /// by design (`0`). [tune]
 pub(super) const DISTRIBUTION_CHANNEL_FAME_GATE: [u8; 3] = [0, 0, 35];
-/// Fee charged at each release under this channel (design §E-3 table). [tune]
-pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 400, 1_500];
+/// Fee charged at each release under this channel (design §E-3 table).
+/// L-SCALE (§B): ×3 to the era-real scale (was [0, 400, 1_500]) so an indie's
+/// distribution outlay tracks its ×3 record income. [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 1_200, 4_500];
 /// Reach floor: effective indie reach is `max(floor, current fame formula)`
 /// (design §E-3 table). [tune]
 pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50];

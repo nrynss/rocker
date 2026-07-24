@@ -26,7 +26,12 @@ impl GameWorld {
         ];
         let capacities = [50, 200, 500, 2000, 20000];
         let prestiges = [10, 25, 40, 70, 95];
-        let payments = [100, 300, 800, 3000, 15000];
+        // L-SCALE (v0.8 §B): gig base pay ×3 to the era-real money scale (was
+        // [100, 300, 800, 3000, 15000]). This is the gig-income lever — a
+        // gig's take is `base_payment × attendance × market × era` — tripled in
+        // lockstep with record/tour income so the gig-grinder keeps pace.
+        // `capacities`/`prestiges` are counts, not dollars — unchanged.
+        let payments = [300, 900, 2400, 9000, 45000];
 
         let mut venues = Vec::new();
         for i in 0..5 {

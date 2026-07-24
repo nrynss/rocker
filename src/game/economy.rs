@@ -351,9 +351,13 @@ impl Game {
         } else {
             demand
         };
-        // M7 (§F): income divides by SALES_INCOME_DIVISOR so the raised
-        // UNITS_PER_SCORE_POINT lifts copies-sold (for certification) without
-        // inflating the money the v0.6 balance was tuned around.
+        // M7 (§F) → L-SCALE (§B): income divided by `SALES_INCOME_DIVISOR` to
+        // hold the compressed v0.6/v0.7 money economy flat while
+        // `UNITS_PER_SCORE_POINT` lifted copies-sold for certification. L-SCALE
+        // retired that divisor (now 1), so record income rises ×3 to the
+        // era-real scale — in lockstep with the ×3 on every other dollar. The
+        // `/ SALES_INCOME_DIVISOR` is kept (a no-op at 1) so the coupling stays
+        // visible and the payout tracks the constant if it ever moves again.
         let income = if let Some(deal) = self.band.current_deal() {
             ((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32
                 / SALES_INCOME_DIVISOR
@@ -892,9 +896,10 @@ impl Game {
                         }
                         release.copies_sold += units;
                         let gross = units * income_per_copy;
-                        // M7 (§F): same SALES_INCOME_DIVISOR as the first-run
-                        // payout — the copy bump feeds certification, not the
-                        // tail's cash.
+                        // M7 (§F) → L-SCALE (§B): same `SALES_INCOME_DIVISOR`
+                        // as the first-run payout — retired to 1 by L-SCALE, so
+                        // the catalog tail's cash rises ×3 to the era-real scale
+                        // in step with the first run.
                         let ongoing_income = match royalty_rate {
                             Some(rate) => (gross as f32 * rate) as u32 / SALES_INCOME_DIVISOR,
                             None => gross / SALES_INCOME_DIVISOR,

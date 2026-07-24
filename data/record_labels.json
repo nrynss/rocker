@@ -8,7 +8,7 @@
       "artist_development": 85,
       "creative_freedom": 70,
       "royalty_rate": 12,
-      "advance_range": [50000, 500000],
+      "advance_range": [150000, 1500000],
       "specialty_genres": ["Rock", "R&B", "Pop"],
       "founded": 1947,
       "reputation": "Legendary label known for Led Zeppelin, Rolling Stones"
@@ -21,7 +21,7 @@
       "artist_development": 80,
       "creative_freedom": 65,
       "royalty_rate": 10,
-      "advance_range": [75000, 750000],
+      "advance_range": [225000, 2250000],
       "specialty_genres": ["Pop", "Rock", "Folk"],
       "founded": 1887,
       "reputation": "Industry giant with massive distribution power"
@@ -34,7 +34,7 @@
       "artist_development": 82,
       "creative_freedom": 72,
       "royalty_rate": 13,
-      "advance_range": [40000, 400000],
+      "advance_range": [120000, 1200000],
       "specialty_genres": ["Rock", "Pop", "Alternative"],
       "founded": 1942,
       "reputation": "Beatles' US label, strong rock heritage"
@@ -47,7 +47,7 @@
       "artist_development": 85,
       "creative_freedom": 75,
       "royalty_rate": 14,
-      "advance_range": [30000, 350000],
+      "advance_range": [90000, 1050000],
       "specialty_genres": ["Rock", "Folk", "Alternative"],
       "founded": 1958,
       "reputation": "Artist-friendly major with strong A&R"
@@ -60,7 +60,7 @@
       "artist_development": 78,
       "creative_freedom": 68,
       "royalty_rate": 11,
-      "advance_range": [35000, 300000],
+      "advance_range": [105000, 900000],
       "specialty_genres": ["Pop", "Rock", "Country"],
       "founded": 1929,
       "reputation": "Elvis's label, strong mainstream presence"
@@ -73,7 +73,7 @@
       "artist_development": 88,
       "creative_freedom": 80,
       "royalty_rate": 15,
-      "advance_range": [25000, 250000],
+      "advance_range": [75000, 750000],
       "specialty_genres": ["Folk", "Rock", "Alternative"],
       "founded": 1950,
       "reputation": "Boutique major focusing on artistry"
@@ -88,7 +88,7 @@
       "artist_development": 90,
       "creative_freedom": 95,
       "royalty_rate": 25,
-      "advance_range": [2000, 15000],
+      "advance_range": [6000, 45000],
       "specialty_genres": ["Grunge", "Alternative", "Punk"],
       "founded": 1986,
       "reputation": "Seattle grunge pioneers, incredible A&R"
@@ -101,7 +101,7 @@
       "artist_development": 95,
       "creative_freedom": 98,
       "royalty_rate": 30,
-      "advance_range": [1000, 10000],
+      "advance_range": [3000, 30000],
       "specialty_genres": ["Alternative", "Art Rock", "Post-Punk"],
       "founded": 1980,
       "reputation": "Artistic visionary label with cult following"
@@ -114,7 +114,7 @@
       "artist_development": 85,
       "creative_freedom": 90,
       "royalty_rate": 28,
-      "advance_range": [500, 8000],
+      "advance_range": [1500, 24000],
       "specialty_genres": ["Indie Rock", "Alternative", "Punk"],
       "founded": 1989,
       "reputation": "Tastemaker indie with strong underground cred"
@@ -127,7 +127,7 @@
       "artist_development": 80,
       "creative_freedom": 95,
       "royalty_rate": 35,
-      "advance_range": [500, 5000],
+      "advance_range": [1500, 15000],
       "specialty_genres": ["Indie Pop", "Alternative", "Folk"],
       "founded": 1989,
       "reputation": "Chapel Hill indie focusing on songcraft"
@@ -140,7 +140,7 @@
       "artist_development": 75,
       "creative_freedom": 98,
       "royalty_rate": 40,
-      "advance_range": [200, 3000],
+      "advance_range": [600, 9000],
       "specialty_genres": ["Punk", "Hardcore", "Noise Rock"],
       "founded": 1981,
       "reputation": "Chicago punk institution, pure DIY ethics"
@@ -153,7 +153,7 @@
       "artist_development": 70,
       "creative_freedom": 100,
       "royalty_rate": 50,
-      "advance_range": [0, 1000],
+      "advance_range": [0, 3000],
       "specialty_genres": ["Hardcore", "Punk", "Post-Hardcore"],
       "founded": 1980,
       "reputation": "Washington DC hardcore, all profits to artists"
@@ -166,7 +166,7 @@
       "artist_development": 65,
       "creative_freedom": 95,
       "royalty_rate": 45,
-      "advance_range": [0, 800],
+      "advance_range": [0, 2400],
       "specialty_genres": ["Punk", "Hardcore", "Alternative"],
       "founded": 1978,
       "reputation": "Legendary punk label, chaotic but influential"
@@ -181,7 +181,7 @@
       "artist_development": 88,
       "creative_freedom": 92,
       "royalty_rate": 32,
-      "advance_range": [1000, 12000],
+      "advance_range": [3000, 36000],
       "specialty_genres": ["Post-Punk", "New Wave", "Dance"],
       "founded": 1978,
       "reputation": "Manchester's finest, Joy Division/New Order home"
@@ -194,7 +194,7 @@
       "artist_development": 82,
       "creative_freedom": 88,
       "royalty_rate": 30,
-      "advance_range": [800, 8000],
+      "advance_range": [2400, 24000],
       "specialty_genres": ["Indie Pop", "Shoegaze", "Brit Pop"],
       "founded": 1983,
       "reputation": "UK indie powerhouse with eccentric vision"
@@ -207,7 +207,7 @@
       "artist_development": 85,
       "creative_freedom": 95,
       "royalty_rate": 35,
-      "advance_range": [500, 5000],
+      "advance_range": [1500, 15000],
       "specialty_genres": ["Indie", "Post-Punk", "Alternative"],
       "founded": 1978,
       "reputation": "UK indie pioneer, strong political stance"

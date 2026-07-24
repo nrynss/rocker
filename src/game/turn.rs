@@ -150,7 +150,11 @@ impl Game {
         let (host_band, host_fame) = candidates[rng.gen_range(0..candidates.len())].clone();
 
         let weeks = rng.gen_range(2..=4u32);
-        let base_pay = weeks * (50 + u32::from(host_fame) * 5);
+        // L-SCALE (v0.8 §B): support-slot pay ×3 to the era-real money scale —
+        // the per-week base (was `50 + host_fame * 5`) triples to `150 +
+        // host_fame * 15`, in lockstep with tour/gig income so a support run
+        // stays a real cash path. `weeks` is a count, not a dollar — unchanged.
+        let base_pay = weeks * (150 + u32::from(host_fame) * 15);
         let pay = (base_pay as f32 * self.timeline.get_gig_pay_modifier()) as u32;
         let gap = host_fame.saturating_sub(self.band.fame);
         let fame_gain = (2 + gap / 8).clamp(3, 12);
