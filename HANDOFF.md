@@ -181,6 +181,22 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
 
+- 2026-07-24 **Review phase (4 parallel reviewers) + fixes (`80c7726`).**
+  Correctness / determinism+save-compat / economy+balance / integration+UI —
+  **no Critical or Major bugs.** Fixes: (1) L-SCALE completeness — starting cash
+  ($500→$1500) and the event/incident money layer (`events_apply.rs`,
+  `incidents.json`) were left un-scaled; ×3'd them (sweep: balance preserved,
+  studio-rat bankruptcies 15→8). (2) `RosterSlot.band_name` serde-default nit.
+  (3) UI capital-band thresholds now single-sourced from `TIER_*_MIN_CAPITAL`
+  (re-exported from `game`), not hand-copied. (4) discography income labeled
+  "gross". (5) honest comments (deferred scene `hit_window` feed;
+  `rival_act_label` pending consumer). (6) stale "med 3 certs" → ~71.
+  (7) tour sweep gains observe-only fame 95/100 rows. **Finding surfaced:**
+  **full-production tour never profits — −$26k even at fame 100** (van/bus
+  healthy, truck profits at 95+). Inherited from v0.7 tour economics, not a
+  v0.8 regression → follow-up. 232 tests, determinism trio unmodified,
+  clippy/fmt clean, 0 insolvent, recoup ~22%. **PR #23 raised for review.**
+
 - 2026-07-24 **Wave 4 complete.** L-BID (`8e4fe16`, clean cherry-pick) then
   L-MNA (`fdb86c3`, 3-way — additive `constants.rs` block resolved keep-both).
   **Cross-agent fix at integration:** L-MNA added `Label` fields
