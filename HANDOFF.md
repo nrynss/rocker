@@ -109,7 +109,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ✅ done | agent-lreach (worktree) | e9b329c |
 | **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | ✅ done | agent-lroster (worktree) | 3122c25 |
 | **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | ✅ done | agent-lbid (worktree) | 8e4fe16 |
-| **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | 🔒 claimed | agent-lmna (worktree) | — |
+| **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | ✅ done | agent-lmna (worktree) | fdb86c3 |
 | **L-CHAR** | Label character / A&R (§G): `LabelStrategy` enum + creative-freedom effects wired into offer pricing, single-cut aggression/memos, renewal behavior | M | L-BID | `LabelStrategy` in `world/labels.rs`, hooks in `label_moves.rs` + `world/deals.rs`, strategy consts | ⬜ open | — | — |
 | **L-CERT** | Year-gate certifications to the era (§I): no scheme <1973, no Platinum <1976, no multi-platinum <1984; thresholds unchanged, only availability gates on year | S | — | certification pass in `economy.rs`, year-gate consts in `constants.rs` | ✅ done | agent-lcert (worktree) | c2be9a0 |
 | **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/{discography,labels}.rs` + mod/input wiring in `src/ui/app.rs`+`input/main.rs` | ✅ done | agent-lui1 (worktree) | 0cae070 |
@@ -180,6 +180,21 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 4 complete.** L-BID (`8e4fe16`, clean cherry-pick) then
+  L-MNA (`fdb86c3`, 3-way — additive `constants.rs` block resolved keep-both).
+  **Cross-agent fix at integration:** L-MNA added `Label` fields
+  `weeks_below_floor`/`acquired_by`; L-BID's `label_fixture` test helper
+  (built in parallel) was missing them → added `0`/`None` in the L-MNA
+  cherry-pick. **Reconciliation confirmed:** L-BID's offer generation already
+  skips non-`Active` labels and L-MNA sets those states — they compose, so
+  distressed/folding labels don't offer the player deals. Suite **232 pass**
+  (+ 7 ignored sweeps), determinism trio unmodified, clippy/fmt clean.
+  **Cycle now 8/11.** Remaining: L-CHAR, L-UI-2, L-SIM (deferred to follow-up
+  per the user — PR raised at this batch). **L-SIM knob noted:** L-MNA's
+  distress floor = $0, so M&A is a safety valve that never fires in natural
+  play (the economy only grows labels); make the floor tier-relative or tighten
+  roster economics if visible natural attrition is wanted.
 
 - 2026-07-24 **L-UI-1 integrated (`0cae070`), clean fast-forward.** 218 pass,
   clippy/fmt clean, determinism green. Per-record sales now visible: a **new
