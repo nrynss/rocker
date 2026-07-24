@@ -106,7 +106,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 |----|------|------|---------|------------------|--------|------------|------|
 | **L-SCALE** | Decompress to one era-real money scale (§B): retire `SALES_INCOME_DIVISOR`, set era-real per-copy income, scale lifestyle/tour/recording/pressing/advance costs in lockstep; re-validate every v0.7 §F ratio in the sim | L | — | income/cost consts across `constants.rs`, `economy.rs` payout math, `data/record_labels.json` advance ranges, coupled cost sites (documented "COUPLED" comments) | ✅ done | agent-lscale (worktree) | dbb803d |
 | **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ✅ done | agent-lentity (worktree) | 9106e1d |
-| **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | 🔒 claimed | agent-lreach (worktree) | — |
+| **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ✅ done | agent-lreach (worktree) | e9b329c |
 | **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | 🔒 claimed | agent-lroster (worktree) | — |
 | **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | ⬜ open | — | — |
 | **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | ⬜ open | — | — |
@@ -179,6 +179,25 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 3a integrated: L-REACH (`e9b329c`), clean cherry-pick.**
+  212 pass (+8), determinism trio unmodified, clippy/fmt clean, solvency sweep
+  still 0 insolvent. Reach/tier now drift: target ≈ ∛(capital) (the inverse of
+  L-ENTITY's seed) + a bounded recent-hits bonus, moving ≤2 pts/month with a
+  3-pt hysteresis dead-band; tier promotes on reach≥70 & capital≥$2M (Major) /
+  reach≥38 & capital≥$200k (Indie), demotes on reach alone. A signed act's NEW
+  releases read the label's live reach (via new `Game::new_release_frozen_reach`
+  in `studio.rs`); catalogue tails keep their frozen reach (invariant intact).
+  New GameWorld field `label_reach_tick` + `drift_labels()` called in
+  `update_week` AFTER the scene passes (so L-ROSTER's scene hits are in the
+  window first). **Reconciliation notes for L-ROSTER:** L-REACH added
+  `Label::{record_chart_hit,reach_target,drift_reach_and_tier,tier_for}` and
+  `GameWorld::drift_labels`; `record_chart_hit` is the entry point for
+  L-ROSTER's scene-hit feed (hook left in `drift_labels` + the economy
+  hit-recording site). **L-SIM [tune] flags:** seeded majors settle ~2 pts off
+  their JSON reach at rest (target is capital-derived); hit_window is
+  capacity-based (Vec<u32>, can't reshape) so a cold-but-rich label plateaus
+  rather than cooling — real cooling needs L-ROSTER/L-MNA flop-bleed.
 
 - 2026-07-24 **L-ENTITY verified at scale** (`label_capital_trajectories_over_fifteen_years`, an L-SIM-preview `#[ignore]` sweep committed to `sim.rs`; run it with `--ignored --nocapture`). 24 seeds × 15 yrs, label-loyalist: **0 insolvent labels** (lowest capital anywhere $25,920, a static boutique seed; highest $12.86M), and the player's label nets **+$2.4M…+$7.5M** — a productive signed act makes its label millions; ledger sound, gangbuster money sane. **Finding that shapes L-ROSTER/L-BID:** the loyalist only ever signs *indies* (renewal keeps it on its first label — PR #22's parked item) so **majors sit fully static** at seed capital (no roster activity until scene bands sign). No bot exercises the major-label path yet — L-ROSTER makes majors book margin off rosters; the major path needs L-BID (a big act reaching a major) before its economics can be swept.
 
