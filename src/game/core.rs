@@ -204,7 +204,7 @@ impl Game {
         self.player.name = player_name.to_string();
         self.band.name = band_name.to_string();
         self.band.genre = genre;
-        self.player.money = 500; // Starting cash in 1970
+        self.player.money = 1500; // Starting cash in 1970 (L-SCALE §B: ×3 with the rest of the economy)
 
         // Bandmates are part of the seed's identity, like the scene itself.
         let mut rng = self.action_rng_for_week(constants::SETUP_STREAM_WEEK);

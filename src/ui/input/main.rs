@@ -69,6 +69,8 @@ impl App {
                     scroll: 0,
                 }
             }
+            MenuKind::Discography => self.screen = Screen::Discography { scroll: 0 },
+            MenuKind::Labels => self.screen = Screen::Labels { scroll: 0 },
             MenuKind::TourReport => self.screen = Screen::TourReport { scroll: 0 },
             MenuKind::Marketing => {
                 let signed = self.game.band.current_deal().is_some();
@@ -216,6 +218,50 @@ impl App {
                     (scroll + 1).min(count - 1)
                 };
                 self.screen = Screen::TourReport { scroll };
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn handle_discography_key(&mut self, key: KeyEvent) {
+        let Screen::Discography { scroll } = self.screen else {
+            return;
+        };
+        let count = self.discography_rows().len();
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.screen = Screen::Discography {
+                    scroll: scroll.saturating_sub(1),
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max_scroll = count.saturating_sub(1);
+                self.screen = Screen::Discography {
+                    scroll: (scroll + 1).min(max_scroll),
+                };
+            }
+            _ => {}
+        }
+    }
+
+    pub(crate) fn handle_labels_key(&mut self, key: KeyEvent) {
+        let Screen::Labels { scroll } = self.screen else {
+            return;
+        };
+        let count = self.game.world.labels.len();
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.screen = Screen::Labels {
+                    scroll: scroll.saturating_sub(1),
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let max_scroll = count.saturating_sub(1);
+                self.screen = Screen::Labels {
+                    scroll: (scroll + 1).min(max_scroll),
+                };
             }
             _ => {}
         }

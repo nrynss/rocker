@@ -1,5 +1,6 @@
 use crate::game::constants::{
-    DISTRIBUTION_CHANNEL_FAME_GATE, DISTRIBUTION_CHANNEL_FEE, DISTRIBUTION_CHANNEL_REACH_FLOOR,
+    DISTRIBUTION_CHANNEL_FAME_GATE, DISTRIBUTION_CHANNEL_FEE,
+    DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR, DISTRIBUTION_CHANNEL_REACH_FLOOR,
 };
 use crate::game::genre::MusicGenre;
 use serde::{Deserialize, Serialize};
@@ -43,34 +44,38 @@ impl MarketingCampaignType {
     ];
 
     pub fn spec(&self) -> CampaignSpec {
+        // L-SCALE (v0.8 §B): campaign `cost` values ×3 to the one honest
+        // era-real money scale (was 100 / 300 / 500 / 750 / 2000), in lockstep
+        // with the ×3 record income a self-releasing act markets against.
+        // `duration_weeks` and `effectiveness_bonus` are not dollars — unchanged.
         match self {
             MarketingCampaignType::BasicPress => CampaignSpec {
                 name: "Basic Press",
-                cost: 100,
+                cost: 300,
                 duration_weeks: 4,
                 effectiveness_bonus: 5,
             },
             MarketingCampaignType::MagazineSpread => CampaignSpec {
                 name: "Magazine Spread",
-                cost: 300,
+                cost: 900,
                 duration_weeks: 4,
                 effectiveness_bonus: 10,
             },
             MarketingCampaignType::RadioPromotion => CampaignSpec {
                 name: "Radio Promotion",
-                cost: 500,
+                cost: 1500,
                 duration_weeks: 6,
                 effectiveness_bonus: 15,
             },
             MarketingCampaignType::SocialMediaBlitz => CampaignSpec {
                 name: "Street Team Blitz",
-                cost: 750,
+                cost: 2250,
                 duration_weeks: 4,
                 effectiveness_bonus: 20,
             },
             MarketingCampaignType::MusicVideo => CampaignSpec {
                 name: "Promo Film",
-                cost: 2000,
+                cost: 6000,
                 duration_weeks: 8,
                 effectiveness_bonus: 30,
             },
@@ -142,6 +147,15 @@ impl DistributionChannel {
     /// formula)` (design §E-3 table).
     pub fn reach_floor(self) -> f32 {
         DISTRIBUTION_CHANNEL_REACH_FLOOR[self.ordinal()]
+    }
+
+    /// How far this channel reaches into the three foreign sales territories
+    /// on distribution alone, before touring (the indie half of international
+    /// presence). `reach_floor` above governs how well the act sells where it
+    /// is present; this governs whether it is present abroad at all. Touring's
+    /// regional fame adds on top (`economy::territory_presence`).
+    pub fn international_floor(self) -> f32 {
+        DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR[self.ordinal()]
     }
 }
 

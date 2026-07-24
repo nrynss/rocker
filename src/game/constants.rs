@@ -31,19 +31,29 @@ pub(super) const SALES_FAME_WEIGHT: f32 = 1.2;
 // M7 (§F): raised 10 → 30 so real careers move enough copies for the
 // certification thresholds (§D: Silver 50k) to be reachable — at the old
 // rate a hit sold only hundreds–low-thousands and nobody ever certified.
-// Copies drive both certification *and* income, so `SALES_INCOME_DIVISOR`
-// divides income back down by the same factor: certifications climb to the
-// designed 50k/150k/400k scale while per-release income stays where the
-// (already-balanced) v0.6 economy had it.
+// Copies are a *count*, not a dollar, so L-SCALE (§B) left this at 30. It once
+// coupled with `SALES_INCOME_DIVISOR` to hold per-release income flat while
+// copies climbed to the 50k/150k/400k scale; L-SCALE has since retired that
+// divisor (below), so copies now drive certification and — at the era-real
+// per-copy royalty — income together.
 pub(super) const UNITS_PER_SCORE_POINT: f32 = 30.0;
-/// Divides record income after the `UNITS_PER_SCORE_POINT` bump so raising
-/// copies-sold for certification (§D) doesn't inflate the money economy
-/// (M7 §F). Kept in step with the ratio `UNITS_PER_SCORE_POINT / 10`, so an
-/// *uncapped* release earns exactly what the v0.6 economy gave it. A release
-/// capped by a small pressing run earns `run / divisor` — which is why the
-/// Garage run below is sized to `500 × divisor`, holding a garage-run act's
-/// income where it was.
-pub(super) const SALES_INCOME_DIVISOR: u32 = 3;
+/// Divided record income after the `UNITS_PER_SCORE_POINT` bump so that raising
+/// copies-sold for certification (§D) didn't inflate the compressed v0.6/v0.7
+/// money economy (M7 §F).
+///
+/// L-SCALE (v0.8 §B) **retired** this — 3 → 1 — as the first step of the
+/// one-honest-scale decompression: record income rises ×3 to meet the already
+/// era-real copy counts, in lockstep with the uniform ×3 of every *other*
+/// dollar in the game (recording/pressing/tour/gig/support/advance costs and
+/// incomes), so ratios are preserved while magnitude triples. Retiring it
+/// *alone* would triple record income while tour/gig income stayed flat and
+/// skew the balance toward records — hence the whole-economy ×3.
+///
+/// Kept as a named constant (now `1`) rather than deleted so the
+/// divisor-coupled `PRESSING_PER_COPY_*` literals below stay legible and
+/// auto-track it (0.10/1, 0.50/1 — themselves ×3 vs the v0.7 values, the
+/// pressing side of the same rescale).
+pub(super) const SALES_INCOME_DIVISOR: u32 = 1;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 
@@ -56,9 +66,14 @@ pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 // clock, and the §D/§F certification balance — median signed 15-year career
 // reaches 1–3 silvers; a home-market act can reach Silver at all — was
 // unknowingly calibrated on that bonus volume. These put the legitimate
-// weekly tail where the exploit-inflated one effectively was: the sweep's
-// label-loyalist lands med 3 certs (was 5 with the exploit, 0 without the
-// retune). Re-check that sweep column before moving either. [tune]
+// weekly tail where the exploit-inflated one effectively was. NOTE (v0.8): the
+// "med 3 certs" that was calibrated to no longer holds — the international
+// record-sales fix plus the L-SCALE rescale lifted the label-loyalist to med
+// ~71 cert *events* over a ~77-album career (records now sell worldwide as
+// intended — the "gangbuster" direction the cycle was for). The §D cert
+// thresholds are unchanged; whether ~71 is the right new normal, or the
+// thresholds should rise to keep gold/platinum special, is an open L-SIM call.
+// Re-check that sweep column before moving either. [tune]
 pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 4;
 pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
@@ -81,19 +96,19 @@ pub const PRESSING_TIERS: [(&str, u32); 4] = [
     ("Regional run", 10_000),
     ("National run", 50_000),
 ];
-pub(super) const PRESSING_SETUP_SINGLE: f32 = 25.0;
-pub(super) const PRESSING_SETUP_ALBUM: f32 = 100.0;
-// Per-copy pressing costs are COUPLED to the M7 sales rescale, the same way
-// as `LABEL_RECOUP_PRESSING_PER_COPY` below (issue #20's bug class): M7
-// tripled the copies a score moves (`UNITS_PER_SCORE_POINT`) while
-// `SALES_INCOME_DIVISOR` kept income dollars flat, so an indie now presses
-// 3× the copies for the same money and the per-copy bill must divide by the
-// same ratio. At the pre-M7 $0.50/album the margin went negative in every
-// era with `recording_cost_modifier > 4/3` — a sold-out album run lost money
-// unconditionally. Dividing restores the pre-M7 economics exactly (a Garage
-// album's bill lands back on v0.6's $350 × era mod against the same capped
-// income). If `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again,
-// carry these along. [tune]
+// L-SCALE (§B): pressing setup ×3 with the rest of the economy (was 25 / 100).
+pub(super) const PRESSING_SETUP_SINGLE: f32 = 75.0;
+pub(super) const PRESSING_SETUP_ALBUM: f32 = 300.0;
+// Per-copy pressing costs are COUPLED to the sales rescale, the same way as
+// `LABEL_RECOUP_PRESSING_PER_COPY` below (issue #20's bug class): M7 tripled
+// the copies a score moves (`UNITS_PER_SCORE_POINT`) while `SALES_INCOME_
+// DIVISOR` kept income dollars flat, so an indie pressed 3× the copies for
+// the same money and the per-copy bill had to divide by the same ratio.
+// L-SCALE (§B) has now retired that divisor (set to 1), so these literals
+// evaluate to $0.10/single and $0.50/album — themselves ×3 vs the v0.7
+// values, exactly the per-copy dollar rescale L-SCALE applies everywhere
+// else. The coupling is kept in the expression so the arithmetic stays
+// legible and tracks the divisor if it ever moves again. [tune]
 pub(super) const PRESSING_PER_COPY_SINGLE: f32 = 0.10 / SALES_INCOME_DIVISOR as f32;
 pub(super) const PRESSING_PER_COPY_ALBUM: f32 = 0.50 / SALES_INCOME_DIVISOR as f32;
 // Label pressing run sizes are COUPLED to the M7 sales rescale like the
@@ -123,6 +138,21 @@ pub(super) const CERT_SILVER_THRESHOLD: u32 = 50_000;
 pub(super) const CERT_GOLD_THRESHOLD: u32 = 150_000;
 pub(super) const CERT_PLATINUM_THRESHOLD: u32 = 400_000;
 pub(super) const CERT_MULTIPLATINUM_STEP: u32 = 400_000;
+
+// Certification year gates (L-CERT, design §I). The copy thresholds above are
+// era-agnostic; only the *availability* of each tier gates on the game year,
+// so the 1970→1993 timeline stops handing out awards that did not yet exist:
+//   - No sales-certification scheme existed before 1973 (the BPI's UK Silver/
+//     Gold scheme — which this game's UK-scaled thresholds track — launched in
+//     1973). Before then, nothing certifies.
+//   - RIAA-style Platinum did not exist before 1976.
+//   - Multi-platinum did not exist before 1984.
+// Applied at award-check time (`era_max_certification_level`), so a record that
+// keeps selling into a later era can still reach a tier once it becomes
+// available — the cap is on the awardable level, never on `copies_sold`.
+pub(super) const CERT_YEAR_SCHEME_START: u32 = 1973;
+pub(super) const CERT_YEAR_PLATINUM: u32 = 1976;
+pub(super) const CERT_YEAR_MULTIPLATINUM: u32 = 1984;
 
 // Award bumps for each certification level (silver/gold/platinum; multi-platinum repeats platinum).
 pub(super) const CERT_FAME_BUMP: &[u8] = &[2, 4, 6]; // Silver, Gold, Platinum
@@ -395,7 +425,9 @@ pub const TOUR_HEALTH_GUARD: u8 = 30;
 // ============================================================================
 
 /// Weekly rent, by tier. [tune]
-pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 40, 180, 700, 2_800];
+/// L-SCALE (§B): ×3 to the era-real scale (was [0, 40, 180, 700, 2_800]).
+/// `move_up_cost` derives from this, so lifestyle deposits scale in lockstep.
+pub(super) const LIFESTYLE_UPKEEP_PER_WEEK: [u32; 5] = [0, 120, 540, 2_100, 8_400];
 /// Added to `STRESS_PASSIVE_RELEASE`, by tier. [tune]
 pub(super) const LIFESTYLE_STRESS_RELEASE_BONUS: [u8; 5] = [0, 1, 2, 3, 4];
 /// The weekly stress drain cannot pull happiness below this floor
@@ -445,7 +477,11 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 /// the `TOUR_GROSS_COEFFICIENT` bump below so a bigger rig's capacity boost
 /// can actually clear its cost: the van profits for a small act, full
 /// production only once the act is big enough to fill the rooms it books.
-pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [120, 400, 1_200, 3_000];
+///
+/// L-SCALE (§B): ×3 to the era-real scale (was [120, 400, 1_200, 3_000]), in
+/// lockstep with the ×3 on `TOUR_GROSS_COEFFICIENT` — box office and rig cost
+/// both triple, so every rig's profit/loss sign and ordering are preserved.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 3_600, 9_000];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
 pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
@@ -455,7 +491,13 @@ pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
 /// so that, with the capacity multiplier above and the compressed rig costs,
 /// touring is a real revenue path — a full-production rig turns a profit
 /// once the act is famous enough to fill its rooms, not a bottomless loss.
-pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.15;
+///
+/// L-SCALE (§B): ×3 to the era-real scale (0.15 → 0.45) — this is the tour
+/// income lever, tripling box office in lockstep with `TOUR_RIG_COST_PER_WEEK`
+/// so touring's profitability ratios (§F: van profitable, heavy rigs a
+/// capacity bet) hold while magnitude triples. Missing it would leave touring
+/// bots (road-dog) flat against the ×3 record economy.
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.45;
 
 /// Wear per tour week — health lost, replacing the flat
 /// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the
@@ -515,10 +557,23 @@ pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 /// which is the number to re-check first if this moves). If
 /// `UNITS_PER_SCORE_POINT` or `SALES_INCOME_DIVISOR` move again, carry this
 /// constant along. [tune]
-pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.05;
+///
+/// L-SCALE (§B): `SALES_INCOME_DIVISOR` did move (retired, 3 → 1), so this
+/// per-copy charge ×3 (0.05 → 0.15) to keep the recoup coupling — the ledger's
+/// pressing accrual triples alongside the ×3 royalty income, so the recoupment
+/// *trajectory in weeks* is unchanged and the §F "recoup before halfway" target
+/// holds exactly as it did at the v0.7 scale.
+pub(super) const LABEL_RECOUP_PRESSING_PER_COPY: f32 = 0.15;
 /// Recoupment cost per point of promo push the label applies in
-/// `apply_label_promo` (design §E-2: $15/point). [tune]
-pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 15;
+/// `apply_label_promo` (design §E-2: $15/point).
+///
+/// L-SCALE (§B): ×3 (15 → 45) — a dollar in the recoupment ledger, tripled
+/// alongside the advance, the pressing accrual, and royalty income so the
+/// recoup ratio is preserved. Beyond the task's explicit cost list, but the
+/// "every dollar ×3, ratios preserved" directive covers it: leaving it flat
+/// would make the promo slice of the ledger recoup ~3× faster relative to the
+/// tripled income. [tune]
+pub(super) const LABEL_RECOUP_PROMO_PER_PUSH: i32 = 45;
 
 // ============================================================================
 // M9: Deal lifecycle — term, breach, renewal window, active label
@@ -553,7 +608,14 @@ pub(super) const DEAL_RENEWAL_WINDOW_WEEKS: u32 = 26;
 /// extension. [tune]
 pub(super) const DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS: u8 = 20;
 pub(super) const DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS: u8 = 8;
-pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 10_000;
+/// L-SCALE (§B): ×3 (10_000 → 30_000) — this is a dollar threshold on the
+/// `unrecouped` ledger, whose balances all tripled (advance + pressing/promo
+/// accrual). Tripling it keeps "deep in the red" the same *proportion* of a
+/// deal, so renewal behaviour (new contract / extension / silence) is
+/// preserved in shape. Beyond the task's explicit cost list, but required by
+/// the "ratios preserved" directive (the two sales-threshold constants above
+/// are unitless reputation points, so they stay). [tune]
+pub(super) const DEAL_RENEWAL_DEEP_RED_UNRECOUPED: i32 = 30_000;
 
 /// New-contract renewal terms: royalty bump range (raw rate, i.e. 0.02 =
 /// 2pp) on top of the current deal's rate, clamped to 1.0. [tune]
@@ -594,11 +656,23 @@ pub(super) const DEAL_MEMO_DEADLINE_STRESS_PER_WEEK: u8 = 3;
 /// National gate is meaningfully tunable; Mail order/Regional are ungated
 /// by design (`0`). [tune]
 pub(super) const DISTRIBUTION_CHANNEL_FAME_GATE: [u8; 3] = [0, 0, 35];
-/// Fee charged at each release under this channel (design §E-3 table). [tune]
-pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 400, 1_500];
+/// Fee charged at each release under this channel (design §E-3 table).
+/// L-SCALE (§B): ×3 to the era-real scale (was [0, 400, 1_500]) so an indie's
+/// distribution outlay tracks its ×3 record income. [tune]
+pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 1_200, 4_500];
 /// Reach floor: effective indie reach is `max(floor, current fame formula)`
 /// (design §E-3 table). [tune]
 pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50];
+/// International presence floor by channel: how far a self-releasing act
+/// reaches into the three *foreign* sales territories (Europe/America/Japan)
+/// on distribution alone, before any touring. Mail order stays home; a
+/// regional distributor leaks a little across borders; a national
+/// distributor gets picked up for export. This is the indie half of the fix
+/// for "no international independent distribution" — the reach the player can
+/// *buy* into foreign markets, on top of which touring's regional fame still
+/// stacks (`economy::territory_presence`). Kept well below the label network
+/// coefficient: signing is still the real passport abroad. [tune]
+pub(super) const DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR: [f32; 3] = [0.0, 0.08, 0.20];
 
 /// A release counts as eligible for an indie re-press once cumulative sales
 /// reach this fraction of the pressed run — "sold out (or low on stock)"
@@ -627,10 +701,441 @@ pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
 pub(super) const LOCAL_PRESENCE: f32 = 1.0;
 
 /// Regional fame (`0..=100`) normalizes by this into the `0..1` "how known
-/// the act is in this country" factor that multiplies reach. Touring is what
-/// raises regional fame (`actions/live.rs`), so a studio-only act reads 0
-/// abroad and sells only at home behind the UK floor. [tune]
+/// the act is in this country" factor that ADDS to the distribution floor
+/// (below) for the three foreign territories. Touring is what raises regional
+/// fame (`actions/live.rs`); on top of whatever floor the act's distribution
+/// already grants abroad, it deepens a specific territory toward full
+/// presence. A studio-only act reads 0 here and rides its distribution floor
+/// alone. [tune]
 pub(super) const REGIONAL_FAME_PRESENCE_DIVISOR: f32 = 100.0;
+
+/// A label's international network, applied to the *square* of its
+/// `market_reach` (`economy::international_floor_for`): the foreign-territory
+/// presence floor a signed act gets on release day, before touring.
+/// Distribution IS what a label sells — a major (reach ~95) puts the record in
+/// Europe/America/Japan shops at once (floor ~0.81 → ~3.4× the home-only
+/// demand), while a small indie label (reach ~20) is a domestic operation that
+/// barely reaches abroad (floor ~0.04). The squared curve is what separates a
+/// global major from a regional indie. This is the core fix for the sales
+/// mechanic: `market_reach` used to be multiplied by a regional fame that only
+/// touring could raise, so a label's reach did *nothing* abroad and every
+/// signed act sold UK-only. The §C/§D thresholds were sized for the "present on
+/// all four territories → 3–4× the copies" act this floor finally delivers.
+/// Touring's regional fame still stacks on top. [tune]
+pub(super) const LABEL_INTERNATIONAL_PRESENCE_COEFF: f32 = 0.9;
+
+// ============================================================================
+// L-ENTITY (v0.8 §A): the label balance sheet — seed capital + the weekly
+// wholesale ledger. A label is now a world entity with `capital` that rises on
+// the wholesale margin its roster sells and falls on what it spends. All
+// numbers here are at the era-real L-SCALE scale (§B) and [tune] — L-SIM (§I)
+// validates them against the "Gold nets low-six-figures / Platinum catalogue →
+// millions" target and 15-year label solvency.
+// ============================================================================
+
+/// Seed `capital` = `financial_power³ × this`. Cubed so majors start flush and
+/// boutiques lean (see `world::labels::seed_capital` for the reference points).
+/// [tune] — sized so a major can front its top advance several times over
+/// without being effectively infinite; L-SIM referees it.
+pub(super) const LABEL_CAPITAL_PER_FP_CUBED: i64 = 15;
+
+/// The label's per-copy wholesale ledger (design §A):
+/// `margin_per_copy = wholesale − manufacturing − mechanical − artist_royalty`.
+/// The artist royalty is NOT a constant here — it reuses the royalty the player
+/// is actually paid (`LABEL_INCOME_PER_COPY × royalty_rate`, netted through
+/// recoupment), so a still-unrecouped act's retained royalty stays with the
+/// label as margin (the Albini asymmetry, §A). Era-real 1970s LP economics:
+/// wholesale ~$4, manufacturing ~$1, mechanical (songwriter/publisher) ~$0.30.
+///
+/// NOTE (accounting seam, flagged for L-SIM): `manufacturing` here is the COGS
+/// of a *sold* copy, while the pressing outlay debited to `capital` at release
+/// (`LABEL_RECOUP_PRESSING_PER_COPY`, $0.15/copy *pressed* — the same figure
+/// that accrues to the deal's `unrecouped` ledger) is the recoup-coupled cash
+/// the label fronts for the run. Both are per the §A/task spec; their
+/// magnitudes differ ($1.00 vs $0.15), so they are not one accounting line.
+/// L-SIM owns reconciling/tuning the pair. [tune]
+pub(super) const LABEL_WHOLESALE_PER_COPY: f32 = 4.0;
+pub(super) const LABEL_MANUFACTURING_PER_COPY: f32 = 1.0;
+pub(super) const LABEL_MECHANICAL_PER_COPY: f32 = 0.30;
+
+// ============================================================================
+// L-REACH (v0.8 §C): reach + tier drift. `market_reach` and `tier` stop being
+// constants and drift toward a target derived from the label's health — its
+// `capital` and its recent charting `hit_window` — bounded per period with a
+// hysteresis dead-band so a label's rise or fall reads as a multi-year
+// trajectory, never a jitter or a teleport (design §C). Because the sales fix
+// made reach drive international distribution, a label's climb literally widens
+// where its acts sell, and its fall contracts it. All numbers [tune] — L-SIM
+// (§I) referees them against "boutiques can rise a tier, majors can fall,
+// nobody teleports, the population stays mobile but stable" over 15 years.
+// ============================================================================
+
+/// How many charting releases a label's rolling `hit_window` holds (design §C).
+/// The most-recent N charting record ids; older ones roll off the front, so the
+/// window means "recent form", not a lifetime tally. Kept short. [tune]
+pub(super) const HIT_WINDOW_LEN: usize = 5;
+
+/// Reach points one recent hit adds to the drift target, and the cap on the
+/// total hit bonus. The cap is below the Boutique→Major reach gap on purpose: a
+/// hot streak lifts a label meaningfully, but hits alone can't peg reach to the
+/// top — capital still gates the ceiling ("rich before big", §C). [tune]
+pub(super) const REACH_PER_HIT: u8 = 4;
+pub(super) const REACH_HIT_BONUS_CAP: u8 = 20;
+
+/// Reach-drift cadence + rate (design §C: "drift, not teleport, bounded per
+/// year"). The drift pass is wired into the weekly world tick but only *acts*
+/// every `REACH_DRIFT_PERIOD_WEEKS` (monthly — the same rhythm as deal offers),
+/// moving reach at most `REACH_DRIFT_STEP` points toward target each period.
+/// `REACH_DRIFT_PER_YEAR` is the annual cap this yields (the documented [tune]
+/// knob); `REACH_DRIFT_STEP` is derived from it so the per-period bound and the
+/// yearly bound can never drift apart: a 2-point monthly step over 13 periods
+/// ≈ 26 points/year, so a boutique climbing from ~20 toward a major's ~70 is a
+/// ~2-year arc, not an overnight jump. [tune]
+pub(super) const REACH_DRIFT_PER_YEAR: u8 = 26;
+pub(super) const REACH_DRIFT_PERIOD_WEEKS: u32 = 4;
+pub(super) const REACH_DRIFT_STEP: u8 =
+    ((REACH_DRIFT_PER_YEAR as u32 * REACH_DRIFT_PERIOD_WEEKS) / WEEKS_PER_YEAR) as u8;
+
+/// Hysteresis dead-band (design §C): reach only moves when it is more than this
+/// many points from target, so a label already sitting at its natural reach
+/// stays put instead of oscillating ±1 every period. [tune]
+pub(super) const REACH_DRIFT_DEADBAND: u8 = 3;
+
+/// The reach ceiling (reach is a 0..=`REACH_MAX` scale, mirroring the JSON
+/// `market_reach`). Drift and the target are clamped to it.
+pub(super) const REACH_MAX: u8 = 100;
+
+/// Tier thresholds (design §C): `tier` follows `market_reach` across these
+/// bands. Promotion needs BOTH reach past the promote threshold AND a capital
+/// floor — a hit can spike a boutique's reach, but it isn't called big until
+/// its balance sheet backs it ("a one-hit boutique gets rich before it gets
+/// big", §C). Demotion is pure reach through a lower threshold: a label that
+/// loses its distribution falls regardless of cash. The promote/demote gap is
+/// the hysteresis that stops a label hovering at a boundary from flip-flopping
+/// tier every period. [tune]
+pub(super) const TIER_INDEPENDENT_REACH_PROMOTE: u8 = 38;
+pub(super) const TIER_INDEPENDENT_REACH_DEMOTE: u8 = 30;
+pub(super) const TIER_MAJOR_REACH_PROMOTE: u8 = 70;
+pub(super) const TIER_MAJOR_REACH_DEMOTE: u8 = 62;
+// `pub` (re-exported via `game::mod`): the UI's label-ledger qualitative
+// capital bands reference these directly so they can't silently desync from
+// the tier logic (single source of truth).
+pub const TIER_INDEPENDENT_MIN_CAPITAL: i64 = 200_000;
+pub const TIER_MAJOR_MIN_CAPITAL: i64 = 2_000_000;
+
+// ============================================================================
+// L-ROSTER (v0.8 §D): scene-band signing + roster P&L. Labels scout and sign
+// unsigned scene acts by fit (genre specialty overlap) and appetite (weight
+// class + capital), populate their `roster`, and book a plausible weekly
+// wholesale margin off each signed act's chart presence — what finally makes
+// majors *active* instead of sitting static at seed capital (L-ENTITY only ever
+// moved the player's own label). All rolls derive from the injected world seed;
+// labels/bands iterate in a deterministic order. Every number here is [tune],
+// refereed by L-SIM's 15-yr label-solvency sweep (§I): sized to keep a
+// deep-roster major accumulating in the low-to-mid millions over a career —
+// the player-side ledger's ballpark (millions, not billions) — while boutiques
+// stay solvent.
+// ============================================================================
+
+/// A scene act must reach this scene fame before any label will scout it —
+/// below it an act is too small to be worth a contract. [tune]
+pub(super) const ROSTER_SIGN_MIN_FAME: u8 = 20;
+
+/// Scouting cadence: each unsigned, eligible band rolls this once a week to draw
+/// label interest. Kept low so the ~180-band scene turns over gradually rather
+/// than in a signing frenzy. [tune]
+pub(super) const ROSTER_SCOUT_WEEKLY_CHANCE: f64 = 0.04;
+
+/// A signing at/above this scene fame makes the news feed (matches the pre-0.8
+/// scene-signing threshold); smaller signings happen silently. [tune]
+pub(super) const ROSTER_SIGN_NEWS_FAME: u8 = 45;
+
+/// Roster capacity by tier — a major carries a deep roster, a boutique a
+/// handful. A label at capacity stops signing (design §D). [tune]
+pub(super) const ROSTER_CAP_BOUTIQUE: usize = 6;
+pub(super) const ROSTER_CAP_INDEPENDENT: usize = 15;
+pub(super) const ROSTER_CAP_MAJOR: usize = 30;
+
+/// Appetite ceiling: a label reaches for a band whose scene fame is no more than
+/// this many points above its own `financial_power` — a lean boutique cannot
+/// land a marquee act (it can't front the advance and the star wouldn't sign).
+/// [tune]
+pub(super) const ROSTER_APPETITE_FAME_HEADROOM: u8 = 15;
+
+/// Caution: a label only signs when its `capital` covers at least this many
+/// times the advance — so a label deep in the red never signs, and a lean one
+/// signs sparingly (a broke label signs less, design §D). [tune]
+pub(super) const ROSTER_SIGN_CAPITAL_SAFETY: i64 = 2;
+
+/// Genre-fit bonus in label selection: a band whose genre sits in the label's
+/// specialty scores this much higher, so labels lean toward their wheelhouse
+/// without being locked to it (`GenrePurist` strictness is L-CHAR's, §G). [tune]
+pub(super) const ROSTER_FIT_MATCH_BONUS: i32 = 40;
+
+/// Roster-room weight in label selection: an emptier roster scores up to this
+/// many extra points (scaled by how full it is, tier-independent), so signings
+/// spread across peers instead of one label hogging its whole weight class
+/// before any other bites. [tune]
+pub(super) const ROSTER_ROOM_WEIGHT: i32 = 20;
+
+/// Signing advance debited from a label's `capital` when it signs a scene act:
+/// `base + fame × per_fame`. Modest against seed capital so it never bankrupts a
+/// label on its own — the act's roster margin replenishes it (design §D). [tune]
+pub(super) const ROSTER_SIGNING_BASE_COST: i64 = 1_000;
+pub(super) const ROSTER_SIGNING_COST_PER_FAME: i64 = 150;
+
+/// Scene-roster margin: a signed act's effective weekly chart score (summed over
+/// every board it charts on, so a major's wider distribution earns more) × this
+/// books to its label's `capital`. The scene analogue of the player-side
+/// per-copy wholesale spread (a scene act has no `copies_sold` pipeline, so its
+/// chart presence stands in for units moved). Sized so a scene act's per-release
+/// margin lands in the same ballpark as a comparable player release and a
+/// deep-roster major accumulates low-to-mid millions over 15 years — L-SIM
+/// referees against the solvency sweep. [tune]
+pub(super) const ROSTER_MARGIN_PER_CHART_SCORE: f32 = 1.0;
+
+// ============================================================================
+// L-BID (v0.8 §E): the deal-offer stream priced from live label state. An
+// offer's advance and royalty come from the offering `Label`'s CURRENT
+// `capital` / `market_reach` / `financial_power` / `tier` and the act's fame —
+// not the static `record_labels.json` row. A label cannot advance money it does
+// not have (advance bounded by `capital`), more than one label can table an
+// offer in the same window, and when two-plus want the act their terms escalate
+// toward the richer/hungrier label's ceiling, each bounded by its own means.
+// Every number here is [tune], refereed by L-SIM (§I): the bidding must draw a
+// hot act better offers than an unknown without making advances unrecoupable or
+// bankrupting labels (the recoup + 15-yr solvency sweeps).
+// ============================================================================
+
+/// Affordability bound: a label will front at most this fraction of its
+/// `capital` as a single advance — the hard "cannot advance money it does not
+/// have" ceiling (design §E / "a label cannot spend money it does not have").
+/// Well below 1.0 so signing never approaches insolvency; at seed
+/// (`capital = fp³ × 15`) this ceiling is `fp³ × 2.25`, which sits above the
+/// stature figure below, so a *healthy* label pays on stature/heat and only a
+/// cash-strapped one is squeezed by affordability. [tune]
+pub(super) const ADVANCE_CAPITAL_FRACTION: f32 = 0.15;
+
+/// The marquee advance a label's *stature* justifies, `financial_power³ × this`
+/// — what it would pay a fame-100 act before the affordability bound. Cubed so
+/// the tier spread is steep (a major reaches for far more than a boutique),
+/// matching the seed-capital curve. Sized so an indie's top advance lands in the
+/// low tens of thousands and a major's in the high six/low seven figures — the
+/// era-real ballpark the recoup sweep already validated. [tune]
+pub(super) const ADVANCE_STATURE_PER_FP_CUBED: f32 = 1.1;
+
+/// Fame's pull on the advance: the fraction of the stature figure an act commands
+/// scales linearly from this floor (a total unknown) at fame 0 to 1.0 (the full
+/// marquee figure) at fame 100 — "a hot act draws better offers than an unknown"
+/// (design §E). [tune]
+pub(super) const ADVANCE_FAME_FLOOR: f32 = 0.15;
+
+/// A label only tables an offer when the advance it could afford
+/// (`capital × ADVANCE_CAPITAL_FRACTION`) clears this floor — below it the label
+/// is too cash-strapped to compete and stays quiet ("a label deep in the red
+/// signs cautiously or not at all", design §E). At the seed scale even the
+/// leanest label clears this comfortably; it bites only once `capital` has bled
+/// far below seed. [tune]
+pub(super) const ADVANCE_MIN_VIABLE_AFFORDABLE: i64 = 2_000;
+
+/// Royalty priced from reach (design §E): a low-reach label competes on royalty
+/// (it cannot compete on advance), a high-reach major pays the least. The rate
+/// runs linearly from `MAX` at reach 0 down to `MIN` at reach 100, reproducing
+/// the JSON shape (majors ~10-11%, indies ~22-25%) from *live* reach so it tracks
+/// L-REACH drift. [tune]
+pub(super) const ROYALTY_REACH_MAX: f32 = 0.32;
+pub(super) const ROYALTY_REACH_MIN: f32 = 0.10;
+
+/// A hot act also commands a better rate: fame adds up to this many points to the
+/// reach-set royalty, linearly by fame. [tune]
+pub(super) const ROYALTY_FAME_BONUS_MAX: f32 = 0.03;
+
+/// Bidding room on royalty (design §E): under competition a label will sweeten
+/// its reach-set rate by up to this premium, never past the hard cap. Royalty is
+/// the cheap lever a poorer label can still pull when it cannot match a rival's
+/// advance. [tune]
+pub(super) const ROYALTY_BID_PREMIUM: f32 = 0.05;
+pub(super) const ROYALTY_HARD_CAP: f32 = 0.35;
+
+/// Bidding escalation (design §E): with two-plus offers on the table, each
+/// closes this fraction of the gap to the best competing terms — advance toward
+/// the top advance (bounded by the label's own affordability, so a broke label
+/// cannot outbid a flush one) and royalty toward the top royalty (bounded by the
+/// label's royalty ceiling). Half-way is a firm but not runaway war. [tune]
+pub(super) const BID_ESCALATION_FRACTION: f32 = 0.5;
+
+/// Genre fit sharpens appetite (design §E): a label whose specialty includes the
+/// act's genre is this much likelier to table an offer, so a genre-fitting act
+/// draws more concurrent suitors (and thus more bidding). Multiplies the tiered
+/// base chance, clamped to a sane ceiling. [tune]
+pub(super) const GENRE_FIT_CHANCE_MULTIPLIER: f64 = 1.5;
+pub(super) const OFFER_CHANCE_MAX: f64 = 0.95;
+
+// ============================================================================
+// L-MNA (v0.8 §F): mergers, acquisitions, and failure. Labels rise and fall all
+// the way — including out of existence. A label whose `capital` stays in the red
+// for long enough goes `Distressed` (stops signing, leans on single-cuts, sheds
+// unrecouped acts at term via the existing breach path); a `Distressed` label is
+// then either acquired by a flush major (its roster — and the player's contract
+// — transfer to the acquirer) or, if it cannot be sold, folds (active deals void
+// via the breach write-off path, catalogue goes dormant). All rolls derive from
+// the injected world seed; labels iterate in a deterministic BTreeMap order.
+//
+// M&A is a *safety valve*, not the median label's fate: L-ENTITY/L-ROSTER tuning
+// keeps labels solvent (the 15-yr sweep bottoms in the high six figures), so the
+// distress floor sits at the red line — a label only distresses if it genuinely
+// bleeds out. Every number here is [tune], refereed by L-SIM's solvency sweep
+// (§I): "failures/foldings real but rare", "no label sits far below zero for
+// long", and "a player signed to a folding label is handled gracefully".
+// ============================================================================
+
+/// A label is "in the red" — and its distress clock ticks — while its `capital`
+/// is strictly below this floor (design §F). Set at 0: the wholesale ledger
+/// keeps healthy labels well positive, so crossing zero is the honest signal
+/// that a label is bleeding out, not merely lean. [tune]
+pub(super) const DISTRESS_CAPITAL_FLOOR: i64 = 0;
+
+/// Consecutive weeks below the floor before a label flips `Active → Distressed`
+/// (design §F: "capital below a floor for N consecutive weeks"). Half a game
+/// year of red ink — long enough that a one-off dip that recovers never trips
+/// it. Climbing back above the floor resets the clock and restores `Active`. [tune]
+pub(super) const DISTRESS_WEEKS: u16 = 26;
+
+/// Consecutive weeks below the floor before a `Distressed` label that could not
+/// be sold **folds** (design §F). Longer than `DISTRESS_WEEKS`, so a label gets
+/// a window in which a flush major might still acquire it before it dies; only a
+/// label nobody buys, still bleeding after a year and a half, actually folds. [tune]
+pub(super) const FOLD_WEEKS: u16 = 78;
+
+/// A label must be an `Active` Major holding at least this much `capital` to
+/// acquire a distressed peer — "a flush major may acquire" (design §F), and "a
+/// label cannot spend money it does not have" (§A key constraint). Mirrors the
+/// Major-tier capital floor: a genuinely flush major, not one just over the
+/// line. [tune]
+pub(super) const ACQUISITION_MIN_ACQUIRER_CAPITAL: i64 = TIER_MAJOR_MIN_CAPITAL;
+
+/// Weekly chance a willing, flush major actually bids for a given distressed
+/// label that still has a roster worth buying (design §F: a major *may* acquire).
+/// Over the `DISTRESS_WEEKS..FOLD_WEEKS` window a rostered distressed label is
+/// very likely to be acquired before it would fold — so acquisitions are the
+/// common resolution and outright foldings (an empty-roster label nobody wants)
+/// the rarer one, matching the era's "majors consolidated the independents". [tune]
+pub(super) const ACQUISITION_WEEKLY_CHANCE: f64 = 0.15;
+
+/// What an acquirer pays to absorb a distressed label — debited from its
+/// `capital` (§A: money is conserved). Modest against a flush major's balance
+/// sheet; the real value it buys is the roster's future margin, not the cash. [tune]
+pub(super) const ACQUISITION_COST: i64 = 100_000;
+
+/// §F founding gate — **OFF by default** (coordinator decision, 2026-07-24):
+/// "leave a clearly-gated stub that L-SIM can flip; do not add new labels this
+/// pass." While `false`, the M&A pass creates no labels. L-SIM flips this to
+/// repopulate the low tier as acquisitions thin it, once the population sweep
+/// shows it is needed.
+pub(super) const LABEL_FOUNDING_ENABLED: bool = false;
+
+// ============================================================================
+// L-CHAR (v0.8 §G): label character / A&R. Each label carries a `LabelStrategy`
+// (assigned at worldgen from its JSON personality) and a live `creative_freedom`
+// stat, now load-bearing: strategy + creative-freedom colour offer pricing (§E),
+// single-cut aggression and memo cadence (§E-5), and the renewal window (§E-4).
+// A `Balanced` label at the creative-freedom midpoint is EXACTLY neutral, so a
+// label with no strong personality prices and meddles precisely as it did before
+// L-CHAR (the L-BID pricing and v0.7 recoup dials are unchanged for it — that
+// invariant is what keeps every pre-L-CHAR test passing untouched). Every number
+// here is [tune], refereed by L-SIM (§I): strategy variety must not break label
+// solvency or make advances unrecoupable.
+// ============================================================================
+
+// --- Strategy assignment at worldgen (§G) -----------------------------------
+// Deterministic buckets from the JSON personality (`LabelStrategy::
+// from_personality`), checked in order: HitFactory (a cash-rich, low-freedom hit
+// machine — the majors), then ArtistFriendly (a high-freedom, high-A&R home —
+// the developing indies), then GenrePurist (a tight, single-scene specialty —
+// the punk/hardcore labels), else Balanced. `financial_power` stands in for tier
+// (every seed major is ≥ 80, every indie/boutique ≤ 35). Thresholds picked
+// against the seed roster so each variant is represented.
+
+/// HitFactory: `creative_freedom <=` this AND `financial_power >=`
+/// `STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER` — a flush label that leans on
+/// product over artistic latitude. [tune]
+pub(super) const STRATEGY_HITFACTORY_MAX_CREATIVE_FREEDOM: u8 = 72;
+pub(super) const STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER: u8 = 80;
+
+/// ArtistFriendly: `creative_freedom >=` this AND `artist_development >=`
+/// `STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT` — a label that gives its
+/// acts room and invests in developing them. [tune]
+pub(super) const STRATEGY_ARTIST_FRIENDLY_MIN_CREATIVE_FREEDOM: u8 = 85;
+pub(super) const STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT: u8 = 80;
+
+/// GenrePurist: a label whose parsed `Label::genres` collapses to at most this
+/// many enum genres — a tight, focused identity. Read off the same specialty
+/// list the purist offer-gate checks, so a purist gates on exactly the wheelhouse
+/// that made it one. [tune]
+pub(super) const STRATEGY_GENRE_PURIST_MAX_SPECIALTY: usize = 2;
+
+// --- Offer pricing colour (§E, layered onto L-BID) --------------------------
+// Multiplier (advance) and delta (royalty) applied on top of the L-BID priced
+// figures. Both are exactly neutral for `Balanced` (mult 1.0 / delta 0.0), so a
+// Balanced label prices identically to pre-L-CHAR. Advances stay bounded by
+// affordability (the L-BID invariant): the multiplier scales the *desired*
+// figure, which is still `.min(affordable)`.
+
+/// Advance multiplier by strategy: HitFactory pays bigger advances (it buys the
+/// act up front), GenrePurist pays a fit premium (it only offers in-specialty),
+/// ArtistFriendly is fair but leads with royalty not advance. [tune]
+pub(super) const STRATEGY_ADVANCE_MULT_HITFACTORY: f32 = 1.30;
+pub(super) const STRATEGY_ADVANCE_MULT_GENRE_PURIST: f32 = 1.15;
+pub(super) const STRATEGY_ADVANCE_MULT_ARTIST_FRIENDLY: f32 = 1.0;
+
+/// Royalty delta (raw rate, i.e. 0.04 = 4pp) by strategy, added to the L-BID
+/// reach/fame rate and clamped to the sane band: ArtistFriendly pays more (its
+/// signature lever, and it "won't lowball" a signing), HitFactory less (it led
+/// with the advance), GenrePurist a small fit premium. Also shifts the bidding
+/// royalty ceiling so an ArtistFriendly label can escalate royalty further. [tune]
+pub(super) const STRATEGY_ROYALTY_DELTA_ARTIST_FRIENDLY: f32 = 0.04;
+pub(super) const STRATEGY_ROYALTY_DELTA_HITFACTORY: f32 = -0.03;
+pub(super) const STRATEGY_ROYALTY_DELTA_GENRE_PURIST: f32 = 0.02;
+
+// --- Single-cut aggression + memo cadence (§E-5, atop the recoup dials) ------
+// Strategy scales the single-cut chance and memo chance on top of the v0.7
+// recoup-pressure multiplier; creative_freedom adds a second, continuous lever
+// (low freedom → more meddling). Both are 1.0 for a Balanced label at the
+// creative-freedom midpoint, so the v0.7 behaviour is exactly preserved there.
+
+/// Single-cut chance multiplier by strategy (on top of recoup pressure):
+/// HitFactory cuts more aggressively, ArtistFriendly sparingly, GenrePurist and
+/// Balanced neutral (1.0). [tune]
+pub(super) const STRATEGY_CUT_MULT_HITFACTORY: f64 = 1.5;
+pub(super) const STRATEGY_CUT_MULT_ARTIST_FRIENDLY: f64 = 0.5;
+
+/// Memo-cadence multiplier by strategy: a HitFactory leans harder (more memos),
+/// an ArtistFriendly leaves the act alone (fewer). GenrePurist/Balanced neutral. [tune]
+pub(super) const STRATEGY_MEMO_MULT_HITFACTORY: f64 = 1.5;
+pub(super) const STRATEGY_MEMO_MULT_ARTIST_FRIENDLY: f64 = 0.5;
+
+/// Creative-freedom's pull on single-cut aggression and memo cadence (§G — "low
+/// freedom raises single-cut aggression"). The multiplier is
+/// `1 + (MIDPOINT - creative_freedom) / MIDPOINT * SWING`, bounded ≥ 0, so
+/// freedom at the midpoint is neutral (1.0), freedom 0 is the most meddling
+/// (`1 + SWING`), and freedom 100 the most hands-off. [tune]
+pub(super) const CREATIVE_FREEDOM_MIDPOINT: f64 = 50.0;
+pub(super) const CREATIVE_FREEDOM_CUT_SWING: f64 = 0.6;
+
+// (A deal whose label doesn't resolve to a seeded entity — a pre-0.8 save, a
+// folded label, the "Test Records" placeholder — reads a neutral 1.0 aggression
+// directly, i.e. a Balanced label at the creative-freedom midpoint: exactly the
+// v0.7 baseline. No separate default constant is needed for that.)
+
+// --- Renewal patience (§E-4) -------------------------------------------------
+/// Strategy scales the "deep in the red" unrecouped threshold at the renewal
+/// window: an ArtistFriendly label is patient (needs a deeper hole before it
+/// gives up on an unrecouped act → more extensions), a HitFactory has short
+/// patience (gives up sooner → more silence). GenrePurist/Balanced neutral (1.0).
+/// Applied to `DEAL_RENEWAL_DEEP_RED_UNRECOUPED`. Kept modest so the ArtistFriendly
+/// threshold (45k) still sits below the "deep red" test fixture (50k). [tune]
+pub(super) const STRATEGY_RENEWAL_PATIENCE_ARTIST_FRIENDLY: f32 = 1.5;
+pub(super) const STRATEGY_RENEWAL_PATIENCE_HITFACTORY: f32 = 0.5;
 
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world

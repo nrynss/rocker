@@ -240,9 +240,12 @@ impl Game {
             } else {
                 Some(distribution_channel)
             },
-            // Freeze the label's reach on the release so its catalog tail
-            // survives the deal ending (§E-3); `None` for an indie release.
-            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
+            // L-REACH (§C): freeze the label's *live* reach on the release (not
+            // the value frozen in the deal at signing) so a record cut after the
+            // label rose or fell carries its reach *now*; that frozen value then
+            // drives this release's catalogue tail for good (§E-3). `None` for an
+            // indie release; the deal's signing reach for an unseeded label.
+            label_market_reach: self.new_release_frozen_reach(),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);
@@ -354,9 +357,12 @@ impl Game {
             } else {
                 Some(distribution_channel)
             },
-            // Freeze the label's reach on the release so its catalog tail
-            // survives the deal ending (§E-3); `None` for an indie release.
-            label_market_reach: self.band.current_deal().map(|deal| deal.market_reach),
+            // L-REACH (§C): freeze the label's *live* reach on the release (not
+            // the value frozen in the deal at signing) so a record cut after the
+            // label rose or fell carries its reach *now*; that frozen value then
+            // drives this release's catalogue tail for good (§E-3). `None` for an
+            // indie release; the deal's signing reach for an unseeded label.
+            label_market_reach: self.new_release_frozen_reach(),
         };
         let name = new_release.name.clone();
         self.just_released_music.push(new_release);

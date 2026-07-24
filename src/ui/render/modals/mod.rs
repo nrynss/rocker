@@ -2,7 +2,9 @@
 
 mod charts;
 mod deals;
+mod discography;
 mod file;
+mod labels;
 mod lifestyle;
 mod marketing;
 mod pickers;
@@ -10,7 +12,9 @@ mod tour;
 
 pub(super) use charts::draw_charts_modal;
 pub(super) use deals::{draw_deals_modal, draw_support_modal};
+pub(super) use discography::draw_discography_modal;
 pub(super) use file::draw_file_modal;
+pub(super) use labels::draw_labels_modal;
 pub(super) use lifestyle::draw_lifestyle_picker_modal;
 pub(super) use marketing::draw_marketing_modal;
 pub(super) use pickers::{

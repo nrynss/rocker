@@ -2,6 +2,7 @@
 
 mod charts;
 mod deals;
+mod labels;
 mod regions;
 mod scene;
 mod venues;
@@ -11,6 +12,11 @@ mod venues;
 #[allow(unused_imports)]
 pub use charts::{CHART_DEPTH, ChartEntry};
 pub use deals::PotentialDealOffer;
+// The label entity's public shape (design §A, L-ENTITY). Downstream tasks
+// extend `labels.rs` directly; these re-exports are for `economy.rs` (the
+// ledger hook), `business.rs` (the advance debit), and tests.
+#[allow(unused_imports)]
+pub use labels::{Label, LabelStatus, LabelStrategy, LabelTier, RosterSlot};
 pub use regions::ChartRegion;
 #[allow(unused_imports)]
 pub use scene::{SCENE_MAX_BANDS, SCENE_MIN_BANDS, SCENE_START_BANDS, SceneBand};
@@ -45,6 +51,22 @@ pub struct GameWorld {
     /// Worldwide is derived on demand and is never a key here.
     #[serde(default)]
     pub regional_charts: BTreeMap<ChartRegion, Vec<ChartEntry>>,
+    /// The living industry (design §A, L-ENTITY): every major/independent/
+    /// boutique from `record_labels.json` becomes a `Label` world entity with
+    /// a balance sheet. Keyed by stable id in a `BTreeMap` for deterministic
+    /// iteration. `#[serde(default)]` so a pre-0.8 save loads with no labels
+    /// (the map is empty; the ledger hook simply no-ops until a new game seeds
+    /// it — a signed player on such a save keeps earning exactly as before).
+    #[serde(default)]
+    pub labels: BTreeMap<u32, Label>,
+    /// L-REACH (§C): a monotonic tick for the reach-drift cadence. The drift
+    /// pass (`drift_labels`) runs on the weekly tick but only *acts* every
+    /// `REACH_DRIFT_PERIOD_WEEKS`, so the yearly reach movement stays bounded
+    /// even though the pass is called weekly. `#[serde(default)]` → 0 on a
+    /// pre-0.8 save (the cadence simply restarts from load; drift is idempotent
+    /// on an empty label map anyway).
+    #[serde(default)]
+    pub label_reach_tick: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +108,11 @@ impl GameWorld {
             dynamic_genre_modifiers: std::collections::HashMap::new(),
             charts: Vec::new(),
             regional_charts: BTreeMap::new(),
+            // Seeded from record_labels.json; RNG-free, so it does not perturb
+            // the world stream the determinism trio replays (design §A).
+            labels: Self::seed_labels(data_files),
+            // L-REACH (§C): the drift cadence starts at 0.
+            label_reach_tick: 0,
         }
     }
 
@@ -103,6 +130,13 @@ impl GameWorld {
         self.update_scene_bands(rng, timeline, data_files, &mut news);
         self.update_scene_population(rng, timeline, data_files, &mut news);
         self.update_trends_with_timeline(timeline, rng);
+        // L-REACH (§C): labels' reach + tier drift toward their capital/hit-
+        // window health. RNG-free and gated to a monthly cadence inside the call.
+        self.drift_labels();
+        // L-MNA (§F): distress, acquisition, folding. Runs last so it only draws
+        // from the tail of the world stream (the determinism trio is unaffected);
+        // its one roll is the injected `rng`, in deterministic label id order.
+        self.run_label_mna(rng, &mut news);
 
         // Decay dynamic genre modifiers
         let mut new_modifiers = std::collections::HashMap::new();

@@ -10,10 +10,14 @@ pub mod constants {
     pub const WEEKS_PER_YEAR: u32 = 52;
     pub const STARTING_YEAR: u32 = 1970;
 
-    // Cost constants
-    pub const SINGLE_RECORDING_COST: i32 = 100;
-    pub const ALBUM_RECORDING_BASE_COST: i32 = 1000;
-    pub const DOCTOR_VISIT_COST: i32 = 50;
+    // Cost constants.
+    //
+    // L-SCALE (v0.8 §B): ×3 to the one honest era-real money scale — every
+    // dollar in the game triples in lockstep so ratios hold while magnitude
+    // lifts. (was 100 / 1000 / 50.)
+    pub const SINGLE_RECORDING_COST: i32 = 300;
+    pub const ALBUM_RECORDING_BASE_COST: i32 = 3000;
+    pub const DOCTOR_VISIT_COST: i32 = 150;
 
     // Game progression constants
     pub const MIN_ALBUM_SONGS: u8 = 8;

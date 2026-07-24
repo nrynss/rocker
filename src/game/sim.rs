@@ -25,6 +25,7 @@ use crate::game::player::LifestyleTier;
 use crate::game::player::Player;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::GameWorld;
+use crate::game::world::{LabelStrategy, LabelTier};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -926,6 +927,389 @@ fn median_signed_act_recoups_the_advance_before_the_terms_halfway_mark() {
     );
 }
 
+/// L-SIM (design §I) — **bidding works, and the major-label path is actually
+/// swept.** A fame-95 act with a real catalogue must draw a *bigger* priced
+/// offer than the same catalogue as a fame-30 unknown, and must reach the
+/// Major tier — the path no career bot exercises (the label-loyalist renews
+/// onto its first *indie* forever, a gap flagged repeatedly across the cycle,
+/// so majors were never swept in play). We drive the live offer market
+/// (`generate_deal_offers`) directly with a synthetic act at each fame, which
+/// is exactly the entry point `turn.rs` calls, seeded so it replays.
+///
+/// This is the *market/integration* echo of the confound-controlled pricing
+/// proofs in `world::deals::tests` (a_hotter_act…, a_broke_label_cannot_outbid…,
+/// royalty_tracks_reach…, artist_friendly_offers_a_higher_royalty…): those pin
+/// the pure `priced_advance`/`priced_royalty` functions holding everything but
+/// the one variable fixed; this proves the whole seeded population produces the
+/// same shape end-to-end. Fast (offer generation only, no career sim) → CI-safe.
+///
+/// Measured 2026-07-25 (60 seeds): a fame-95 act drew a Major offer on **57/60**
+/// seeds with a median best advance **north of $1M**, versus a fame-30 unknown
+/// capped at an indie/boutique best advance of ~$7k — two orders of magnitude
+/// smaller. Strategy split cleanly (§G): HitFactory labels led on advance
+/// (~$998k median) while ArtistFriendly led on royalty (0.322 vs 0.138). NB
+/// **royalty is reach-driven, not a clean function of fame across tiers** — by
+/// design (§E) a high-reach major pays the *least* royalty and competes on the
+/// advance, a low-reach boutique competes on royalty — so the robust market-
+/// level "hotter act, better terms" lever pinned here is the *advance*.
+#[test]
+fn a_big_act_reaching_a_major_draws_bigger_priced_offers_than_an_unknown() {
+    const SEEDS: u64 = 60;
+    const UNKNOWN_FAME: u8 = 30;
+    const STAR_FAME: u8 = 95;
+
+    fn minimal_release(id: u32, release_type: ReleaseType) -> music::Release {
+        music::Release {
+            id,
+            name: "Catalogue".to_string(),
+            release_type,
+            release_quality: 60,
+            week_released: 1,
+            songs_involved_quality_avg: 60,
+            active_marketing: Vec::new(),
+            marketing_level_achieved: 0,
+            initial_sales_score: 0,
+            total_income_generated: 0,
+            genre: Some(genre::MusicGenre::Rock),
+            copies_pressed: 0,
+            copies_sold: 0,
+            peak_chart_position: None,
+            singles_cut: 0,
+            certified: 0,
+            distribution_channel: None,
+            label_market_reach: None,
+        }
+    }
+    // A synthetic act: enough catalogue + buzz to clear the Major interest gate
+    // (fame 40 / 1 album / 3 releases / buzz 30) when famous enough.
+    fn act(fame: u8) -> Band {
+        Band {
+            fame,
+            genre: genre::MusicGenre::Rock,
+            singles_released: (0..4)
+                .map(|i| minimal_release(i, ReleaseType::Single))
+                .collect(),
+            albums_released: (0..6)
+                .map(|i| minimal_release(100 + i, ReleaseType::Album))
+                .collect(),
+            ..Band::default()
+        }
+    }
+
+    // Per-fame: best advance + best royalty each seed, and how often a Major bit.
+    let mut best_adv: std::collections::BTreeMap<u8, Vec<u32>> = std::collections::BTreeMap::new();
+    let mut best_roy: std::collections::BTreeMap<u8, Vec<f32>> = std::collections::BTreeMap::new();
+    let mut major_offer_seeds = 0u32;
+    // Strategy buckets over every offer the star drew, keyed by the offering
+    // label's live strategy (§G).
+    let mut adv_by_strategy: std::collections::BTreeMap<String, Vec<u32>> =
+        std::collections::BTreeMap::new();
+    let mut roy_by_strategy: std::collections::BTreeMap<String, Vec<f32>> =
+        std::collections::BTreeMap::new();
+
+    for seed in 1..=SEEDS {
+        let game = seeded_game(seed);
+        let strategy_of: std::collections::HashMap<String, LabelStrategy> = game
+            .world
+            .labels
+            .values()
+            .map(|l| (l.name.clone(), l.strategy))
+            .collect();
+
+        for fame in [UNKNOWN_FAME, STAR_FAME] {
+            let band = act(fame);
+            // A fresh rng per (seed, fame) so the two draws are independent and
+            // reproducible; the world itself is identical.
+            let mut rng = StdRng::seed_from_u64(seed.wrapping_mul(7).wrapping_add(u64::from(fame)));
+            let offers = game
+                .world
+                .generate_deal_offers(&band, &game.data_files, &mut rng);
+
+            best_adv
+                .entry(fame)
+                .or_default()
+                .push(offers.iter().map(|o| o.advance).max().unwrap_or(0));
+            best_roy
+                .entry(fame)
+                .or_default()
+                .push(offers.iter().map(|o| o.royalty_rate).fold(0.0f32, f32::max));
+
+            if fame == STAR_FAME {
+                if offers.iter().any(|o| o.label_tier == "Major") {
+                    major_offer_seeds += 1;
+                }
+                for o in &offers {
+                    if let Some(strategy) = strategy_of.get(&o.label_name) {
+                        let key = format!("{strategy:?}");
+                        adv_by_strategy
+                            .entry(key.clone())
+                            .or_default()
+                            .push(o.advance);
+                        roy_by_strategy.entry(key).or_default().push(o.royalty_rate);
+                    }
+                }
+            }
+        }
+    }
+
+    let med_u32 = |v: &[u32]| -> u32 {
+        let mut v = v.to_vec();
+        v.sort_unstable();
+        v.get(v.len() / 2).copied().unwrap_or(0)
+    };
+    let med_f32 = |v: &[f32]| -> f32 {
+        let mut v = v.to_vec();
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v.get(v.len() / 2).copied().unwrap_or(0.0)
+    };
+
+    let unknown_adv = med_u32(&best_adv[&UNKNOWN_FAME]);
+    let star_adv = med_u32(&best_adv[&STAR_FAME]);
+    let unknown_roy = med_f32(&best_roy[&UNKNOWN_FAME]);
+    let star_roy = med_f32(&best_roy[&STAR_FAME]);
+
+    println!("bidding market, {SEEDS} seeds (median best offer the act drew):");
+    println!(
+        "  fame {UNKNOWN_FAME:>3} (unknown): best advance ${unknown_adv:>9}, best royalty {unknown_roy:.3}"
+    );
+    println!(
+        "  fame {STAR_FAME:>3} (star)   : best advance ${star_adv:>9}, best royalty {star_roy:.3}"
+    );
+    println!("  the star drew a Major-tier offer on {major_offer_seeds}/{SEEDS} seeds");
+    println!("offers the star drew, by offering-label strategy:");
+    for (strategy, advs) in &adv_by_strategy {
+        let roys = &roy_by_strategy[strategy];
+        println!(
+            "  {strategy:<14} n={:>3}  median advance ${:>9}  median royalty {:.3}",
+            advs.len(),
+            med_u32(advs),
+            med_f32(roys),
+        );
+    }
+
+    // Bidding works: the hotter act commands a bigger advance through the live
+    // market (the robust direction — see the note on royalty above).
+    assert!(
+        star_adv > unknown_adv,
+        "a fame-{STAR_FAME} act should draw a bigger advance than the same catalogue at fame {UNKNOWN_FAME}: ${star_adv} vs ${unknown_adv}"
+    );
+    // The major-label path is actually swept: a big act reaches the majors.
+    assert!(
+        major_offer_seeds * 2 >= SEEDS as u32,
+        "a fame-{STAR_FAME} act should reach the Major tier on most seeds; only {major_offer_seeds}/{SEEDS} drew a Major offer"
+    );
+    // Era-real scale: the star's advance is at least the era's six figures (it
+    // medians north of $1M), not the v0.7 compressed thousands.
+    assert!(
+        star_adv >= 100_000,
+        "a superstar's advance should be era-real (six figures or more), got median ${star_adv}"
+    );
+    // §G strategy colours the market: a HitFactory leads with the advance, an
+    // ArtistFriendly with the royalty. (Confound-controlled proof: deals::tests.)
+    if let (Some(hf_adv), Some(af_adv)) = (
+        adv_by_strategy.get("HitFactory"),
+        adv_by_strategy.get("ArtistFriendly"),
+    ) {
+        assert!(
+            med_u32(hf_adv) > med_u32(af_adv),
+            "a HitFactory should lead with a bigger advance than an ArtistFriendly through the market: ${} vs ${}",
+            med_u32(hf_adv),
+            med_u32(af_adv)
+        );
+    }
+    if let (Some(hf_roy), Some(af_roy)) = (
+        roy_by_strategy.get("HitFactory"),
+        roy_by_strategy.get("ArtistFriendly"),
+    ) {
+        assert!(
+            med_f32(af_roy) > med_f32(hf_roy),
+            "an ArtistFriendly should lead with a better royalty than a HitFactory through the market: {:.3} vs {:.3}",
+            med_f32(af_roy),
+            med_f32(hf_roy)
+        );
+    }
+}
+
+/// L-SIM (design §I) — **label solvency, gangbuster scale, and mobility over
+/// fifteen years.** The signed player (label-loyalist) drives one label's
+/// ledger to superstar volume while the rest of the industry lives off its own
+/// rosters; across every seed the population must stay
+///
+/// 1. **solvent** — no label ends underwater (`capital < 0`);
+/// 2. **sane** — capital lands in the era's millions, never billions or
+///    negative (the wholesale ledger neither hyper-inflates nor collapses);
+/// 3. **gangbuster** (§I "the gangbuster target") — a signed, productive
+///    superstar's label clears era-real millions, and the player banks era-real
+///    millions too (not the v0.7 compressed thousands);
+/// 4. **stable with mobility** — majors stay dominant in aggregate, yet at
+///    least one label crosses a tier line across the seed set.
+///
+/// Promoted from the L-ENTITY print-only preview to a pinned assertion sweep
+/// (L-SIM owns the calibrated bounds). Measured 2026-07-25 (24 seeds × 15 yrs,
+/// release build): **0 insolvent**; leanest label **$25,920** (a static,
+/// roster-less boutique — solvent, just tiny), richest **$48.4M** (Atlantic, a
+/// Major); the signed player's own label nets **+$19M…+$37M**; the player ends
+/// with a **median ~$16.7M** in the bank (cross-checked against the balance
+/// report's `med.$`). At least one indie the player supercharges crosses into
+/// the Major tier across the set (mobility), while the six seeded majors still
+/// hold the aggregate lead (dominance).
+///
+/// **Distress-floor design-call (refereed here, L-SIM).** The floor is kept at
+/// $0 (an intended safety valve, not natural attrition — see
+/// `game::tests::labels::mna_resolves_injected_distress_within_the_fold_horizon`
+/// and `constants::DISTRESS_CAPITAL_FLOOR`). In natural play the wholesale
+/// ledger only *grows* labels, so nobody folds; that is precisely why this
+/// sweep sees 0 insolvent and 0 folds. §F's "failures occur across the seed
+/// set" is exercised by the injected-distress sweep; the *rarity* half —
+/// "failure is not the median label's fate" — is what the 0 natural folds here
+/// pin. Raising the floor to force attrition would falsely distress solvent-
+/// but-lean boutiques and risk the validated solvency, so it was rejected.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn label_capital_trajectories_over_fifteen_years() {
+    const HORIZON: u32 = 15 * constants::WEEKS_PER_YEAR;
+    const SEEDS: u64 = 24;
+
+    fn tier_rank(t: LabelTier) -> u8 {
+        match t {
+            LabelTier::Boutique => 0,
+            LabelTier::Independent => 1,
+            LabelTier::Major => 2,
+        }
+    }
+
+    let mut player_label: Vec<(String, i64, i64)> = Vec::new(); // (name, seeded, end)
+    let mut player_money: Vec<i32> = Vec::new();
+    let mut signed_at_end = 0u32;
+    let mut min_capital_any = i64::MAX;
+    let mut max_capital_any = i64::MIN;
+    let mut insolvent_instances = 0u32;
+    // Mobility + dominance bookkeeping.
+    let mut tier_changes = 0u32;
+    let mut promotions = 0u32;
+    let mut richest_is_major = 0u32;
+    let mut cap_by_tier = [0i64; 3]; // indexed by tier_rank: [Boutique, Indie, Major]
+
+    for seed in 1..=SEEDS {
+        let mut game = seeded_game(seed);
+        let seeded: std::collections::BTreeMap<u32, (i64, LabelTier)> = game
+            .world
+            .labels
+            .iter()
+            .map(|(id, l)| (*id, (l.capital, l.tier)))
+            .collect();
+        let _career = drive(Bot::LabelLoyalist, &mut game, HORIZON);
+
+        player_money.push(game.player.money);
+        if let Some(id) = game.band.current_deal().and_then(|d| d.label_id)
+            && let Some(label) = game.world.labels.get(&id)
+        {
+            signed_at_end += 1;
+            let start = seeded.get(&id).map(|(c, _)| *c).unwrap_or(0);
+            player_label.push((label.name.clone(), start, label.capital));
+        }
+
+        let mut richest: Option<(i64, LabelTier)> = None;
+        for (id, label) in &game.world.labels {
+            min_capital_any = min_capital_any.min(label.capital);
+            max_capital_any = max_capital_any.max(label.capital);
+            if label.capital < 0 {
+                insolvent_instances += 1;
+            }
+            cap_by_tier[tier_rank(label.tier) as usize] += label.capital.max(0);
+            if let Some((_, seed_tier)) = seeded.get(id)
+                && *seed_tier != label.tier
+            {
+                tier_changes += 1;
+                if tier_rank(label.tier) > tier_rank(*seed_tier) {
+                    promotions += 1;
+                }
+            }
+            if richest.is_none_or(|(cap, _)| label.capital > cap) {
+                richest = Some((label.capital, label.tier));
+            }
+        }
+        if matches!(richest, Some((_, LabelTier::Major))) {
+            richest_is_major += 1;
+        }
+    }
+
+    player_label.sort_by_key(|&(_, _, end)| end);
+    println!(
+        "player's label capital after 15 yrs (label-loyalist, {SEEDS} seeds; signed at end: {signed_at_end}):"
+    );
+    for (name, start, end) in &player_label {
+        println!(
+            "  {name:<22} seeded ${start:>12}  ->  end ${end:>13}  (Δ ${:>+13})",
+            end - start
+        );
+    }
+    player_money.sort_unstable();
+    let median_player_money = player_money[player_money.len() / 2];
+    println!(
+        "all labels/seeds at end: lowest capital ${min_capital_any}, highest ${max_capital_any}, insolvent instances (capital<0): {insolvent_instances}"
+    );
+    println!("player's own bank at end (median over {SEEDS} seeds): ${median_player_money}");
+    println!(
+        "aggregate capital by tier: boutique ${}, independent ${}, major ${}",
+        cap_by_tier[0], cap_by_tier[1], cap_by_tier[2]
+    );
+    println!(
+        "tier mobility across the set: {tier_changes} labels changed tier ({promotions} promotions); richest label was a Major on {richest_is_major}/{SEEDS} seeds"
+    );
+
+    // (1) Solvent: nobody underwater.
+    assert_eq!(
+        insolvent_instances, 0,
+        "the industry must stay solvent in natural play — {insolvent_instances} label-instances ended with negative capital"
+    );
+    assert!(
+        min_capital_any > 0,
+        "the leanest label should still be above water in natural play (lowest ${min_capital_any})"
+    );
+    // (2) Sane band: era millions, never runaway billions.
+    assert!(
+        max_capital_any < 1_000_000_000,
+        "no label should hyper-inflate into the billions (richest ${max_capital_any}); the ledger is decompressed, not broken"
+    );
+    // (3) Gangbuster: the signed superstar's label clears era-real millions, and
+    // the player banks era-real millions — not the v0.7 compressed thousands.
+    assert!(
+        signed_at_end * 2 >= SEEDS as u32,
+        "the label-loyalist should be signed at the horizon on most seeds; only {signed_at_end}/{SEEDS}"
+    );
+    for (name, start, end) in &player_label {
+        assert!(
+            *end > 1_000_000,
+            "the signed superstar's label {name} should clear era-real millions, ended ${end}"
+        );
+        assert!(
+            end > start,
+            "a productive signed act must leave its label richer than it seeded it ({name}: ${start} -> ${end})"
+        );
+    }
+    assert!(
+        median_player_money > 1_000_000,
+        "the player as a recouped superstar should bank era-real millions (median ${median_player_money}), not the old compressed thousands"
+    );
+    // (4) Stable with mobility: majors dominant in aggregate, but the ladder moves.
+    assert!(
+        cap_by_tier[2] > cap_by_tier[1] && cap_by_tier[2] > cap_by_tier[0],
+        "majors should hold the aggregate capital lead (boutique ${}, indie ${}, major ${})",
+        cap_by_tier[0],
+        cap_by_tier[1],
+        cap_by_tier[2]
+    );
+    assert!(
+        tier_changes > 0,
+        "the industry should show tier mobility across the seed set — no label changed tier in 15 years on any seed"
+    );
+    assert!(
+        richest_is_major * 2 >= SEEDS as u32,
+        "a Major should top the capital table on most seeds (only {richest_is_major}/{SEEDS})"
+    );
+}
+
 /// With both story-event taps silenced (they can hand out fame), a band
 /// that never records is fully deterministic: fame never exceeds
 /// `LIVE_FAME_BASE_CAP`, on every seed, every time.
@@ -1215,6 +1599,32 @@ fn fame_ramp_onset_is_gentle_even_across_grace_tier_boundaries() {
 // Long sweeps: run by hand, report the numbers.
 // ---------------------------------------------------------------------------
 
+/// The whole-population balance report — and the sweep that pins §I's
+/// cross-bot targets. Beyond "no bot ever panics", it asserts:
+///
+/// - **Scale re-validation (§F): a signed act nets ≥ an indie over a career.**
+///   The label-loyalist's median 15-year net worth must top both the eternal
+///   indie-lifer's and the balanced-indie's — signing is a real upgrade, not a
+///   trap. Measured 2026-07-25 (release, 60 seeds): loyalist **$16.7M** vs
+///   indie-lifer **$3.5M** vs balanced-indie **$3.9M**.
+/// - **No mass bankruptcy (§F "nobody dies of money").** Every bot keeps its
+///   bankruptcy (`WentBroke`) rate a clear minority and its deaths rare — the
+///   decompressed economy is survivable, not a death spiral. Measured: broke
+///   4–8/60 across bots (worst: studio-rat 8/60 ≈ 13%); died 0 everywhere
+///   except the road-dog's 2/60 touring deaths.
+/// - **Certification frequency — ratified (design-call, L-SIM).** A signed
+///   superstar now certifies a *median 71 records* (max 75) over a 15-year
+///   career, up from the v0.7 "median 3 / 1–3 silver" target. This is the
+///   **intended** direction of the cycle — records sell worldwide off a label's
+///   reach, so gangbuster money is literal. The retired v0.7 target text lives
+///   on in `docs/DESIGN-v0.7-money-cycle.md` (§D/§I) and `CHANGELOG.md`; those
+///   are not L-SIM's to edit (docs / L-CLOSE own them) and are flagged for
+///   reconciliation at cycle close. We ratify the new magnitude with a floor an
+///   order above the old target and a sane ceiling — *not* by raising the copy
+///   thresholds, which the user explicitly wanted lower-friction, not higher.
+///   (Only the label-loyalist certifies at volume: an unsigned indie's mail-
+///   order reach never clears the 50k Silver bar, so the other bots median 0 —
+///   itself the proof that a label's international reach is what sells records.)
 #[test]
 #[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
 fn fifteen_year_careers_never_panic_and_print_the_balance_report() {
@@ -1230,6 +1640,152 @@ fn fifteen_year_careers_never_panic_and_print_the_balance_report() {
     }
     print_report(&careers);
     assert!(panics.is_empty(), "sim panicked: {panics:?}");
+
+    // --- §I cross-bot assertions (measure-then-pin; see the doc comment) ---
+    let runs_of = |bot: Bot| -> Vec<&Career> { careers.iter().filter(|c| c.bot == bot).collect() };
+    let median_money = |bot: Bot| -> i32 {
+        median(runs_of(bot).iter().map(|c| c.final_money).collect()).unwrap_or(0)
+    };
+    let median_certs = |bot: Bot| -> usize {
+        median(runs_of(bot).iter().map(|c| c.certifications).collect()).unwrap_or(0)
+    };
+
+    // No mass bankruptcy: broke a clear minority, deaths rare — for every bot.
+    for bot in Bot::ALL {
+        let runs = runs_of(bot);
+        let broke = runs
+            .iter()
+            .filter(|c| c.ending == Ending::WentBroke)
+            .count();
+        let died = runs.iter().filter(|c| c.ending == Ending::Died).count();
+        assert!(
+            broke * 3 < runs.len(),
+            "{} went broke {broke}/{} times — bankruptcy should be a clear minority, not the economy's default",
+            bot.name(),
+            runs.len()
+        );
+        assert!(
+            died * 10 <= runs.len(),
+            "{} died {died}/{} times — the decompressed economy must not be a death spiral",
+            bot.name(),
+            runs.len()
+        );
+    }
+
+    // Scale re-validation (§F): signing nets ≥ staying indie, over a full career.
+    let loyalist = median_money(Bot::LabelLoyalist);
+    let indie = median_money(Bot::IndieLifer);
+    let balanced = median_money(Bot::BalancedIndie);
+    assert!(
+        loyalist >= indie && loyalist >= balanced,
+        "a signed act should net at least an indie over a career: label-loyalist median ${loyalist} vs indie-lifer ${indie} / balanced-indie ${balanced}"
+    );
+
+    // Certification frequency ratified: the signed superstar certifies at
+    // gangbuster volume — an order of magnitude above the retired v0.7 "med 3",
+    // bounded below the absurd (it cannot certify more records than it ships).
+    let certs = median_certs(Bot::LabelLoyalist);
+    assert!(
+        (30..=150).contains(&certs),
+        "signed-superstar certification frequency out of the ratified band: median {certs} (expected ~71, an order above the retired v0.7 'median 3' target)"
+    );
+}
+
+/// L-SIM (design §F/§I) — **matched-lifestyle upkeep is a sane share of
+/// income.** The homebody matches its lifestyle tier to what it can afford, so
+/// at its settled tier the weekly upkeep should be a real bite of income
+/// (§F target: 10–25%), not a rounding error and not a death spiral. We drive
+/// a homebody to maturity, then measure over a two-year window of single-week
+/// gig/rest turns only: with no recording, touring, deposits, doctor visits,
+/// or (suppressed) incidents, the *only* money out is lifestyle upkeep, so
+/// `income = Δmoney + upkeep` is exact each week. The tier is free to float
+/// (upkeep is read from the current tier every week, so an eviction mid-window
+/// keeps the arithmetic exact — and settling downward is itself the game's own
+/// "match to affordability").
+///
+/// Measured 2026-07-25 (24 seeds): **median 21.4%**, every seed 20.4–22.3% —
+/// the homebody settles in a Mansion and spends ~21% of a ~$4M/2yr income on
+/// upkeep. The band is asserted, not a point value — the homebody is an
+/// *unsigned* indie (mail-order reach, no certifications), so its income is
+/// indie-scale and the ratio lands in the designed 10–25% range rather than
+/// the near-zero a signed superstar's income would produce.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn matched_lifestyle_upkeep_is_a_sane_share_of_income() {
+    const SEEDS: u64 = 24;
+    const CAREER: u32 = 15 * constants::WEEKS_PER_YEAR;
+    const WINDOW: u32 = 2 * constants::WEEKS_PER_YEAR;
+
+    let mut ratios: Vec<f64> = Vec::new();
+    let mut rows: Vec<(u64, &'static str, i64, i64, f64)> = Vec::new();
+
+    for seed in 1..=SEEDS {
+        let mut game = seeded_game(seed);
+        drive(Bot::Homebody, &mut game, CAREER);
+        // A career that already ended (broke/died) has no steady income to
+        // measure — the survival property is the balance report's job.
+        if game.is_game_over() {
+            continue;
+        }
+        suppress_story_events(&mut game);
+
+        let mut total_upkeep = 0i64;
+        let mut total_income = 0i64;
+        for _ in 0..WINDOW {
+            if game.is_game_over() {
+                break;
+            }
+            let upkeep = i64::from(game.player.lifestyle.upkeep_per_week());
+            let before = game.player.money;
+            // Single-week actions only (gig or laze): each advances exactly one
+            // week and charges exactly one week of upkeep, keeping the money
+            // decomposition exact. No TakeBreak (multi-week), no discretionary
+            // spend.
+            let action = gig_or_rest(&game);
+            if game.process_turn(action).is_err() {
+                game.process_turn(GameAction::LazeAround)
+                    .expect("lazing is always allowed");
+            }
+            game.take_turn_log();
+            game.events.last_event_week = u32::MAX;
+            let after = game.player.money;
+            total_upkeep += upkeep;
+            total_income += i64::from(after - before) + upkeep;
+        }
+
+        let tier = game.player.lifestyle.label();
+        if total_income > 0 {
+            let ratio = total_upkeep as f64 / total_income as f64;
+            ratios.push(ratio);
+            rows.push((seed, tier, total_upkeep, total_income, ratio));
+        }
+    }
+
+    println!(
+        "matched-lifestyle upkeep as a share of income (homebody, {SEEDS} seeds, 2-yr window):"
+    );
+    for (seed, tier, upkeep, income, ratio) in &rows {
+        println!(
+            "  seed {seed:>2}: end tier {tier:<12} upkeep ${upkeep:>8}, income ${income:>9}  ->  {:.1}%",
+            ratio * 100.0
+        );
+    }
+    assert!(
+        !ratios.is_empty(),
+        "no surviving homebody career produced a measurable income window"
+    );
+    ratios.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let median = ratios[ratios.len() / 2];
+    println!("median upkeep/income ratio: {:.1}%", median * 100.0);
+
+    // §F target: matched-lifestyle upkeep is 10–25% of income. Asserted on the
+    // median at the design floor with slack above 25% for seed spread — this
+    // catches upkeep going trivial (< 10%) or turning into a spiral (> 30%).
+    assert!(
+        (0.10..=0.30).contains(&median),
+        "matched-lifestyle upkeep should be ~10–25% of income (§F); median was {:.1}%",
+        median * 100.0
+    );
 }
 
 #[test]
@@ -1391,6 +1947,40 @@ fn tour_profitability_by_rig_and_fame_sweep() {
                     "  fame {fame:>3}  {:<16}: (rig gated — unavailable at this fame)",
                     rig.label()
                 );
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  fame {fame:>3}  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+            avgs.push((fame, rig, avg));
+        }
+    }
+
+    // Review follow-up (design §A "full production profitable only at 75+"):
+    // the assertions below deliberately stop at fame 80, but the real superstar
+    // tours at 95-100. Observe (no assert) whether the top rigs ever escape the
+    // red there, so a "permanent trap" (full production never profitable, an
+    // inherited v0.7 question) is visible in the report rather than hidden.
+    //
+    // L-SIM RULING (design-call, 2026-07-25): the full-production rig is a
+    // **permanent money-loser** — measured net −$30,690 (fame 80), −$27,514
+    // (fame 95), −$26,456 (fame 100); it never turns a profit at any fame. The
+    // van/bus stay healthy and the truck & crew clears a small profit from
+    // fame 95, so only the top rig is stuck. This is **out of scope for the
+    // label cycle**: it is inherited v0.7 tour economics (box office vs quoted
+    // rig cost), untouched by v0.8, and retuning tour costs here would reach
+    // outside L-SIM's remit and risk the validated touring balance. Left as a
+    // documented follow-up for a future tour-economics pass; the fame-95/100
+    // rows below keep it measured (observe-only) so it cannot silently drift.
+    for fame in [95u8, 100] {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .collect();
+            if nets.is_empty() {
                 continue;
             }
             let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;

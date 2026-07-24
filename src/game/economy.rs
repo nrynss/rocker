@@ -77,6 +77,37 @@ impl Game {
         }
     }
 
+    /// M11 (design §C): the foreign-territory presence floor a release carries
+    /// from its distribution *before any touring*. This is what makes a label
+    /// deal — or a bought indie channel — actually put the record in foreign
+    /// shops, rather than the pre-M11 model where `market_reach` was multiplied
+    /// by a regional fame that only touring could raise (so a major's reach did
+    /// nothing abroad and every act sold UK-only). A signed release floors at a
+    /// fraction of the label's `market_reach`; an indie release floors at its
+    /// channel's export reach. Touring's regional fame adds on top of this
+    /// (`territory_presence`), so the road still deepens a specific market — it
+    /// is no longer the *only* way to reach one. Same captured-state shape as
+    /// [`Game::reach_for`] so the borrow-constrained tail loop can call it too.
+    fn international_floor_for(
+        market_reach: Option<u8>,
+        channel: Option<DistributionChannel>,
+    ) -> f32 {
+        match market_reach {
+            // Squared, not linear, in the label's reach: only a *major*'s
+            // network is genuinely global, while a small independent (reach
+            // ~20-45) is a domestic/regional operation that barely reaches
+            // abroad on distribution alone. The curve keeps a top major near
+            // the design's "present on all four territories → 3–4× copies"
+            // (reach 95 → floor ~0.81 → ~3.4× demand) while a boutique label
+            // stays close to home (reach 20 → floor ~0.04 → ~1.1×).
+            Some(reach) => {
+                let r = f32::from(reach) / 100.0;
+                r * r * LABEL_INTERNATIONAL_PRESENCE_COEFF
+            }
+            None => channel.unwrap_or_default().international_floor(),
+        }
+    }
+
     /// M10 (design §C): the `regional_fame` country key for a sales
     /// territory. `regional_fame` is keyed `"{country}:{region}"`
     /// (`actions/live.rs`); the four `ChartRegion::TERRITORIES` map onto the
@@ -95,10 +126,12 @@ impl Game {
 
     /// M10 (design §C): how known the act is in a country — the strongest
     /// `regional_fame` it has built across that country's regions, normalized
-    /// to `0..1`. Touring raises regional fame (`actions/live.rs`), so a
-    /// studio-only act reads 0 abroad. Taking the max over the country's
-    /// region entries is order-independent, so iterating the `regional_fame`
-    /// `HashMap` here stays deterministic despite its random iteration order.
+    /// to `0..1`. Touring raises regional fame (`actions/live.rs`); a
+    /// studio-only act reads 0 here and reaches a foreign territory only
+    /// through its distribution floor (M11, `international_floor_for`). Taking
+    /// the max over the country's region entries is order-independent, so
+    /// iterating the `regional_fame` `HashMap` here stays deterministic despite
+    /// its random iteration order.
     fn regional_fame_factor(&self, country: &str) -> f32 {
         let prefix = format!("{country}:");
         let best = self
@@ -111,24 +144,26 @@ impl Game {
         f32::from(best) / REGIONAL_FAME_PRESENCE_DIVISOR
     }
 
-    /// M10 (design §C): the player's presence on one sales territory —
-    /// `reach × regional-fame factor`, with the UK home floor. `reach` is the
-    /// release's distribution reach and is constant across territories, so
-    /// callers compute it once and pass it in; only the regional-fame factor
-    /// varies by territory. Used to scale both the chart submission and the
-    /// demand sum for each of the four `ChartRegion::TERRITORIES`.
-    fn territory_presence(&self, region: world::ChartRegion, reach: f32) -> f32 {
+    /// M10/M11 (design §C): the player's presence on one sales territory.
+    /// `reach` (the release's distribution reach) and `intl_floor` (its
+    /// distribution's foreign presence floor) are constant across territories,
+    /// so callers compute them once and pass them in; only the regional-fame
+    /// factor varies by territory. Used to scale both the chart submission and
+    /// the demand sum for each of the four `ChartRegion::TERRITORIES`.
+    fn territory_presence(&self, region: world::ChartRegion, reach: f32, intl_floor: f32) -> f32 {
         if matches!(region, world::ChartRegion::Uk) {
             // Home market: the act's distribution reach carries it directly.
-            // A label's `market_reach` (or a bought indie channel) sells you
-            // at home without a domestic tour — regional fame only decides
-            // how far you reach *abroad* (design §C: "tours carry your
-            // records abroad"). A non-touring act therefore sells at home
-            // roughly as it did before regional charts; touring adds the
-            // three foreign territories on top.
             reach
         } else {
-            reach * self.regional_fame_factor(Self::territory_country(region))
+            // Foreign markets (M11): distribution puts the record on the shelf
+            // — a label's network or a bought export channel gives a presence
+            // floor with no touring at all — and touring's regional fame adds
+            // on top, deepening a specific market toward full presence. Before
+            // M11 the floor was implicitly 0, so `market_reach` sold nothing
+            // abroad and only the road reached foreign territories.
+            let factor =
+                (intl_floor + self.regional_fame_factor(Self::territory_country(region))).min(1.0);
+            reach * factor
         }
     }
 
@@ -198,6 +233,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the pressing + promo outlay that just accrued to the
+        // recoupment ledger also leaves the label's balance sheet.
+        self.credit_label_capital(-i64::from(outlay));
     }
 
     /// M5 (§E-2): route a signed act's royalty through the label's recoupment
@@ -215,6 +253,166 @@ impl Game {
         let applied = (royalty as i32).min(deal.unrecouped);
         deal.unrecouped -= applied;
         royalty - applied as u32
+    }
+
+    /// L-ENTITY (§A): the `GameWorld::labels` id of the player's current label,
+    /// if signed. Prefers the deal's stamped `label_id` (`action_accept_deal`),
+    /// falling back to a unique-name match for a deal signed before that field
+    /// existed (an old save). `None` when unsigned or when labels aren't seeded.
+    fn player_label_id(&self) -> Option<u32> {
+        let deal = self.band.current_deal()?;
+        if let Some(id) = deal.label_id {
+            return Some(id);
+        }
+        self.world
+            .labels
+            .iter()
+            .find(|(_, label)| label.name == deal.label_name)
+            .map(|(id, _)| *id)
+    }
+
+    /// L-ENTITY (§A): book `delta` dollars to the player's label's balance
+    /// sheet — positive is wholesale margin earned, negative is money spent.
+    /// The single entry point every label-capital move in the money pipeline
+    /// goes through. A no-op when unsigned or when the label isn't in the world
+    /// (a pre-0.8 save with no seeded labels), so it can never touch the
+    /// player's income or recoupment — it only ADDS the label's side (§A).
+    fn credit_label_capital(&mut self, delta: i64) {
+        if delta == 0 {
+            return;
+        }
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        if let Some(label) = self.world.labels.get_mut(&id) {
+            label.book(delta);
+        }
+    }
+
+    /// L-REACH (§C): record the player's charting release in its label's rolling
+    /// `hit_window` — the recent-form input to the label's reach-drift target.
+    /// Resolved the same way as the wholesale ledger (`player_label_id`), so it
+    /// no-ops when unsigned or when the label isn't a seeded world entity (a
+    /// pre-0.8 save / the "Test Records" placeholder). Scene-band chart hits are
+    /// L-ROSTER's feed (§D); this books only the player's.
+    fn record_label_chart_hit(&mut self, release_id: u32) {
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        if let Some(label) = self.world.labels.get_mut(&id) {
+            label.record_chart_hit(release_id);
+        }
+    }
+
+    /// L-MNA (§F): reconcile the PLAYER's contract with any M&A that hit the
+    /// label it is signed to. The weekly world pass (`GameWorld::run_label_mna`)
+    /// transitions label *status* and moves scene rosters, but the player's deal
+    /// lives on `self.band`, so its transfer/void happens here — the
+    /// deal-transfer/void call-site (design §F). Invoked once a week from the
+    /// sales pass, after the world tick has run its M&A pass and before this
+    /// week's margin books, so an acquisition's new owner books the week's
+    /// margin and a fold's void lets the week sell at indie rates.
+    ///
+    /// - **Acquired:** retag the deal onto the acquirer via
+    ///   `Band::transfer_deal_to_acquirer` — terms carry; the acquirer's
+    ///   reach/tier apply going forward (L-REACH's read-through handles new
+    ///   releases once `label_id` points at the acquirer).
+    /// - **Folding:** void the deal via `Band::void_deal_on_label_fold` (the
+    ///   breach write-off path: free agent, any `unrecouped` written off, no
+    ///   punitive cooldown — a fold is not the band's breach).
+    ///
+    /// Idempotent: after a transfer the deal points at an `Active` acquirer, so a
+    /// later week no-ops; a chain (the acquirer itself later folds or is
+    /// acquired) resolves one hop per week. No-op when unsigned, or when the
+    /// label isn't a seeded world entity (a pre-0.8 save / the test placeholder).
+    pub(super) fn reconcile_player_label_mna(&mut self) {
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        let (status, acquired_by) = {
+            let Some(label) = self.world.labels.get(&id) else {
+                return;
+            };
+            (label.status, label.acquired_by)
+        };
+        match status {
+            world::LabelStatus::Acquired => {
+                let Some(acquirer_id) = acquired_by else {
+                    return;
+                };
+                let (acquirer_name, acquirer_tier, acquirer_reach) = {
+                    let Some(acquirer) = self.world.labels.get(&acquirer_id) else {
+                        return;
+                    };
+                    (
+                        acquirer.name.clone(),
+                        acquirer.tier.deal_tier(),
+                        acquirer.market_reach,
+                    )
+                };
+                if let Some(former_label) = self.band.transfer_deal_to_acquirer(
+                    acquirer_id,
+                    acquirer_name.clone(),
+                    acquirer_tier,
+                    acquirer_reach,
+                ) {
+                    self.log(format!(
+                        "🏦 {} has been acquired by {} — your contract moves with it, terms unchanged.",
+                        former_label, acquirer_name
+                    ));
+                }
+            }
+            world::LabelStatus::Folding => {
+                if let Some(voided) = self.band.void_deal_on_label_fold() {
+                    self.log(format!(
+                        "🏚️ {} has folded — you're a free agent again.",
+                        voided.label_name
+                    ));
+                    if voided.written_off > 0 {
+                        self.log(format!(
+                            "🗑️ ${} still owed is written off with the label — you're clear.",
+                            voided.written_off
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// L-REACH (§C): the reach a NEW signed release freezes onto itself at record
+    /// time. It reads the label's *live* `market_reach` (which now drifts, §C) —
+    /// not the value frozen into `RecordDeal` at signing — so a record cut after
+    /// the label has risen or fallen carries the label's reach *now*. That value
+    /// is then frozen on the release as `label_market_reach` for its catalogue
+    /// tail: the sales-fix invariant is preserved because the tail reads the
+    /// per-release frozen reach via `reach_for` / `international_floor_for`, never
+    /// the still-drifting label. Falls back to the deal's signing reach when the
+    /// label isn't a seeded world entity (a pre-0.8 save / the test placeholder),
+    /// and `None` for an unsigned (indie) release — exactly the previous value in
+    /// both those cases, so nothing changes for an unsigned or unseeded deal.
+    pub(super) fn new_release_frozen_reach(&self) -> Option<u8> {
+        let deal = self.band.current_deal()?;
+        let live = self
+            .player_label_id()
+            .and_then(|id| self.world.labels.get(&id))
+            .map(|label| label.market_reach);
+        Some(live.unwrap_or(deal.market_reach))
+    }
+
+    /// L-ENTITY (§A): the label's wholesale margin on `copies` sold, given the
+    /// royalty that actually reached the artist for this batch
+    /// (`royalty_to_artist` — the recoupment-netted `to_player`). The label
+    /// collects wholesale and pays manufacturing + mechanical on every copy;
+    /// the artist is paid only what recoupment lets through, so a
+    /// still-unrecouped act's retained royalty stays here as the label's margin
+    /// (design §A — "recoupment retains the player's royalty to the label, it
+    /// does not delete money"). `manufacturing` is the sold-copy COGS; the run's
+    /// pressing cash is a separate release-time debit (see the constant's note).
+    fn label_wholesale_margin(copies: u32, royalty_to_artist: u32) -> i64 {
+        let per_copy =
+            LABEL_WHOLESALE_PER_COPY - LABEL_MANUFACTURING_PER_COPY - LABEL_MECHANICAL_PER_COPY;
+        (copies as f32 * per_copy) as i64 - i64::from(royalty_to_artist)
     }
 
     /// M5 (§E-1, label half): a signed act's release that sold out or crossed
@@ -238,6 +436,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the fresh run's pressing cost leaves the label's
+        // balance sheet, same as it accrues to the recoupment ledger.
+        self.credit_label_capital(-i64::from(outlay));
         Some(format!(
             "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
             label_name, release.name, reason, fresh_run
@@ -276,6 +477,9 @@ impl Game {
         if let Some(deal) = self.band.record_deal.as_mut() {
             deal.unrecouped = deal.unrecouped.saturating_add(outlay);
         }
+        // L-ENTITY (§A): the tail-path fresh run's pressing cost also leaves
+        // the label's balance sheet.
+        self.credit_label_capital(-i64::from(outlay));
         self.log(format!(
             "🏭 {} presses a fresh run of '{}' ({}) — {} more copies in stores.",
             label_name, release_name, reason, fresh_run
@@ -297,9 +501,17 @@ impl Game {
         // moves ~3–4× a home-only act at the same score — which is why the §D
         // certification thresholds sit higher.
         let reach = self.distribution_multiplier(release);
+        let intl_floor = Self::international_floor_for(
+            release
+                .label_market_reach
+                .or_else(|| self.band.current_deal().map(|deal| deal.market_reach)),
+            release.distribution_channel,
+        );
         let demand_units: f32 = world::ChartRegion::TERRITORIES
             .iter()
-            .map(|&territory| sales_score as f32 * self.territory_presence(territory, reach))
+            .map(|&territory| {
+                sales_score as f32 * self.territory_presence(territory, reach, intl_floor)
+            })
             .sum();
         let demand = (demand_units * UNITS_PER_SCORE_POINT) as u32;
         let sold_out = release.copies_pressed > 0 && demand > release.copies_pressed;
@@ -308,9 +520,13 @@ impl Game {
         } else {
             demand
         };
-        // M7 (§F): income divides by SALES_INCOME_DIVISOR so the raised
-        // UNITS_PER_SCORE_POINT lifts copies-sold (for certification) without
-        // inflating the money the v0.6 balance was tuned around.
+        // M7 (§F) → L-SCALE (§B): income divided by `SALES_INCOME_DIVISOR` to
+        // hold the compressed v0.6/v0.7 money economy flat while
+        // `UNITS_PER_SCORE_POINT` lifted copies-sold for certification. L-SCALE
+        // retired that divisor (now 1), so record income rises ×3 to the
+        // era-real scale — in lockstep with the ×3 on every other dollar. The
+        // `/ SALES_INCOME_DIVISOR` is kept (a no-op at 1) so the coupling stays
+        // visible and the payout tracks the constant if it ever moves again.
         let income = if let Some(deal) = self.band.current_deal() {
             ((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32
                 / SALES_INCOME_DIVISOR
@@ -328,6 +544,10 @@ impl Game {
 
     /// Compute the certification level (0 = none, 1 = silver, 2 = gold,
     /// 3 = platinum, 4+ = multi-platinum count) from copies_sold.
+    ///
+    /// Pure and era-agnostic — the copy thresholds never move. The game-year
+    /// availability of each tier is applied separately at award-check time via
+    /// [`Self::era_max_certification_level`] (L-CERT, design §I).
     pub(crate) fn compute_certification_level(copies_sold: u32) -> u8 {
         if copies_sold < CERT_SILVER_THRESHOLD {
             0
@@ -343,10 +563,41 @@ impl Game {
         }
     }
 
+    /// The highest certification level awardable in a given game year (L-CERT,
+    /// design §I). Certifications are gated to real industry history: the copy
+    /// thresholds are unchanged, but a tier the era has not introduced yet is
+    /// simply unreachable.
+    ///
+    /// - `year < 1973` → 0: no sales-certification scheme yet, nothing awards.
+    /// - `1973..1976` → 2 (Gold): Platinum not yet introduced.
+    /// - `1976..1984` → 3 (Platinum): multi-platinum not yet introduced.
+    /// - `year >= 1984` → all levels (multi-platinum, 4+).
+    ///
+    /// This is the cap applied to `new_level` at award-check time, so a record
+    /// still selling in a later era can reach a tier the week it crosses the
+    /// threshold in a year where that tier exists.
+    pub(crate) fn era_max_certification_level(year: u32) -> u8 {
+        if year < CERT_YEAR_SCHEME_START {
+            0
+        } else if year < CERT_YEAR_PLATINUM {
+            2 // Gold is the ceiling; Platinum does not exist yet.
+        } else if year < CERT_YEAR_MULTIPLATINUM {
+            3 // Platinum is the ceiling; multi-platinum does not exist yet.
+        } else {
+            u8::MAX // Every tier is available.
+        }
+    }
+
     /// Compute certification awards for a release that has crossed a threshold.
     /// Returns a tuple of (old_level, new_level) if a new level was crossed, or None.
-    pub(crate) fn compute_certification_awards(release: &Release) -> Option<(u8, u8)> {
-        let new_level = Self::compute_certification_level(release.copies_sold);
+    ///
+    /// `era_max` caps the awardable level to what the game year allows (L-CERT,
+    /// design §I) — callers pass [`Self::era_max_certification_level`] for the
+    /// current year. Capping `new_level` *before* comparing to `release.certified`
+    /// is what makes the gate honest: pre-1973 nothing certifies, and a Platinum-
+    /// volume record in 1974 tops out at Gold until Platinum exists.
+    pub(crate) fn compute_certification_awards(release: &Release, era_max: u8) -> Option<(u8, u8)> {
+        let new_level = Self::compute_certification_level(release.copies_sold).min(era_max);
         if new_level > release.certified {
             Some((release.certified, new_level))
         } else {
@@ -446,6 +697,11 @@ impl Game {
             return;
         }
         self.last_sales_pass_week = Some(self.week);
+        // L-MNA (§F): once a week, right after the weekly world tick has run its
+        // M&A pass, reconcile the player's contract with any acquisition/folding
+        // of its label — before this week's margin books, so the new owner (on
+        // acquisition) or indie rates (on a fold void) apply to this same pass.
+        self.reconcile_player_label_mna();
         let current_week = self.week;
 
         // M5 (§E-2): snapshot the recoupment ledger so the weekly status line
@@ -476,6 +732,12 @@ impl Game {
                 // understate a record's peak (a #1 UK single rarely tops the
                 // summed Worldwide 100).
                 let reach = self.distribution_multiplier(&release);
+                let intl_floor = Self::international_floor_for(
+                    release
+                        .label_market_reach
+                        .or_else(|| self.band.current_deal().map(|deal| deal.market_reach)),
+                    release.distribution_channel,
+                );
                 let band_name = self.band.name.clone();
                 let mut best_position: Option<usize> = None;
 
@@ -496,8 +758,9 @@ impl Game {
                 }
 
                 for territory in world::ChartRegion::TERRITORIES {
-                    let territory_score =
-                        (sales_score as f32 * self.territory_presence(territory, reach)) as u32;
+                    let territory_score = (sales_score as f32
+                        * self.territory_presence(territory, reach, intl_floor))
+                        as u32;
                     if let Some(position) = self.world.submit_chart_entry(
                         territory,
                         release.name.clone(),
@@ -517,6 +780,12 @@ impl Game {
                 }
                 if let Some(position) = best_position {
                     release.peak_chart_position = Some(position.min(u8::MAX as usize) as u8);
+                    // L-REACH (§C): a roster release that charts feeds its
+                    // label's rolling hit window — the recent-form input to the
+                    // reach-drift target, so a label riding a hit trends up. The
+                    // player's charting releases feed the player's label here;
+                    // scene-band hits are L-ROSTER's feed (§D).
+                    self.record_label_chart_hit(release.id);
                 }
 
                 let (income, units_sold, sold_out) =
@@ -529,13 +798,31 @@ impl Game {
                 let to_player = self.apply_recoupment(income);
                 self.player.earn_money(to_player);
 
+                // L-ENTITY (§A): book the label's wholesale margin on this
+                // release's first-run copies. Conserved single accounting —
+                // the label kept the spread on every copy, and the royalty the
+                // player did NOT receive (retained while unrecouped) stays with
+                // the label as margin. Player income/recoupment above is
+                // untouched; this only ADDS the label's side. Scene-band roster
+                // P&L is L-ROSTER's hook (§D) — this books only the player's.
+                if self.band.current_deal().is_some() {
+                    let margin = Self::label_wholesale_margin(units_sold, to_player);
+                    self.credit_label_capital(margin);
+                }
+
                 // Check for certification milestones (§D). The 🏆 lines are
                 // held back like the 🏭 restock below: the award's mechanics
                 // (fame bump sizes the fresh run) stay here, but its news
                 // must follow the 💿/📦 sales lines that caused it.
                 let mut certified_this_pass = false;
                 let mut cert_lines = Vec::new();
-                if let Some((old_level, new_level)) = Self::compute_certification_awards(&release) {
+                // L-CERT (§I): cap the awardable tier to what this game year
+                // allows before deciding the transition — early years award
+                // less (or nothing) even at hit volume.
+                let era_max = Self::era_max_certification_level(self.timeline.get_current_year());
+                if let Some((old_level, new_level)) =
+                    Self::compute_certification_awards(&release, era_max)
+                {
                     let release_name = release.name.clone();
                     let copies_sold = release.copies_sold;
                     release.certified = new_level;
@@ -686,9 +973,17 @@ impl Game {
         // mutable borrow of `self.band`), so M5's recoupment paydown and the
         // player payout both happen once, after the loop.
         let mut catalog_gross_this_week: u32 = 0;
+        // L-ENTITY (§A): copies the catalog tail sells this week, summed across
+        // releases, so the label's wholesale margin is booked once after the
+        // loop (which holds a `&mut self.band` and can't touch `self.world`).
+        let mut catalog_copies_sold_this_week: u32 = 0;
 
         // Collect certifications to apply after the loop (to avoid borrow checker issues).
         let mut certifications_to_award: Vec<(String, u8, u8, u32)> = Vec::new();
+        // L-CERT (§I): the era's certification ceiling, captured up front for
+        // the same borrow reason as the deal terms above — the tail loop holds
+        // a `&mut self.band` and can't call `&self`. Constant across the pass.
+        let era_max = Self::era_max_certification_level(self.timeline.get_current_year());
 
         // M5 (§E-1, label half — tail path): a signed release runs its stock
         // down over months, and certification (§D) lands here on the tail, not
@@ -748,16 +1043,24 @@ impl Game {
                             release.label_market_reach.or(market_reach),
                             release.distribution_channel,
                         );
+                        // M11: the release's own foreign presence floor from
+                        // its distribution, captured per release for the same
+                        // borrow reason as `reach` above.
+                        let intl_floor = Self::international_floor_for(
+                            release.label_market_reach.or(market_reach),
+                            release.distribution_channel,
+                        );
                         // Mirrors `territory_presence`: the UK home market
                         // rides the act's reach directly; the three foreign
-                        // territories scale by regional fame (touring).
+                        // territories ride the distribution floor plus touring's
+                        // regional fame, clamped to full presence.
                         let presence_sum: f32 = territory_fame
                             .iter()
                             .map(|&(region, fame_factor)| {
                                 if matches!(region, world::ChartRegion::Uk) {
                                     reach
                                 } else {
-                                    reach * fame_factor
+                                    reach * (intl_floor + fame_factor).min(1.0)
                                 }
                             })
                             .sum();
@@ -788,10 +1091,12 @@ impl Game {
                             continue;
                         }
                         release.copies_sold += units;
+                        catalog_copies_sold_this_week += units;
                         let gross = units * income_per_copy;
-                        // M7 (§F): same SALES_INCOME_DIVISOR as the first-run
-                        // payout — the copy bump feeds certification, not the
-                        // tail's cash.
+                        // M7 (§F) → L-SCALE (§B): same `SALES_INCOME_DIVISOR`
+                        // as the first-run payout — retired to 1 by L-SCALE, so
+                        // the catalog tail's cash rises ×3 to the era-real scale
+                        // in step with the first run.
                         let ongoing_income = match royalty_rate {
                             Some(rate) => (gross as f32 * rate) as u32 / SALES_INCOME_DIVISOR,
                             None => gross / SALES_INCOME_DIVISOR,
@@ -801,8 +1106,11 @@ impl Game {
 
                         // Check for certification milestones after each tail sale (§D).
                         // We collect these and apply them after the loop to avoid borrow checker issues.
+                        // L-CERT (§I): `era_max` gates the awardable tier to the
+                        // game year, so a record that keeps selling into a later
+                        // era catches up to a tier once it becomes available.
                         if let Some((old_level, new_level)) =
-                            Self::compute_certification_awards(release)
+                            Self::compute_certification_awards(release, era_max)
                         {
                             certifications_to_award.push((
                                 release.name.clone(),
@@ -864,6 +1172,16 @@ impl Game {
                 "💵 Catalog royalties trickle in: ${}.",
                 catalog_to_player
             ));
+        }
+        // L-ENTITY (§A): book the label's wholesale margin on the catalog
+        // tail's copies (same conserved model as the first-run path above).
+        // `royalty_rate` is `Some` exactly when signed, so this books only
+        // under a deal; retained royalty (paid down against the ledger) stays
+        // with the label as margin.
+        if royalty_rate.is_some() {
+            let margin =
+                Self::label_wholesale_margin(catalog_copies_sold_this_week, catalog_to_player);
+            self.credit_label_capital(margin);
         }
 
         // M5 (§E-2): one aggregated status line per week — never once per

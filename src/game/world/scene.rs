@@ -82,15 +82,10 @@ impl GameWorld {
                 releases.push((idx, title, score, band.label.clone(), band.fame));
             }
 
-            // Signings: a rising unsigned act catches a label's ear.
-            if band.label.is_none() && band.fame >= 25 && rng.gen_bool(0.02) {
-                let label = Self::random_label_for_fame(data_files, band.fame, rng);
-                if band.fame >= 45 {
-                    news.push(format!("🖋️ {} sign with {}.", band.name, label));
-                }
-                band.label = Some(label);
-                band.momentum = (band.momentum + 1).min(3);
-            }
+            // Signings are no longer a per-band coin flip against a random label
+            // (the pre-0.8 placeholder). L-ROSTER (§D) runs a real fit + appetite
+            // signing pass over the seeded `Label` entities after this loop — see
+            // `tick_scene_rosters` at the end of the method.
         }
 
         // Chart submissions happen after the borrow on bands ends. Every
@@ -157,6 +152,12 @@ impl GameWorld {
         }
 
         self.fill_territories(rng, timeline, data_files);
+
+        // L-ROSTER (§D): the single hook into the scene pass. Labels scout and
+        // sign unsigned acts by fit + appetite, and each signed act's chart
+        // presence books wholesale margin to its label's capital — all logic
+        // (and its determinism) lives in `world/labels.rs::tick_scene_rosters`.
+        self.tick_scene_rosters(rng, news);
     }
 
     /// Bands break up and new ones form: the scene has a life of its own.

@@ -8,14 +8,35 @@ use ratatui::{
 };
 
 use crate::data::format_money;
+use crate::game::world::{Label, LabelStatus};
 use crate::ui::app::{App, Screen};
 
 use super::super::centered_rect;
+// L-UI-2 (§H): the deal picker reads an offering label's *current* health with
+// the same qualitative vocabulary as the label ledger — never a rival's exact
+// figure. Single source of truth, shared with `labels.rs`.
+use super::labels::{capital_band, tier_label};
+
+/// The health annotation for an offering label (design §H): its qualitative
+/// capital band (colour-coded, never an exact rival figure) plus a distress
+/// flag when the label is in trouble. Shared by the offer list and the detail
+/// view so an offer reads the same in both. A folded/acquired label would not
+/// be tabling offers, so only the live `Distressed` state is flagged.
+fn health_spans(label: &Label) -> Vec<Span<'static>> {
+    let (word, color) = capital_band(label.capital);
+    let mut spans = vec![Span::styled(word.to_string(), Style::new().fg(color))];
+    if label.status == LabelStatus::Distressed {
+        spans.push(Span::styled(" ⚠ distressed", Style::new().fg(Color::Red)));
+    }
+    spans
+}
 pub(crate) fn draw_deals_modal(frame: &mut Frame, app: &App) {
     let Screen::Deals { selected, detail } = &app.screen else {
         return;
     };
-    let area = centered_rect(72, 70, frame.area());
+    // Wider than the v0.7 picker (was 72%): L-UI-2 (§H) annotates each offer
+    // row with the offering label's live health, which needs the extra columns.
+    let area = centered_rect(82, 72, frame.area());
     frame.render_widget(Clear, area);
 
     let offers = &app.game.pending_deal_offers;
@@ -62,6 +83,34 @@ pub(crate) fn draw_deals_modal(frame: &mut Frame, app: &App) {
                 data.creative_freedom
             )),
             Line::from(format!("  Reputation: {}", data.reputation)),
+        ]);
+
+        // L-UI-2 (§H): the label's *current* standing — its live tier, reach,
+        // and a health read — so "rising indie vs safe major" is legible before
+        // signing. Read from the live world entity (the block above is the
+        // static offer-time snapshot); a pre-0.8 save with no seeded labels
+        // simply omits this section.
+        if let Some(label) = app.label_by_name(&offer.label_name) {
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                "  Where they stand now",
+                Style::new().fg(Color::Cyan).bold(),
+            ));
+            let mut standing = vec![
+                Span::raw("  "),
+                Span::styled(tier_label(label.tier).to_string(), Style::new().bold()),
+                Span::styled("  ·  ", Style::new().fg(Color::DarkGray)),
+                Span::styled(
+                    format!("reach {}/100", label.market_reach),
+                    Style::new().fg(Color::White),
+                ),
+                Span::styled("  ·  ", Style::new().fg(Color::DarkGray)),
+            ];
+            standing.extend(health_spans(label));
+            lines.push(Line::from(standing));
+        }
+
+        lines.extend([
             Line::from(""),
             Line::styled(
                 "  [A]ccept · [R]eject · [Esc] back",
@@ -73,19 +122,28 @@ pub(crate) fn draw_deals_modal(frame: &mut Frame, app: &App) {
         let items: Vec<ListItem> = offers
             .iter()
             .map(|offer| {
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("{:<22}", offer.label_name), Style::new().bold()),
+                let mut spans = vec![
+                    Span::styled(format!("{:<20}", offer.label_name), Style::new().bold()),
                     Span::styled(
                         format!("{:<12}", offer.label_tier),
                         Style::new().fg(Color::Cyan),
                     ),
                     Span::raw(format!(
-                        "{} adv · {:.0}% · {} albums",
+                        "{} adv · {:.0}% · {} alb",
                         format_money(offer.advance as i32),
                         offer.royalty_rate * 100.0,
                         offer.albums_required
                     )),
-                ]))
+                ];
+                // L-UI-2 (§H): a health read on the offering label's live
+                // balance sheet, so "rising indie vs safe major" is legible at
+                // the table. Omitted (row unchanged) when no live label backs
+                // the offer — e.g. a pre-0.8 save's JSON-priced offer.
+                if let Some(label) = app.label_by_name(&offer.label_name) {
+                    spans.push(Span::styled("  ·  ", Style::new().fg(Color::DarkGray)));
+                    spans.extend(health_spans(label));
+                }
+                ListItem::new(Line::from(spans))
             })
             .collect();
         let list = List::new(items)

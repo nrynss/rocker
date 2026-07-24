@@ -37,6 +37,14 @@ impl Game {
         // M9 (design §E-5): a label in the red gets antsy about product —
         // the idle gate drops and the cut chance doubles while it's owed.
         let recoup_pressure = deal.unrecouped > 0;
+        // L-CHAR (§G): the label's character scales the cut cadence on top of the
+        // recoup pressure — a HitFactory / low-creative-freedom label cuts harder,
+        // an ArtistFriendly / high-freedom one sparingly. Neutral (1.0) when the
+        // deal's label isn't a seeded entity (an old save / the test placeholder).
+        let cut_aggression = self
+            .world
+            .label_for_deal(deal)
+            .map_or(1.0, |label| label.single_cut_aggression());
 
         // Condition 2: find an eligible album (un-singled tracks, most recent first).
         // We need to check if there's an eligible album first.
@@ -62,13 +70,15 @@ impl Game {
         }
 
         // Condition 5: roll on the rng (10% chance, doubled under recoup
-        // pressure). This is the last check so weeks where earlier
-        // conditions fail draw nothing from the stream.
-        let cut_chance = if recoup_pressure {
+        // pressure, then scaled by the label's character — §G). This is the last
+        // check so weeks where earlier conditions fail draw nothing from the
+        // stream. Clamped to a valid probability (`gen_bool` requires 0..=1).
+        let base_chance = if recoup_pressure {
             LABEL_CUT_CHANCE * LABEL_CUT_CHANCE_PRESSURE_MULTIPLIER
         } else {
             LABEL_CUT_CHANCE
         };
+        let cut_chance = (base_chance * cut_aggression).clamp(0.0, 1.0);
         if !rng.gen_bool(cut_chance) {
             return;
         }
@@ -239,6 +249,17 @@ impl Game {
         let label_name = deal.label_name.clone();
         let albums_owed = deal.albums_owed();
         let albums_remaining = deal.albums_required.saturating_sub(deal.albums_delivered);
+        // L-CHAR (§G): the label's character scales its memo cadence — a
+        // HitFactory / low-creative-freedom label leans harder, an ArtistFriendly
+        // / high-freedom one leaves the act alone. Neutral (1.0) when the deal's
+        // label isn't a seeded entity. The deadline STRESS bite below is
+        // unaffected (it is real pressure, not a memo that rolled).
+        let memo_chance = (DEAL_MEMO_CHANCE
+            * self
+                .world
+                .label_for_deal(deal)
+                .map_or(1.0, |label| label.memo_aggression()))
+        .clamp(0.0, 1.0);
         // Only a *real* term has a deadline. A legacy deal (`term_weeks == 0`)
         // has `term_end_week == signed_week`, so `weeks_left` would saturate
         // to 0 and read as "past deadline" — phantom pressure on a deal that
@@ -264,7 +285,7 @@ impl Game {
 
         // One memo max per week (priority: deadline, then cut-single, then
         // write-songs); each condition still rolls independently.
-        if deadline_pressure && rng.gen_bool(DEAL_MEMO_CHANCE) {
+        if deadline_pressure && rng.gen_bool(memo_chance) {
             self.log(format!(
                 "📠 {}: 'The contract says {} more album{}. The clock says {} weeks.'",
                 label_name,
@@ -272,12 +293,12 @@ impl Game {
                 if albums_remaining == 1 { "" } else { "s" },
                 weeks_left
             ));
-        } else if material_idle && rng.gen_bool(DEAL_MEMO_CHANCE) {
+        } else if material_idle && rng.gen_bool(memo_chance) {
             self.log(format!(
                 "📠 {}: 'Cut a single from that material — this week, ideally.'",
                 label_name
             ));
-        } else if no_progress && rng.gen_bool(DEAL_MEMO_CHANCE) {
+        } else if no_progress && rng.gen_bool(memo_chance) {
             self.log(format!(
                 "📠 {}: 'We need songs on tape. Write.'",
                 label_name

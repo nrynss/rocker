@@ -54,6 +54,17 @@ pub enum Screen {
         region: crate::game::world::ChartRegion,
         scroll: usize,
     },
+    /// The band's discography browser: every record with its sales, income,
+    /// chart peak, and certification (L-UI-1). Read-only; `scroll` is the
+    /// index of the first record shown.
+    Discography {
+        scroll: usize,
+    },
+    /// The record-label ledger browser (L-UI-1, design §H). Read-only;
+    /// `scroll` is the index of the first label shown.
+    Labels {
+        scroll: usize,
+    },
     MarketingRelease {
         selected: usize,
     },
@@ -114,6 +125,10 @@ pub enum MenuKind {
     Deals,
     SupportTour,
     Charts,
+    /// Open the discography browser (L-UI-1): per-record sales.
+    Discography,
+    /// Open the record-label ledger browser (L-UI-1, design §H).
+    Labels,
     TourReport,
     Marketing,
     Save,
@@ -399,6 +414,42 @@ impl App {
                 kind: MenuKind::Charts,
             },
             MenuEntry {
+                hotkey: 'd',
+                label: "Discography…",
+                detail: {
+                    let records = game.just_released_music.len() + game.band.total_releases();
+                    if records == 0 {
+                        "no records yet".into()
+                    } else {
+                        format!(
+                            "{} record{} · sales",
+                            records,
+                            if records == 1 { "" } else { "s" }
+                        )
+                    }
+                },
+                enabled: true,
+                kind: MenuKind::Discography,
+            },
+            MenuEntry {
+                hotkey: 'b',
+                label: "Labels…",
+                detail: {
+                    let labels = game.world.labels.len();
+                    if labels == 0 {
+                        "the label ledger".into()
+                    } else {
+                        format!(
+                            "{} label{} ledger",
+                            labels,
+                            if labels == 1 { "'s" } else { "s'" }
+                        )
+                    }
+                },
+                enabled: true,
+                kind: MenuKind::Labels,
+            },
+            MenuEntry {
                 hotkey: 'r',
                 label: "Tour Report…",
                 detail: match &game.last_tour_report {
@@ -518,6 +569,52 @@ impl App {
         }
     }
 
+    /// Every record in the band's catalogue for the discography browser
+    /// (L-UI-1): anything dropping soon first, then the released catalogue
+    /// newest-first. The `bool` is `released` — `false` for a record still in
+    /// its pre-release sales window (not yet in stores). Shared by the modal
+    /// renderer and its scroll handler so both agree on the record count.
+    pub fn discography_rows(&self) -> Vec<(&crate::game::music::Release, bool)> {
+        let mut rows: Vec<(&crate::game::music::Release, bool)> = self
+            .game
+            .just_released_music
+            .iter()
+            .map(|release| (release, false))
+            .collect();
+        let mut released: Vec<&crate::game::music::Release> = self
+            .game
+            .band
+            .singles_released
+            .iter()
+            .chain(self.game.band.albums_released.iter())
+            .collect();
+        released.sort_by_key(|release| std::cmp::Reverse(release.week_released));
+        rows.extend(released.into_iter().map(|release| (release, true)));
+        rows
+    }
+
+    /// The `world.labels` id of the label the player is currently signed to,
+    /// if any (via the signed deal's `label_id`). Lets the label ledger show
+    /// the player's own label's exact capital while keeping rivals' figures
+    /// qualitative (design §H).
+    pub fn player_label_id(&self) -> Option<u32> {
+        self.game.band.current_deal().and_then(|deal| deal.label_id)
+    }
+
+    /// The live world `Label` an offer comes from, matched by name — a
+    /// `PotentialDealOffer` carries the label's *name*, not its id. Lets the
+    /// deal picker (L-UI-2, design §H) annotate an offer with the offering
+    /// label's *current* health (capital band, distress) and standing. `None`
+    /// for a pre-0.8 save (no seeded labels) or a name with no live entity, so
+    /// the picker degrades to the plain, un-annotated row there.
+    pub fn label_by_name(&self, name: &str) -> Option<&crate::game::world::Label> {
+        self.game
+            .world
+            .labels
+            .values()
+            .find(|label| label.name == name)
+    }
+
     // --- Logging ---
 
     pub(crate) fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {
@@ -562,6 +659,8 @@ impl App {
             Screen::Deals { .. } => self.handle_deals_key(key),
             Screen::SupportOffer => self.handle_support_offer_key(key),
             Screen::Charts { .. } => self.handle_charts_key(key),
+            Screen::Discography { .. } => self.handle_discography_key(key),
+            Screen::Labels { .. } => self.handle_labels_key(key),
             Screen::MarketingRelease { .. } => self.handle_marketing_release_key(key),
             Screen::MarketingCampaign { .. } => self.handle_marketing_campaign_key(key),
             Screen::File { .. } => self.handle_file_key(key),

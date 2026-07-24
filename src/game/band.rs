@@ -59,6 +59,15 @@ pub struct RecordDeal {
     /// The label's distribution muscle (0-100), taken from the label data.
     #[serde(default = "default_market_reach")]
     pub market_reach: u8,
+    /// Which `GameWorld::labels` entity this deal is with (L-ENTITY, design
+    /// §A). Stamped at signing (`action_accept_deal`) by matching the offer's
+    /// `label_name` to a seeded `Label`, so the weekly wholesale ledger can
+    /// book the deal's margin to the right label's `capital`. `#[serde(default)]`
+    /// → `None` on a pre-0.8 save (or a deal signed before this field existed);
+    /// the ledger then falls back to matching by `label_name`, and a save with
+    /// no seeded labels at all simply books nothing (income is unchanged).
+    #[serde(default)]
+    pub label_id: Option<u32>,
     /// Label recoupment ledger (design §E-2). The label's outlay the player
     /// must repay out of royalties before a cent reaches the band: the advance
     /// at signing, then pressing + promo at every release under the deal.
@@ -417,6 +426,48 @@ impl Band {
         }
         let deal = self.record_deal.take().expect("checked Some above");
         Some(deal.label_name)
+    }
+
+    /// L-MNA (design §F): the label the player is signed to was acquired — move
+    /// the live contract to its new owner. The deal's identity (`label_id`,
+    /// `label_name`, `label_tier`) and the reach that applies going forward
+    /// (`market_reach`) retag to the acquirer; every term carries unchanged —
+    /// advance, royalty rate, albums owed/delivered, `unrecouped`, `signed_week`,
+    /// and `term_weeks`. New releases then read the acquirer's *live* reach
+    /// through `label_id` (L-REACH's read-through, §C), while each older release
+    /// keeps its own frozen `label_market_reach` for its catalogue tail. Returns
+    /// the former label's name for the news line; `None` when unsigned.
+    pub fn transfer_deal_to_acquirer(
+        &mut self,
+        acquirer_id: u32,
+        acquirer_name: String,
+        acquirer_tier: &str,
+        acquirer_reach: u8,
+    ) -> Option<String> {
+        let deal = self.record_deal.as_mut()?;
+        let former_label = deal.label_name.clone();
+        deal.label_id = Some(acquirer_id);
+        deal.label_name = acquirer_name;
+        deal.label_tier = acquirer_tier.to_string();
+        deal.market_reach = acquirer_reach;
+        Some(former_label)
+    }
+
+    /// L-MNA (design §F): the label the player is signed to folded — void the
+    /// contract and make the band a free agent. This reuses the breach
+    /// *write-off* (`check_term_breach` above): any remaining `unrecouped`
+    /// balance is written off, never charged to the player. It deliberately does
+    /// NOT set the punitive breach cooldown or take the reputation hit — a label
+    /// folding out from under the band is not the band's breach, so free agency
+    /// here is clean and labels can come knocking again immediately. Returns the
+    /// same `BreachOutcome` shape (label name + amount written off) for the news
+    /// lines; `None` when unsigned.
+    pub fn void_deal_on_label_fold(&mut self) -> Option<BreachOutcome> {
+        let deal = self.record_deal.take()?;
+        Some(BreachOutcome {
+            label_name: deal.label_name,
+            written_off: deal.unrecouped,
+        })
     }
 }
 

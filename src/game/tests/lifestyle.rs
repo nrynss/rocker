@@ -223,7 +223,8 @@ fn broke_two_consecutive_weeks_triggers_eviction() {
     game.player.money = 100;
     game.player.happiness = 50;
 
-    // Week 1: upkeep (180) pushes money to -80 — one broke week, no eviction yet.
+    // Week 1: upkeep (540, L-SCALE ×3) pushes money to -440 — one broke week,
+    // no eviction yet.
     game.update_lifestyle(&GameAction::WriteSongs);
     assert_eq!(game.player.weeks_broke, 1);
     assert_eq!(game.player.lifestyle, LifestyleTier::CityApartment);
@@ -251,11 +252,11 @@ fn broke_streak_resets_once_money_recovers() {
     game.player.lifestyle = LifestyleTier::CityApartment;
     game.player.money = 100;
 
-    game.update_lifestyle(&GameAction::WriteSongs); // -> -80, weeks_broke = 1
+    game.update_lifestyle(&GameAction::WriteSongs); // -> -440, weeks_broke = 1
     assert_eq!(game.player.weeks_broke, 1);
 
     game.player.money = 1_000; // recovered before the next tick
-    game.update_lifestyle(&GameAction::WriteSongs); // -> 820, not broke
+    game.update_lifestyle(&GameAction::WriteSongs); // -> 460, not broke
 
     assert_eq!(game.player.weeks_broke, 0);
     assert_eq!(game.player.lifestyle, LifestyleTier::CityApartment);

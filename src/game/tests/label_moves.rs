@@ -5,6 +5,7 @@ use rand::rngs::StdRng;
 
 use super::*;
 use crate::game::music::ReleaseType;
+use crate::game::world::LabelStrategy;
 
 #[test]
 fn label_cut_does_not_fire_unsigned() {
@@ -274,4 +275,94 @@ fn deterministic_rng_makes_cuts_reproducible() {
             game2.just_released_music[0].name
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// §G (L-CHAR): label character scales single-cut aggression on top of the v0.7
+// recoup-pressure dials. These drive the real `label_single_cut_check` on a
+// game signed to a seeded world label whose character we control, and count how
+// often it cuts across many seeds — the observable end of the strategy /
+// creative-freedom levers.
+// ---------------------------------------------------------------------------
+
+/// A game signed to seeded world label id 0, with its `strategy` +
+/// `creative_freedom` overridden, and the album/idle/cooldown guards already
+/// cleared — so every `label_single_cut_check` reaches its final roll and the
+/// only thing that varies between configs is the L-CHAR cadence.
+fn game_signed_to_label_0(strategy: LabelStrategy, creative_freedom: u8) -> Game {
+    let mut game = test_game();
+    game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
+
+    let label = game
+        .world
+        .labels
+        .get_mut(&0)
+        .expect("seeded label 0 exists");
+    label.strategy = strategy;
+    label.creative_freedom = creative_freedom;
+    let label_name = label.name.clone();
+    let market_reach = label.market_reach;
+
+    // A deal linked to that label by id (so `label_for_deal` resolves it), owing
+    // nothing — no recoup pressure, so the base cut chance is the plain 10%.
+    let mut deal = test_deal(market_reach, 0.12);
+    deal.label_name = label_name;
+    deal.label_id = Some(0);
+    game.band.record_deal = Some(deal);
+
+    let mut album = test_release(1, ReleaseType::Album);
+    album.week_released = 1; // old release, well past the cut cooldown
+    album.singles_cut = 0;
+    album.genre = Some(genre::MusicGenre::Rock);
+    game.band.albums_released.push(album);
+
+    game.idle_streak = 5; // clears the idle gate
+    game.week = 30; // past the 6-week release cooldown
+    game
+}
+
+/// Count how many of `seeds` independent rolls produce a single-cut, resetting
+/// the cut state between rolls so each is an independent trial at the label's
+/// (fixed) cut chance.
+fn count_cuts(game: &mut Game, seeds: u64) -> usize {
+    let mut cuts = 0;
+    for seed in 0..seeds {
+        game.just_released_music.clear();
+        game.band.albums_released[0].singles_cut = 0;
+        let mut rng = StdRng::seed_from_u64(seed);
+        game.label_single_cut_check(&mut rng);
+        if !game.just_released_music.is_empty() {
+            cuts += 1;
+        }
+    }
+    cuts
+}
+
+#[test]
+fn hit_factory_cuts_more_aggressively_than_artist_friendly() {
+    // Same creative freedom (midpoint) so ONLY the strategy differs.
+    let mut factory = game_signed_to_label_0(LabelStrategy::HitFactory, 50);
+    let mut friendly = game_signed_to_label_0(LabelStrategy::ArtistFriendly, 50);
+    let factory_cuts = count_cuts(&mut factory, 400);
+    let friendly_cuts = count_cuts(&mut friendly, 400);
+    assert!(
+        factory_cuts > friendly_cuts,
+        "a HitFactory ({factory_cuts}/400) should cut more often than an ArtistFriendly label \
+         ({friendly_cuts}/400)"
+    );
+}
+
+#[test]
+fn low_creative_freedom_label_cuts_more_often_than_a_hands_off_one() {
+    // Same strategy (Balanced) so ONLY creative freedom differs — the game-level
+    // counterpart to the unit test in `tests/labels.rs`.
+    let mut meddling = game_signed_to_label_0(LabelStrategy::Balanced, 10);
+    let mut hands_off = game_signed_to_label_0(LabelStrategy::Balanced, 95);
+    let meddling_cuts = count_cuts(&mut meddling, 400);
+    let hands_off_cuts = count_cuts(&mut hands_off, 400);
+    assert!(
+        meddling_cuts > hands_off_cuts,
+        "a low-creative-freedom label ({meddling_cuts}/400) should cut more than a hands-off one \
+         ({hands_off_cuts}/400)"
+    );
 }
