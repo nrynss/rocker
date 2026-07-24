@@ -1034,6 +1034,109 @@ pub(super) const ACQUISITION_COST: i64 = 100_000;
 /// shows it is needed.
 pub(super) const LABEL_FOUNDING_ENABLED: bool = false;
 
+// ============================================================================
+// L-CHAR (v0.8 §G): label character / A&R. Each label carries a `LabelStrategy`
+// (assigned at worldgen from its JSON personality) and a live `creative_freedom`
+// stat, now load-bearing: strategy + creative-freedom colour offer pricing (§E),
+// single-cut aggression and memo cadence (§E-5), and the renewal window (§E-4).
+// A `Balanced` label at the creative-freedom midpoint is EXACTLY neutral, so a
+// label with no strong personality prices and meddles precisely as it did before
+// L-CHAR (the L-BID pricing and v0.7 recoup dials are unchanged for it — that
+// invariant is what keeps every pre-L-CHAR test passing untouched). Every number
+// here is [tune], refereed by L-SIM (§I): strategy variety must not break label
+// solvency or make advances unrecoupable.
+// ============================================================================
+
+// --- Strategy assignment at worldgen (§G) -----------------------------------
+// Deterministic buckets from the JSON personality (`LabelStrategy::
+// from_personality`), checked in order: HitFactory (a cash-rich, low-freedom hit
+// machine — the majors), then ArtistFriendly (a high-freedom, high-A&R home —
+// the developing indies), then GenrePurist (a tight, single-scene specialty —
+// the punk/hardcore labels), else Balanced. `financial_power` stands in for tier
+// (every seed major is ≥ 80, every indie/boutique ≤ 35). Thresholds picked
+// against the seed roster so each variant is represented.
+
+/// HitFactory: `creative_freedom <=` this AND `financial_power >=`
+/// `STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER` — a flush label that leans on
+/// product over artistic latitude. [tune]
+pub(super) const STRATEGY_HITFACTORY_MAX_CREATIVE_FREEDOM: u8 = 72;
+pub(super) const STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER: u8 = 80;
+
+/// ArtistFriendly: `creative_freedom >=` this AND `artist_development >=`
+/// `STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT` — a label that gives its
+/// acts room and invests in developing them. [tune]
+pub(super) const STRATEGY_ARTIST_FRIENDLY_MIN_CREATIVE_FREEDOM: u8 = 85;
+pub(super) const STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT: u8 = 80;
+
+/// GenrePurist: a label whose parsed `Label::genres` collapses to at most this
+/// many enum genres — a tight, focused identity. Read off the same specialty
+/// list the purist offer-gate checks, so a purist gates on exactly the wheelhouse
+/// that made it one. [tune]
+pub(super) const STRATEGY_GENRE_PURIST_MAX_SPECIALTY: usize = 2;
+
+// --- Offer pricing colour (§E, layered onto L-BID) --------------------------
+// Multiplier (advance) and delta (royalty) applied on top of the L-BID priced
+// figures. Both are exactly neutral for `Balanced` (mult 1.0 / delta 0.0), so a
+// Balanced label prices identically to pre-L-CHAR. Advances stay bounded by
+// affordability (the L-BID invariant): the multiplier scales the *desired*
+// figure, which is still `.min(affordable)`.
+
+/// Advance multiplier by strategy: HitFactory pays bigger advances (it buys the
+/// act up front), GenrePurist pays a fit premium (it only offers in-specialty),
+/// ArtistFriendly is fair but leads with royalty not advance. [tune]
+pub(super) const STRATEGY_ADVANCE_MULT_HITFACTORY: f32 = 1.30;
+pub(super) const STRATEGY_ADVANCE_MULT_GENRE_PURIST: f32 = 1.15;
+pub(super) const STRATEGY_ADVANCE_MULT_ARTIST_FRIENDLY: f32 = 1.0;
+
+/// Royalty delta (raw rate, i.e. 0.04 = 4pp) by strategy, added to the L-BID
+/// reach/fame rate and clamped to the sane band: ArtistFriendly pays more (its
+/// signature lever, and it "won't lowball" a signing), HitFactory less (it led
+/// with the advance), GenrePurist a small fit premium. Also shifts the bidding
+/// royalty ceiling so an ArtistFriendly label can escalate royalty further. [tune]
+pub(super) const STRATEGY_ROYALTY_DELTA_ARTIST_FRIENDLY: f32 = 0.04;
+pub(super) const STRATEGY_ROYALTY_DELTA_HITFACTORY: f32 = -0.03;
+pub(super) const STRATEGY_ROYALTY_DELTA_GENRE_PURIST: f32 = 0.02;
+
+// --- Single-cut aggression + memo cadence (§E-5, atop the recoup dials) ------
+// Strategy scales the single-cut chance and memo chance on top of the v0.7
+// recoup-pressure multiplier; creative_freedom adds a second, continuous lever
+// (low freedom → more meddling). Both are 1.0 for a Balanced label at the
+// creative-freedom midpoint, so the v0.7 behaviour is exactly preserved there.
+
+/// Single-cut chance multiplier by strategy (on top of recoup pressure):
+/// HitFactory cuts more aggressively, ArtistFriendly sparingly, GenrePurist and
+/// Balanced neutral (1.0). [tune]
+pub(super) const STRATEGY_CUT_MULT_HITFACTORY: f64 = 1.5;
+pub(super) const STRATEGY_CUT_MULT_ARTIST_FRIENDLY: f64 = 0.5;
+
+/// Memo-cadence multiplier by strategy: a HitFactory leans harder (more memos),
+/// an ArtistFriendly leaves the act alone (fewer). GenrePurist/Balanced neutral. [tune]
+pub(super) const STRATEGY_MEMO_MULT_HITFACTORY: f64 = 1.5;
+pub(super) const STRATEGY_MEMO_MULT_ARTIST_FRIENDLY: f64 = 0.5;
+
+/// Creative-freedom's pull on single-cut aggression and memo cadence (§G — "low
+/// freedom raises single-cut aggression"). The multiplier is
+/// `1 + (MIDPOINT - creative_freedom) / MIDPOINT * SWING`, bounded ≥ 0, so
+/// freedom at the midpoint is neutral (1.0), freedom 0 is the most meddling
+/// (`1 + SWING`), and freedom 100 the most hands-off. [tune]
+pub(super) const CREATIVE_FREEDOM_MIDPOINT: f64 = 50.0;
+pub(super) const CREATIVE_FREEDOM_CUT_SWING: f64 = 0.6;
+
+// (A deal whose label doesn't resolve to a seeded entity — a pre-0.8 save, a
+// folded label, the "Test Records" placeholder — reads a neutral 1.0 aggression
+// directly, i.e. a Balanced label at the creative-freedom midpoint: exactly the
+// v0.7 baseline. No separate default constant is needed for that.)
+
+// --- Renewal patience (§E-4) -------------------------------------------------
+/// Strategy scales the "deep in the red" unrecouped threshold at the renewal
+/// window: an ArtistFriendly label is patient (needs a deeper hole before it
+/// gives up on an unrecouped act → more extensions), a HitFactory has short
+/// patience (gives up sooner → more silence). GenrePurist/Balanced neutral (1.0).
+/// Applied to `DEAL_RENEWAL_DEEP_RED_UNRECOUPED`. Kept modest so the ArtistFriendly
+/// threshold (45k) still sits below the "deep red" test fixture (50k). [tune]
+pub(super) const STRATEGY_RENEWAL_PATIENCE_ARTIST_FRIENDLY: f32 = 1.5;
+pub(super) const STRATEGY_RENEWAL_PATIENCE_HITFACTORY: f32 = 0.5;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

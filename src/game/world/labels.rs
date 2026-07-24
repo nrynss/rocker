@@ -17,23 +17,34 @@
 //! - `roster` / `hit_window` stay empty. `// L-ROSTER will` scout and sign
 //!   scene bands and feed their releases' margin into `capital` (§D);
 //!   `// L-REACH will` push charting release ids into `hit_window` (§C).
-//! - `strategy` seeds to a neutral default. `// L-CHAR will` assign real
-//!   strategies and wire their behaviour into offers/single-cuts (§G).
+//! - `strategy` is assigned at worldgen from the JSON personality (L-CHAR, §G)
+//!   and is load-bearing: it colours offer pricing (`deals.rs`), single-cut
+//!   aggression + memo cadence (`label_moves.rs`), and the renewal window.
 //! - `status` seeds to `Active`. `// L-MNA will` transition labels through
 //!   `Distressed`/`Folding`/`Acquired` (§F).
 
 use crate::data_loader::{GameDataFiles, RecordLabel};
+use crate::game::band::RecordDeal;
 use crate::game::constants::{
     ACQUISITION_COST, ACQUISITION_MIN_ACQUIRER_CAPITAL, ACQUISITION_WEEKLY_CHANCE,
-    DISTRESS_CAPITAL_FLOOR, DISTRESS_WEEKS, FOLD_WEEKS, HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED,
-    LABEL_FOUNDING_ENABLED, REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS, REACH_DRIFT_STEP,
-    REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, ROSTER_APPETITE_FAME_HEADROOM,
-    ROSTER_CAP_BOUTIQUE, ROSTER_CAP_INDEPENDENT, ROSTER_CAP_MAJOR, ROSTER_FIT_MATCH_BONUS,
+    CREATIVE_FREEDOM_CUT_SWING, CREATIVE_FREEDOM_MIDPOINT, DISTRESS_CAPITAL_FLOOR, DISTRESS_WEEKS,
+    FOLD_WEEKS, HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED, LABEL_FOUNDING_ENABLED,
+    REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS, REACH_DRIFT_STEP, REACH_HIT_BONUS_CAP,
+    REACH_MAX, REACH_PER_HIT, ROSTER_APPETITE_FAME_HEADROOM, ROSTER_CAP_BOUTIQUE,
+    ROSTER_CAP_INDEPENDENT, ROSTER_CAP_MAJOR, ROSTER_FIT_MATCH_BONUS,
     ROSTER_MARGIN_PER_CHART_SCORE, ROSTER_ROOM_WEIGHT, ROSTER_SCOUT_WEEKLY_CHANCE,
     ROSTER_SIGN_CAPITAL_SAFETY, ROSTER_SIGN_MIN_FAME, ROSTER_SIGN_NEWS_FAME,
-    ROSTER_SIGNING_BASE_COST, ROSTER_SIGNING_COST_PER_FAME, TIER_INDEPENDENT_MIN_CAPITAL,
-    TIER_INDEPENDENT_REACH_DEMOTE, TIER_INDEPENDENT_REACH_PROMOTE, TIER_MAJOR_MIN_CAPITAL,
-    TIER_MAJOR_REACH_DEMOTE, TIER_MAJOR_REACH_PROMOTE,
+    ROSTER_SIGNING_BASE_COST, ROSTER_SIGNING_COST_PER_FAME, STRATEGY_ADVANCE_MULT_ARTIST_FRIENDLY,
+    STRATEGY_ADVANCE_MULT_GENRE_PURIST, STRATEGY_ADVANCE_MULT_HITFACTORY,
+    STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT, STRATEGY_ARTIST_FRIENDLY_MIN_CREATIVE_FREEDOM,
+    STRATEGY_CUT_MULT_ARTIST_FRIENDLY, STRATEGY_CUT_MULT_HITFACTORY,
+    STRATEGY_GENRE_PURIST_MAX_SPECIALTY, STRATEGY_HITFACTORY_MAX_CREATIVE_FREEDOM,
+    STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER, STRATEGY_MEMO_MULT_ARTIST_FRIENDLY,
+    STRATEGY_MEMO_MULT_HITFACTORY, STRATEGY_RENEWAL_PATIENCE_ARTIST_FRIENDLY,
+    STRATEGY_RENEWAL_PATIENCE_HITFACTORY, STRATEGY_ROYALTY_DELTA_ARTIST_FRIENDLY,
+    STRATEGY_ROYALTY_DELTA_GENRE_PURIST, STRATEGY_ROYALTY_DELTA_HITFACTORY,
+    TIER_INDEPENDENT_MIN_CAPITAL, TIER_INDEPENDENT_REACH_DEMOTE, TIER_INDEPENDENT_REACH_PROMOTE,
+    TIER_MAJOR_MIN_CAPITAL, TIER_MAJOR_REACH_DEMOTE, TIER_MAJOR_REACH_PROMOTE,
 };
 use crate::game::genre::MusicGenre;
 use rand::Rng;
@@ -65,25 +76,116 @@ impl LabelTier {
     }
 }
 
-/// A label's A&R personality (design §G). L-ENTITY seeds every label to
-/// `Balanced`; the named variants are the §G vocabulary that L-CHAR assigns
-/// and wires into offer pricing, single-cut aggression, and renewals.
-///
-/// `#[allow(dead_code)]`: the non-`Balanced` variants are constructed by
-/// L-CHAR (§G), not yet here — kept so the enum's public shape is stable for
-/// the downstream task rather than reshaped mid-cycle.
-#[allow(dead_code)]
+/// A label's A&R personality (design §G), assigned at worldgen from its JSON
+/// personality (`LabelStrategy::from_personality`) and now load-bearing: it
+/// colours offer pricing (§E), single-cut aggression + memo cadence (§E-5), and
+/// the renewal window (§E-4). `Balanced` is the neutral default — a label with
+/// no strong personality prices and behaves exactly as it did before L-CHAR, so
+/// every strategy multiplier/delta is 1.0/0.0 for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LabelStrategy {
-    /// Neutral seed (L-ENTITY). L-CHAR replaces this with a real strategy.
+    /// Neutral: prices on the L-BID base, cuts/memos on the v0.7 dials alone.
     #[default]
     Balanced,
-    /// Higher royalty, more creative freedom, patient with unrecouped acts.
+    /// Higher royalty, fair advances (won't lowball), patient with unrecouped
+    /// acts, and rarely forces a single-cut.
     ArtistFriendly,
-    /// Big advances, aggressive single-cuts, short patience.
+    /// Big advances, lower royalty, aggressive single-cuts, short patience, and
+    /// leans hard with memos.
     HitFactory,
-    /// Only signs its specialty, but pays a premium for fit.
+    /// Only tables an offer for an act in its specialty, but pays a fit premium
+    /// (advance + royalty) when the genre matches.
     GenrePurist,
+}
+
+impl LabelStrategy {
+    /// L-CHAR (§G): the strategy a label's JSON personality earns at worldgen.
+    /// Deterministic and pure — a function of `financial_power` (tier proxy),
+    /// `creative_freedom`, `artist_development`, and the breadth of the label's
+    /// parsed specialty. Checked in priority order (HitFactory → ArtistFriendly
+    /// → GenrePurist → Balanced): a cash-rich, low-freedom label is a hit machine
+    /// first; a high-freedom, high-A&R label is an artist's home; a label with a
+    /// tight single-scene specialty is a purist; everything else is Balanced.
+    fn from_personality(seed: &RecordLabel, specialty_breadth: usize) -> Self {
+        if seed.creative_freedom <= STRATEGY_HITFACTORY_MAX_CREATIVE_FREEDOM
+            && seed.financial_power >= STRATEGY_HITFACTORY_MIN_FINANCIAL_POWER
+        {
+            LabelStrategy::HitFactory
+        } else if seed.creative_freedom >= STRATEGY_ARTIST_FRIENDLY_MIN_CREATIVE_FREEDOM
+            && seed.artist_development >= STRATEGY_ARTIST_FRIENDLY_MIN_ARTIST_DEVELOPMENT
+        {
+            LabelStrategy::ArtistFriendly
+        } else if specialty_breadth <= STRATEGY_GENRE_PURIST_MAX_SPECIALTY {
+            LabelStrategy::GenrePurist
+        } else {
+            LabelStrategy::Balanced
+        }
+    }
+
+    /// L-CHAR (§G): advance multiplier applied to the L-BID priced advance. The
+    /// advance stays bounded by affordability downstream (the L-BID invariant),
+    /// so this only scales the *desired* figure. `1.0` for Balanced.
+    pub(in crate::game) fn advance_multiplier(self) -> f32 {
+        match self {
+            LabelStrategy::HitFactory => STRATEGY_ADVANCE_MULT_HITFACTORY,
+            LabelStrategy::GenrePurist => STRATEGY_ADVANCE_MULT_GENRE_PURIST,
+            LabelStrategy::ArtistFriendly => STRATEGY_ADVANCE_MULT_ARTIST_FRIENDLY,
+            LabelStrategy::Balanced => 1.0,
+        }
+    }
+
+    /// L-CHAR (§G): royalty delta (raw rate) added to the L-BID reach/fame rate
+    /// and to the bidding royalty ceiling. `0.0` for Balanced.
+    pub(in crate::game) fn royalty_delta(self) -> f32 {
+        match self {
+            LabelStrategy::ArtistFriendly => STRATEGY_ROYALTY_DELTA_ARTIST_FRIENDLY,
+            LabelStrategy::HitFactory => STRATEGY_ROYALTY_DELTA_HITFACTORY,
+            LabelStrategy::GenrePurist => STRATEGY_ROYALTY_DELTA_GENRE_PURIST,
+            LabelStrategy::Balanced => 0.0,
+        }
+    }
+
+    /// L-CHAR (§G): single-cut chance multiplier, on top of the v0.7 recoup
+    /// pressure. `1.0` for Balanced/GenrePurist.
+    pub(in crate::game) fn single_cut_multiplier(self) -> f64 {
+        match self {
+            LabelStrategy::HitFactory => STRATEGY_CUT_MULT_HITFACTORY,
+            LabelStrategy::ArtistFriendly => STRATEGY_CUT_MULT_ARTIST_FRIENDLY,
+            LabelStrategy::Balanced | LabelStrategy::GenrePurist => 1.0,
+        }
+    }
+
+    /// L-CHAR (§G): memo-cadence multiplier. `1.0` for Balanced/GenrePurist.
+    pub(in crate::game) fn memo_multiplier(self) -> f64 {
+        match self {
+            LabelStrategy::HitFactory => STRATEGY_MEMO_MULT_HITFACTORY,
+            LabelStrategy::ArtistFriendly => STRATEGY_MEMO_MULT_ARTIST_FRIENDLY,
+            LabelStrategy::Balanced | LabelStrategy::GenrePurist => 1.0,
+        }
+    }
+
+    /// L-CHAR (§G): patience multiplier on the renewal-window "deep in the red"
+    /// threshold — an ArtistFriendly label needs a deeper hole before it gives up
+    /// on an unrecouped act, a HitFactory less. `1.0` for Balanced/GenrePurist.
+    pub(in crate::game) fn renewal_patience(self) -> f32 {
+        match self {
+            LabelStrategy::ArtistFriendly => STRATEGY_RENEWAL_PATIENCE_ARTIST_FRIENDLY,
+            LabelStrategy::HitFactory => STRATEGY_RENEWAL_PATIENCE_HITFACTORY,
+            LabelStrategy::Balanced | LabelStrategy::GenrePurist => 1.0,
+        }
+    }
+}
+
+/// L-CHAR (§G): creative-freedom's continuous pull on single-cut aggression and
+/// memo cadence. Low freedom → a more meddling label (multiplier > 1); high
+/// freedom → hands-off (< 1); the midpoint is neutral (1.0). Bounded ≥ 0 so it
+/// can never drive a probability negative. The second lever (alongside strategy)
+/// the single-cut/memo cadence multiplies in — see `Label::single_cut_aggression`.
+fn creative_freedom_meddling(creative_freedom: u8) -> f64 {
+    let swing = (CREATIVE_FREEDOM_MIDPOINT - f64::from(creative_freedom))
+        / CREATIVE_FREEDOM_MIDPOINT
+        * CREATIVE_FREEDOM_CUT_SWING;
+    (1.0 + swing).max(0.0)
 }
 
 /// Where a label is in its lifecycle (design §A/§F). L-ENTITY seeds every label
@@ -199,6 +301,24 @@ impl Label {
     pub fn book(&mut self, delta: i64) {
         self.capital += delta;
         self.ledger_ytd += delta;
+    }
+
+    /// L-CHAR (§G): how hard this label leans on single-cuts — the multiplier
+    /// `label_moves` applies to the base cut chance on top of the v0.7 recoup
+    /// pressure. Combines the strategy lever (HitFactory aggressive, ArtistFriendly
+    /// sparing) with the continuous creative-freedom lever (low freedom → more
+    /// meddling). Neutral (1.0) for a Balanced label at the creative-freedom
+    /// midpoint, so the v0.7 cut cadence is exactly preserved there.
+    pub(in crate::game) fn single_cut_aggression(&self) -> f64 {
+        self.strategy.single_cut_multiplier() * creative_freedom_meddling(self.creative_freedom)
+    }
+
+    /// L-CHAR (§G): how hard this label leans on memos — the multiplier
+    /// `label_moves` applies to the base memo chance. Same two levers as
+    /// `single_cut_aggression`, with the strategy's memo multiplier. Neutral (1.0)
+    /// for a Balanced label at the creative-freedom midpoint.
+    pub(in crate::game) fn memo_aggression(&self) -> f64 {
+        self.strategy.memo_multiplier() * creative_freedom_meddling(self.creative_freedom)
     }
 
     /// L-REACH (§C): record a charting release in the rolling `hit_window` — the
@@ -352,24 +472,44 @@ impl GameWorld {
             label.drift_reach_and_tier();
         }
     }
+
+    /// L-CHAR (§G): the seeded `Label` a `RecordDeal` is with — preferring the
+    /// deal's stamped `label_id`, falling back to a unique-name match for a deal
+    /// signed before that field existed (an old save). Mirrors the resolution
+    /// `economy.rs::player_label_id` uses for the wholesale ledger. `None` when
+    /// the label isn't a seeded world entity (a pre-0.8 save, the "Test Records"
+    /// placeholder) — the caller then falls back to neutral behaviour.
+    pub(in crate::game) fn label_for_deal(&self, deal: &RecordDeal) -> Option<&Label> {
+        if let Some(id) = deal.label_id {
+            return self.labels.get(&id);
+        }
+        self.labels
+            .values()
+            .find(|label| label.name == deal.label_name)
+    }
 }
 
 impl Label {
     /// Instantiate a `Label` from one `record_labels.json` row.
     fn from_seed(id: u32, tier: LabelTier, seed: &RecordLabel) -> Self {
+        // Parse the specialty first: its breadth feeds the strategy assignment
+        // (a tight specialty → GenrePurist), and the parsed list is what the
+        // purist offer-gate later checks — so a purist gates on exactly the
+        // wheelhouse that made it one.
+        let genres = parse_specialty_genres(&seed.specialty_genres);
         Label {
             id,
             name: seed.name.clone(),
             tier,
-            genres: parse_specialty_genres(&seed.specialty_genres),
             founded_year: seed.founded as u16,
             capital: seed_capital(seed.financial_power),
             market_reach: seed.market_reach,
             financial_power: seed.financial_power,
             artist_development: seed.artist_development,
             creative_freedom: seed.creative_freedom,
-            // L-CHAR (§G) assigns the real strategy; a neutral seed here.
-            strategy: LabelStrategy::Balanced,
+            // L-CHAR (§G): a real strategy from the JSON personality.
+            strategy: LabelStrategy::from_personality(seed, genres.len()),
+            genres,
             status: LabelStatus::Active,
             roster: Vec::new(),
             hit_window: Vec::new(),

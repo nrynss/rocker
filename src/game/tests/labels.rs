@@ -8,8 +8,8 @@ use crate::data_loader::GameDataFiles;
 use crate::game::genre::MusicGenre;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{
-    ChartRegion, GameWorld, Label, LabelStatus, LabelTier, RosterSlot, SCENE_MAX_BANDS,
-    SCENE_MIN_BANDS,
+    ChartRegion, GameWorld, Label, LabelStatus, LabelStrategy, LabelTier, RosterSlot,
+    SCENE_MAX_BANDS, SCENE_MIN_BANDS,
 };
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -1407,5 +1407,79 @@ fn mna_resolves_injected_distress_within_the_fold_horizon() {
         max_weeks_in_red <= FOLD_WEEKS + REACH_DRIFT_PERIOD_WEEKS as u16,
         "a label sat in the red for {max_weeks_in_red} weeks, past the fold horizon {FOLD_WEEKS} — \
          the valve failed to fire"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// §G (L-CHAR): label character — strategy assignment + creative-freedom effect.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn worldgen_assigns_real_strategies_not_all_balanced() {
+    let data = GameDataFiles::load().expect("data files present");
+    let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(42));
+
+    // §G: strategy is load-bearing now — it is no longer the dormant `Balanced`
+    // stub L-ENTITY seeded. The seed roster earns a spread of real strategies.
+    let strategies: Vec<LabelStrategy> = world.labels.values().map(|l| l.strategy).collect();
+    let count = |s: LabelStrategy| strategies.iter().filter(|&&x| x == s).count();
+
+    assert!(
+        strategies.iter().any(|&s| s != LabelStrategy::Balanced),
+        "not all labels should be the neutral Balanced stub"
+    );
+    // Each named strategy the design calls for is represented on the roster
+    // (so the personalities actually surface in play).
+    for s in [
+        LabelStrategy::HitFactory,
+        LabelStrategy::ArtistFriendly,
+        LabelStrategy::GenrePurist,
+    ] {
+        assert!(
+            count(s) > 0,
+            "expected at least one {s:?} label on the roster"
+        );
+    }
+
+    // The assignment is a pure function of the (RNG-free) JSON personality, so a
+    // different world seed produces the identical per-label strategy.
+    let world_b = GameWorld::new(&data, &mut StdRng::seed_from_u64(999));
+    for (id, label) in &world.labels {
+        assert_eq!(
+            label.strategy, world_b.labels[id].strategy,
+            "strategy assignment must be deterministic for {}",
+            label.name
+        );
+    }
+}
+
+#[test]
+fn low_creative_freedom_raises_single_cut_aggression() {
+    let data = GameDataFiles::load().expect("data files present");
+    let world = GameWorld::new(&data, &mut StdRng::seed_from_u64(1));
+
+    // Hold the strategy constant (Balanced) and vary ONLY creative_freedom, so
+    // the effect under test is creative-freedom's alone (§G — "low freedom raises
+    // single-cut aggression").
+    let mut meddling = world.labels[&0].clone();
+    meddling.strategy = LabelStrategy::Balanced;
+    meddling.creative_freedom = 10;
+    let mut hands_off = meddling.clone();
+    hands_off.creative_freedom = 95;
+
+    assert!(
+        meddling.single_cut_aggression() > hands_off.single_cut_aggression(),
+        "low creative freedom ({:.3}) must be more cut-aggressive than high ({:.3})",
+        meddling.single_cut_aggression(),
+        hands_off.single_cut_aggression()
+    );
+
+    // The midpoint is exactly neutral — a Balanced label there behaves precisely
+    // as it did before L-CHAR (the invariant that keeps the v0.7 tests passing).
+    let mut midpoint = meddling.clone();
+    midpoint.creative_freedom = 50;
+    assert!(
+        (midpoint.single_cut_aggression() - 1.0).abs() < 1e-9,
+        "Balanced at the creative-freedom midpoint must be exactly neutral (1.0)"
     );
 }

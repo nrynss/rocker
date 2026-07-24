@@ -29,11 +29,12 @@ use crate::game::constants::{
     DEAL_TERM_MAJOR_WEEKS, GENRE_FIT_CHANCE_MULTIPLIER, OFFER_CHANCE_MAX, ROYALTY_BID_PREMIUM,
     ROYALTY_FAME_BONUS_MAX, ROYALTY_HARD_CAP, ROYALTY_REACH_MAX, ROYALTY_REACH_MIN,
 };
+use crate::game::genre::MusicGenre;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use super::GameWorld;
-use super::labels::{Label, LabelStatus, LabelTier};
+use super::labels::{Label, LabelStatus, LabelStrategy, LabelTier};
 
 // Deal-offer buzz: the scale the tier thresholds in record_labels.json
 // measure (independent 10, boutique 20, major 30). Fame carries most of it;
@@ -179,6 +180,14 @@ impl GameWorld {
                 .current_deal()
                 .is_some_and(|deal| deal.label_name == label.name)
             {
+                continue;
+            }
+            // L-CHAR (§G): a GenrePurist only tables an offer for an act inside
+            // its specialty (it pays a fit premium for the ones it does want, via
+            // its advance/royalty multipliers). Every other strategy is happy to
+            // reach outside its wheelhouse — genre only *sharpens* their appetite
+            // (the `GENRE_FIT_CHANCE_MULTIPLIER` coin-flip below).
+            if declines_on_genre(label, &band.genre) {
                 continue;
             }
             // Appetite / affordability (design §E): a label deep in the red signs
@@ -378,8 +387,17 @@ impl GameWorld {
         }
         let labels_data = game_data.get_record_labels_data();
         let label_data = find_label_by_name(labels_data, &deal.label_tier, &deal.label_name)?;
+        // L-CHAR (§G): the live label's strategy colours the renewal's patience.
+        // A deal whose label isn't a seeded entity reads `Balanced` (neutral).
+        let strategy = self
+            .label_for_deal(deal)
+            .map_or(LabelStrategy::Balanced, |label| label.strategy);
 
-        match renewal_decision(deal.unrecouped, band.reputation.commercial_success) {
+        match renewal_decision(
+            deal.unrecouped,
+            band.reputation.commercial_success,
+            strategy,
+        ) {
             RenewalDecision::Silence => None,
             RenewalDecision::Extension => {
                 let advance = (deal.advance as f32 * DEAL_EXTENSION_ADVANCE_FRACTION) as u32;
@@ -476,10 +494,24 @@ enum RenewalDecision {
     Silence,
 }
 
-fn renewal_decision(unrecouped: i32, commercial_success: u8) -> RenewalDecision {
+/// L-CHAR (§G): `strategy` colours how patient the label is with an unrecouped
+/// act. The "deep in the red" threshold that tips an extension into silence is
+/// scaled by the strategy's patience: an ArtistFriendly label needs a deeper
+/// hole before it walks away (more extensions), a HitFactory less (short
+/// patience → more silence). The NewContract branch (recouped + decent sales) is
+/// strategy-independent — a healthy act is worth re-signing to anyone. Balanced
+/// keeps the exact v0.7 threshold.
+fn renewal_decision(
+    unrecouped: i32,
+    commercial_success: u8,
+    strategy: LabelStrategy,
+) -> RenewalDecision {
     if unrecouped <= 0 && commercial_success >= DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS {
-        RenewalDecision::NewContract
-    } else if unrecouped >= DEAL_RENEWAL_DEEP_RED_UNRECOUPED
+        return RenewalDecision::NewContract;
+    }
+    let deep_red =
+        (DEAL_RENEWAL_DEEP_RED_UNRECOUPED as f32 * strategy.renewal_patience()).round() as i32;
+    if unrecouped >= deep_red
         && commercial_success <= DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS
     {
         RenewalDecision::Silence
@@ -528,11 +560,16 @@ fn fame_advance_frac(fame: u8) -> f32 {
 }
 
 /// An offer's advance, priced from live state (design §E): the stature figure
-/// trimmed by the act's heat, then bounded by what the label can actually afford
-/// — so a hot act draws a bigger advance than an unknown, and a broke/lean label
-/// cannot advance money it does not have. Pure and deterministic.
+/// trimmed by the act's heat and coloured by the label's strategy (§G —
+/// HitFactory pays bigger, GenrePurist a fit premium), then bounded by what the
+/// label can actually afford — so a hot act draws a bigger advance than an
+/// unknown, and a broke/lean label cannot advance money it does not have (the
+/// strategy multiplier scales the *desired* figure, never the affordability
+/// bound, so the L-BID invariant holds). Pure and deterministic.
 pub(super) fn priced_advance(label: &Label, fame: u8) -> u32 {
-    let desired = advance_stature(label) as f64 * f64::from(fame_advance_frac(fame));
+    let desired = advance_stature(label) as f64
+        * f64::from(fame_advance_frac(fame))
+        * f64::from(label.strategy.advance_multiplier());
     let affordable = advance_affordable_ceiling(label) as f64;
     desired.min(affordable).max(0.0).round() as u32
 }
@@ -546,18 +583,31 @@ fn royalty_from_reach(market_reach: u8) -> f32 {
 }
 
 /// An offer's royalty, priced from the label's live reach plus a hot act's small
-/// premium (design §E), clamped to the sane band. Pure and deterministic.
+/// premium and the label's strategy delta (design §E/§G — ArtistFriendly pays
+/// more, HitFactory less), clamped to the sane band. Pure and deterministic.
 pub(super) fn priced_royalty(label: &Label, fame: u8) -> f32 {
     let base = royalty_from_reach(label.market_reach);
     let fame_bonus = ROYALTY_FAME_BONUS_MAX * (f32::from(fame) / 100.0);
-    (base + fame_bonus).clamp(ROYALTY_REACH_MIN, ROYALTY_HARD_CAP)
+    (base + fame_bonus + label.strategy.royalty_delta()).clamp(ROYALTY_REACH_MIN, ROYALTY_HARD_CAP)
 }
 
 /// The highest royalty a label will go to under a bidding war: its reach-set
-/// base plus the competitive premium, hard-capped. Royalty is the cheap lever a
-/// poorer label can still pull when it cannot match a rival's advance (§E).
+/// base, its strategy delta (§G — so an ArtistFriendly label can escalate
+/// further, a HitFactory less), plus the competitive premium, clamped. Royalty
+/// is the cheap lever a poorer label can still pull when it cannot match a
+/// rival's advance (§E). Uses the same delta as `priced_royalty`, so the ceiling
+/// is never below a label's own priced rate.
 fn royalty_ceiling(label: &Label) -> f32 {
-    (royalty_from_reach(label.market_reach) + ROYALTY_BID_PREMIUM).min(ROYALTY_HARD_CAP)
+    (royalty_from_reach(label.market_reach) + label.strategy.royalty_delta() + ROYALTY_BID_PREMIUM)
+        .clamp(ROYALTY_REACH_MIN, ROYALTY_HARD_CAP)
+}
+
+/// L-CHAR (§G): whether a label declines to make an offer purely on genre — a
+/// `GenrePurist` only signs acts in its specialty. Every other strategy is happy
+/// to sign outside its wheelhouse (genre only sharpens appetite, it never
+/// forbids). Pure; unit-tested.
+fn declines_on_genre(label: &Label, band_genre: &MusicGenre) -> bool {
+    label.strategy == LabelStrategy::GenrePurist && !label.genres.contains(band_genre)
 }
 
 /// The bidding war (design §E): with two-plus offers on the table each label
@@ -706,6 +756,7 @@ fn find_json_row<'a>(labels_data: &'a RecordLabelsData, name: &str) -> Option<&'
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::genre::MusicGenre;
     use crate::game::music::{Release, ReleaseType};
     use crate::game::world::LabelStrategy;
     use rand::SeedableRng;
@@ -866,6 +917,124 @@ mod tests {
                 "royalty {r:.3} out of the sane band"
             );
         }
+    }
+
+    // --- strategy colour on pricing (§G) ------------------------------------
+
+    #[test]
+    fn artist_friendly_offers_a_higher_royalty_than_a_hit_factory() {
+        // Identical stature, reach, capital, and act fame — only the A&R
+        // strategy differs. ArtistFriendly leads with royalty; a HitFactory trims
+        // it (it led with the advance instead). (§G)
+        let mut friendly = label_fixture(5_000_000, 60, 55, LabelTier::Independent);
+        friendly.strategy = LabelStrategy::ArtistFriendly;
+        let mut factory = label_fixture(5_000_000, 60, 55, LabelTier::Independent);
+        factory.strategy = LabelStrategy::HitFactory;
+
+        let friendly_r = priced_royalty(&friendly, 60);
+        let factory_r = priced_royalty(&factory, 60);
+        assert!(
+            friendly_r > factory_r,
+            "ArtistFriendly ({friendly_r:.3}) must offer a higher royalty than HitFactory \
+             ({factory_r:.3}) at equal fame/capital"
+        );
+        for r in [friendly_r, factory_r] {
+            assert!(
+                (ROYALTY_REACH_MIN..=ROYALTY_HARD_CAP).contains(&r),
+                "royalty {r:.3} out of the sane band"
+            );
+        }
+    }
+
+    #[test]
+    fn a_hit_factory_pays_a_bigger_advance_than_an_artist_friendly_label() {
+        // Capital high enough that affordability doesn't bind, so the strategy
+        // multiplier is what separates them (§G: a HitFactory buys the act up
+        // front). The advance still stays inside the affordability ceiling.
+        let mut factory = label_fixture(50_000_000, 70, 60, LabelTier::Major);
+        factory.strategy = LabelStrategy::HitFactory;
+        let mut friendly = label_fixture(50_000_000, 70, 60, LabelTier::Major);
+        friendly.strategy = LabelStrategy::ArtistFriendly;
+
+        let factory_adv = priced_advance(&factory, 80);
+        let friendly_adv = priced_advance(&friendly, 80);
+        assert!(
+            factory_adv > friendly_adv,
+            "HitFactory ({factory_adv}) must pay a bigger advance than ArtistFriendly \
+             ({friendly_adv})"
+        );
+        // The L-BID affordability invariant still holds for the aggressive one.
+        assert!(i64::from(factory_adv) <= advance_affordable_ceiling(&factory));
+    }
+
+    #[test]
+    fn a_genre_purist_only_offers_in_specialty() {
+        // A GenrePurist declines outright for an out-of-specialty act, and does
+        // NOT decline for one in its wheelhouse (it will then table an offer at
+        // a fit premium). (§G)
+        let mut purist = label_fixture(5_000_000, 40, 45, LabelTier::Independent);
+        purist.strategy = LabelStrategy::GenrePurist;
+        purist.genres = vec![MusicGenre::Punk];
+        assert!(
+            declines_on_genre(&purist, &MusicGenre::Pop),
+            "a GenrePurist must decline an out-of-specialty act"
+        );
+        assert!(
+            !declines_on_genre(&purist, &MusicGenre::Punk),
+            "a GenrePurist must NOT decline an in-specialty act"
+        );
+
+        // Its fit premium: for a matching act it out-royalties a plain Balanced
+        // peer with the same reach/capital (the "pays a premium for fit" half).
+        let mut balanced = label_fixture(5_000_000, 40, 45, LabelTier::Independent);
+        balanced.genres = vec![MusicGenre::Punk];
+        assert!(priced_royalty(&purist, 50) > priced_royalty(&balanced, 50));
+
+        // Every other strategy is happy to reach outside its wheelhouse — genre
+        // only sharpens appetite, it never forbids.
+        assert!(
+            !declines_on_genre(&balanced, &MusicGenre::Pop),
+            "a Balanced label signs outside its specialty"
+        );
+    }
+
+    #[test]
+    fn strategy_colours_renewal_patience() {
+        // A shallow-but-weak red that a patient ArtistFriendly label still
+        // extends through, but an impatient HitFactory walks away from — the
+        // renewal §E-4 decision coloured by §G. 20k sits between HitFactory's
+        // scaled floor (15k) and ArtistFriendly's (45k).
+        let unrecouped = 20_000;
+        let weak = DEAL_RENEWAL_WEAK_SALES_MAX_COMMERCIAL_SUCCESS;
+
+        assert!(
+            matches!(
+                renewal_decision(unrecouped, weak, LabelStrategy::HitFactory),
+                RenewalDecision::Silence
+            ),
+            "a HitFactory has short patience — silence on a shallow-but-weak red"
+        );
+        assert!(
+            matches!(
+                renewal_decision(unrecouped, weak, LabelStrategy::ArtistFriendly),
+                RenewalDecision::Extension
+            ),
+            "an ArtistFriendly label is patient — an extension, not silence"
+        );
+        // Balanced keeps the exact v0.7 threshold (30k), so still an extension.
+        assert!(matches!(
+            renewal_decision(unrecouped, weak, LabelStrategy::Balanced),
+            RenewalDecision::Extension
+        ));
+        // The recouped + decent-sales new-contract path is strategy-independent.
+        assert!(matches!(
+            renewal_decision(
+                0,
+                DEAL_RENEWAL_DECENT_SALES_MIN_COMMERCIAL_SUCCESS,
+                LabelStrategy::HitFactory
+            ),
+            RenewalDecision::NewContract
+        ));
     }
 
     // --- bidding escalation -------------------------------------------------
