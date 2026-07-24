@@ -107,7 +107,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-SCALE** | Decompress to one era-real money scale (§B): retire `SALES_INCOME_DIVISOR`, set era-real per-copy income, scale lifestyle/tour/recording/pressing/advance costs in lockstep; re-validate every v0.7 §F ratio in the sim | L | — | income/cost consts across `constants.rs`, `economy.rs` payout math, `data/record_labels.json` advance ranges, coupled cost sites (documented "COUPLED" comments) | ✅ done | agent-lscale (worktree) | dbb803d |
 | **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ✅ done | agent-lentity (worktree) | 9106e1d |
 | **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ✅ done | agent-lreach (worktree) | e9b329c |
-| **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | 🔒 claimed | agent-lroster (worktree) | — |
+| **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | ✅ done | agent-lroster (worktree) | 3122c25 |
 | **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | ⬜ open | — | — |
 | **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | ⬜ open | — | — |
 | **L-CHAR** | Label character / A&R (§G): `LabelStrategy` enum + creative-freedom effects wired into offer pricing, single-cut aggression/memos, renewal behavior | M | L-BID | `LabelStrategy` in `world/labels.rs`, hooks in `label_moves.rs` + `world/deals.rs`, strategy consts | ⬜ open | — | — |
@@ -179,6 +179,24 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 3 complete: L-ROSTER integrated (`3122c25`), 3-way over
+  L-REACH.** Three additive conflicts (the `use` block, the const block, the
+  test block in `constants.rs`/`world/labels.rs`/`tests/labels.rs`) resolved by
+  keeping both sides; fmt fix folded in. Suite **216 pass** (+4), determinism
+  trio unmodified, clippy/fmt clean, save-compat green. **Combined solvency
+  sweep** (reach drift + active rosters together): **0 insolvent**, capital
+  $401k–$24.8M — sane, no explosion. The industry now lives: labels sign scene
+  acts by fit+appetite (233/260 signed), rosters book chart-presence margin, and
+  reach/tier drift off the resulting capital. **Deferred (not a gap):** scene
+  chart-hits are not wired into L-REACH's `hit_window` recency bonus — roster
+  success already drives reach via the `capital` pathway; the explicit
+  `record_chart_hit` feed for scene acts needs stable scene-release ids, left as
+  a minor L-SIM/L-UI-era enhancement. **Half the cycle done (5/11).** Remaining:
+  wave 4 = L-BID (priced offers + bidding) + L-MNA (distress/acquisition/folding)
+  + L-CHAR (strategy/creative-freedom effects — **prereq L-BID**), then L-UI,
+  with L-SIM the continuous [tune] referee. L-BID + L-MNA parallelize (deals.rs
+  vs labels.rs status); L-CHAR follows L-BID (both touch deals.rs).
 
 - 2026-07-24 **Wave 3a integrated: L-REACH (`e9b329c`), clean cherry-pick.**
   212 pass (+8), determinism trio unmodified, clippy/fmt clean, solvency sweep
