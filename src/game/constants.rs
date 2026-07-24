@@ -43,6 +43,13 @@ pub(super) const UNITS_PER_SCORE_POINT: f32 = 30.0;
 /// capped by a small pressing run earns `run / divisor` — which is why the
 /// Garage run below is sized to `500 × divisor`, holding a garage-run act's
 /// income where it was.
+///
+/// L-SCALE (v0.8 §B) will **retire** this (set to 1) as the first step of the
+/// one-honest-scale decompression — but only in lockstep with the uniform ×3
+/// of every *other* dollar in the game (see the HANDOFF L-SCALE Notes for the
+/// full inventory). Retiring it alone triples record income while tour/gig
+/// income stay flat, skewing the balance toward records — so it is left at 3
+/// until L-SCALE lands the whole renumbering together.
 pub(super) const SALES_INCOME_DIVISOR: u32 = 3;
 pub(super) const INDIE_INCOME_PER_COPY: u32 = 2;
 pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;

@@ -138,5 +138,44 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
 
 - 2026-07-24: board opened by the coordinator. Foundation (sales fix) is
   in the branch. Design doc `docs/DESIGN-v0.8-label-cycle.md` proposed;
-  the two flagged coordinator calls (§B scale model, §F founding) should
-  be settled before L-SCALE is claimed.
+  both flagged calls settled — §B **one honest scale**, §F **founding
+  off** to start.
+
+- 2026-07-24 **L-SCALE scouting (measured, not yet committed).** Retiring
+  `SALES_INCOME_DIVISOR` alone (3 → 1) was built and swept: it works
+  directionally — record income triples, so med net worth over 15 yrs
+  rose (label-loyalist $2.56M → $3.96M; studio-rat climbed out of the red,
+  −$116 → +$92.9k, bankruptcies 10 → 6). **But it skews the game toward
+  records:** tour/gig income stayed flat, so road-dog's wins collapsed
+  2 → 0. Confirmed: the divisor must be retired *only in lockstep* with a
+  uniform ×3 of every other dollar. Reverted to keep the branch green; the
+  full renumbering below is L-SCALE's actual job.
+
+  **Income sources (must all end at the same scale):** record catalog gross
+  (`economy.rs:~849`, already ×3 once the divisor is retired) · tour box
+  office (`TOUR_GROSS_COEFFICIENT` 0.15 → ×3, `live.rs` `base_gross`) · gig
+  earnings (`live.rs:308` — trace its formula/constant) · support-slot pay
+  (`business.rs:288` `offer.pay` — scale at its generation site) · signing
+  advance (`data/record_labels.json`, see the caveat).
+
+  **Cost constants to ×3:** `SINGLE_RECORDING_COST` (100), `ALBUM_RECORDING_
+  BASE_COST` (1000), `DOCTOR_VISIT_COST` (50) in `src/data/constants.rs` ·
+  `LIFESTYLE_UPKEEP_PER_WEEK` · `TOUR_RIG_COST_PER_WEEK` ·
+  `PRESSING_SETUP_SINGLE/ALBUM` · `DISTRIBUTION_CHANNEL_FEE` in
+  `constants.rs` · marketing campaign `cost:` values in `music.rs` (100…2000).
+  `PRESSING_PER_COPY_*` auto-triple with the divisor; **copy counts do NOT
+  scale** (`PRESSING_TIERS`, cert thresholds, `UNITS_PER_SCORE_POINT`).
+
+  **`LABEL_RECOUP_PRESSING_PER_COPY`** 0.05 → 0.15 (un-divide, keep recoup
+  coupling — see its comment).
+
+  **Caveat / cross-check with the recoupment concern (parked from PR #22):**
+  scaling advances ×3 preserves the advance-to-income ratio (recoupment stays
+  as hard as today). *Leaving advances unscaled* instead makes recoupment ~3×
+  easier and shrinks the windfall — directly addressing "major advances never
+  recoup." Pick one deliberately and let L-SIM's "signed nets ≥ indie over a
+  full deal" + "median recoup < half term" targets referee it.
+
+  **Exact-value tests will break** (income/recoup dollar assertions in
+  `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
+  Determinism trio stays unmodified.

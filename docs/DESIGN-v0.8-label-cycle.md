@@ -10,12 +10,13 @@
 > and — underneath all of it — a money scale where a superstar and their
 > label both earn what the era actually paid.
 >
-> This is the **proposed decided design** for the v0.8 feature cycle,
-> opened 2026-07-24. It is a **proposal for the coordinator's sign-off**,
-> not yet contract — the [tune] numbers and any section the coordinator
-> revises are open until then. Once agreed, the cycle's task board is
-> `HANDOFF.md` at the repo root. FUTURE.md (Musician, relationships,
-> solo/band) stays the north star for a later cycle.
+> This is the **decided design** for the v0.8 feature cycle, opened
+> 2026-07-24. The two flagged forks are settled (coordinator, 2026-07-24):
+> **§B — one honest money scale** (not dual-scale), and **§F — label
+> founding starts off** (sim may flip it). Remaining [tune] numbers are
+> validated in L-SIM, not contract. The cycle's task board is `HANDOFF.md`
+> at the repo root. FUTURE.md (Musician, relationships, solo/band) stays
+> the north star for a later cycle.
 >
 > **Builds on:** the record-sales fix (branch `fix/balance-major-label-
 > international`, folded in as this cycle's foundation) that gave a label's
@@ -157,12 +158,21 @@ bankrupted by the rescale, no bot trivially rich, all §F ratios intact).
 It is sequenced **first** (L-SCALE, below) so every later section books
 its money at the final scale.
 
-> **Coordinator call flagged:** the alternative is a *dual-scale* model —
-> keep the player's wallet compressed for gameplay affordability, express
-> label capital on a separate "industry" scale with an explicit conversion
-> at the royalty boundary. Cheaper and lower-risk, but the player's own
-> "gangbuster" earnings stay compressed. The decided design above chooses
-> one honest scale; note this fork before L-SCALE starts.
+> **Decided 2026-07-24 (coordinator): one honest scale.** The dual-scale
+> alternative (compressed player wallet + a separate "industry" scale for
+> label capital) is rejected — the player's own earnings should reach
+> era-real "gangbuster" magnitude too, not just the labels'. L-SCALE
+> therefore decompresses the single shared economy end-to-end.
+>
+> **Method (measure, then rescale):** the copy counts are already at the
+> real certification scale (50k Silver …) — only the *dollars per copy*
+> are compressed by `SALES_INCOME_DIVISOR`. So L-SCALE (a) retires the
+> divisor (income rises to meet the already-real copy counts) and rebalances
+> the divisor-coupled cost literals, then (b) rescales the *independent*
+> player-cost constants (lifestyle, tour, recording, pressing setup,
+> marketing, advances, tour box-office) so every §F affordability ratio
+> holds. Step (b) is driven by the sim's §F ratio readout after step (a),
+> not guessed — the sim says which costs moved out of band, and by how much.
 
 ---
 
