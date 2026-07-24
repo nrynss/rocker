@@ -1341,6 +1341,10 @@ fn mna_resolves_injected_distress_within_the_fold_horizon() {
     let mut distress_events = 0u32;
     let mut deepest_capital = i64::MAX;
     let mut max_weeks_in_red = 0u16;
+    // Rarity (§I "failure is real but rare"): the whole population at the end,
+    // so we can show failure is not the *median* label's fate.
+    let mut total_label_instances = 0u32;
+    let mut nonactive_at_end = 0u32;
 
     for seed in 1..=SEEDS {
         let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(seed));
@@ -1384,6 +1388,15 @@ fn mna_resolves_injected_distress_within_the_fold_horizon() {
                 max_weeks_in_red = max_weeks_in_red.max(label.weeks_below_floor);
             }
         }
+
+        // Final population for this seed: only the two bled labels should have
+        // been driven out of the market; the rest ride out the 15 years Active.
+        for label in world.labels.values() {
+            total_label_instances += 1;
+            if matches!(label.status, LabelStatus::Folding | LabelStatus::Acquired) {
+                nonactive_at_end += 1;
+            }
+        }
     }
 
     println!("L-MNA safety valve over 15 yrs × {SEEDS} seeds (two labels bled red per seed):");
@@ -1393,6 +1406,9 @@ fn mna_resolves_injected_distress_within_the_fold_horizon() {
     println!("  deepest capital any label reached: ${deepest_capital}");
     println!(
         "  longest any label sat in the red: {max_weeks_in_red} weeks (fold horizon {FOLD_WEEKS})"
+    );
+    println!(
+        "  final population: {nonactive_at_end}/{total_label_instances} labels ended folded or acquired"
     );
 
     // Every seed bled two labels red — M&A must have resolved them, not left
@@ -1407,6 +1423,21 @@ fn mna_resolves_injected_distress_within_the_fold_horizon() {
         max_weeks_in_red <= FOLD_WEEKS + REACH_DRIFT_PERIOD_WEEKS as u16,
         "a label sat in the red for {max_weeks_in_red} weeks, past the fold horizon {FOLD_WEEKS} — \
          the valve failed to fire"
+    );
+    // §I "failure is real but rare": even with two labels bled red every seed,
+    // failure is a clear minority — not the median label's fate. The rest of the
+    // industry (14 of 16 per seed) rides out the 15 years Active.
+    assert!(
+        nonactive_at_end * 3 < total_label_instances,
+        "failure should not be the median label's fate: {nonactive_at_end}/{total_label_instances} \
+         labels ended folded or acquired"
+    );
+    // Acquisition is the common resolution and outright folding the rarer one —
+    // "the majors consolidated the independents" (§F), not a wave of collapses.
+    assert!(
+        acquisitions > foldings,
+        "acquisition should be the common resolution, folding the rare one (acquisitions \
+         {acquisitions}, foldings {foldings})"
     );
 }
 
