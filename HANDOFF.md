@@ -108,11 +108,12 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ✅ done | agent-lentity (worktree) | 9106e1d |
 | **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ✅ done | agent-lreach (worktree) | e9b329c |
 | **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | ✅ done | agent-lroster (worktree) | 3122c25 |
-| **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | ⬜ open | — | — |
-| **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | ⬜ open | — | — |
+| **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | 🔒 claimed | agent-lbid (worktree) | — |
+| **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | 🔒 claimed | agent-lmna (worktree) | — |
 | **L-CHAR** | Label character / A&R (§G): `LabelStrategy` enum + creative-freedom effects wired into offer pricing, single-cut aggression/memos, renewal behavior | M | L-BID | `LabelStrategy` in `world/labels.rs`, hooks in `label_moves.rs` + `world/deals.rs`, strategy consts | ⬜ open | — | — |
 | **L-CERT** | Year-gate certifications to the era (§I): no scheme <1973, no Platinum <1976, no multi-platinum <1984; thresholds unchanged, only availability gates on year | S | — | certification pass in `economy.rs`, year-gate consts in `constants.rs` | ✅ done | agent-lcert (worktree) | c2be9a0 |
-| **L-UI** | Label ledger/browser modal, deal-picker health/trajectory annotations, industry news lines (§H) | M | L-REACH, L-BID, L-MNA | **new** `src/ui/render/modals/labels.rs` + mod/input wiring, deal-picker annotations in `pickers.rs`, news lines at their source sites | ⬜ open | — | — |
+| **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/labels.rs` + mod/input wiring in `src/ui/app.rs` | 🔒 claimed | agent-lui1 (worktree) | — |
+| **L-UI-2** | UI slice 2 (§H): deal-picker health/trajectory annotations + industry news lines (mergers/foldings/distress/rival breakouts) at their source sites | S | L-BID, L-MNA, L-UI-1 | deal-picker annotations in `pickers.rs`, news lines at their source sites | ⬜ open | — | — |
 | **L-SIM** | Sim-lab validation (§I): label-solvency + gangbuster-target + bidding + graceful-failure bots and assertions; scale re-validation harness for L-SCALE | M | L-SCALE (continuous thereafter) | `src/game/sim.rs`, `src/game/tests/**` (new files) | ⬜ open | — | — |
 | **L-CLOSE** | Cycle close: board audit, CHANGELOG, bump 0.8.0, archive this board, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | — | — |
 
@@ -179,6 +180,18 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 4 dispatched + L-UI reordered forward.** User asked (mid-
+  cycle) for **per-record sales in the UI** ("no way to see the sales of each
+  record") and to stop checkpoint-asking and just drive the loop. So: L-UI split
+  into **L-UI-1** (per-record sales in the discography + a label-ledger browser
+  of already-built fields — buildable now on L-ROSTER) and **L-UI-2** (bidding/
+  M&A/news annotations, needs wave 4). Dispatched **three parallel worktree
+  agents**: L-UI-1 (`ui/` only), L-BID (`world/deals.rs`), L-MNA (`world/labels.rs`
+  status + `band.rs`/`economy.rs` deal-transfer call-sites) — mostly disjoint
+  files, integrate sequentially. L-CHAR still gated on L-BID (both touch
+  `deals.rs`). Coordinator owns the board; agents ff-merge origin/label/v0.8
+  first, commit, report SHA, don't push, don't touch HANDOFF.md.
 
 - 2026-07-24 **Wave 3 complete: L-ROSTER integrated (`3122c25`), 3-way over
   L-REACH.** Three additive conflicts (the `use` block, the const block, the
