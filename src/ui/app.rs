@@ -439,7 +439,11 @@ impl App {
                     if labels == 0 {
                         "the label ledger".into()
                     } else {
-                        format!("{} labels' ledger", labels)
+                        format!(
+                            "{} label{} ledger",
+                            labels,
+                            if labels == 1 { "'s" } else { "s'" }
+                        )
                     }
                 },
                 enabled: true,
