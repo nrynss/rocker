@@ -926,6 +926,77 @@ fn median_signed_act_recoups_the_advance_before_the_terms_halfway_mark() {
     );
 }
 
+/// L-SIM preview (v0.8 §I) — requested at the L-ENTITY checkpoint: over full
+/// 15-year careers, does the label balance sheet (L-ENTITY §A) stay solvent
+/// and sane? Scene-band signing (L-ROSTER) isn't built yet, so only the
+/// player's *current* label sees ledger activity — its capital should climb on
+/// the act's sales margin and dip on the advance/pressing it fronts, netting
+/// well positive for a productive signed career; every other label sits at its
+/// seeded capital, which this also sanity-checks. Not the final assertion
+/// sweep (L-SIM owns the calibrated bounds) — it prints the trajectories and
+/// asserts only the one hard invariant that matters now: a label the player is
+/// signed to is never left deeply insolvent by the advance it fronted (real
+/// distress/bankruptcy is L-MNA's job, not an accident of L-ENTITY).
+#[test]
+#[ignore]
+fn label_capital_trajectories_over_fifteen_years() {
+    const HORIZON: u32 = 15 * constants::WEEKS_PER_YEAR;
+    const SEEDS: u64 = 24;
+
+    let mut player_label: Vec<(String, i64, i64)> = Vec::new(); // (name, seeded, end)
+    let mut signed_at_end = 0u32;
+    let mut min_capital_any = i64::MAX;
+    let mut max_capital_any = i64::MIN;
+    let mut insolvent_instances = 0u32;
+
+    for seed in 1..=SEEDS {
+        let mut game = seeded_game(seed);
+        let seeded: std::collections::BTreeMap<u32, i64> = game
+            .world
+            .labels
+            .iter()
+            .map(|(id, l)| (*id, l.capital))
+            .collect();
+        let _career = drive(Bot::LabelLoyalist, &mut game, HORIZON);
+
+        if let Some(id) = game.band.current_deal().and_then(|d| d.label_id)
+            && let Some(label) = game.world.labels.get(&id)
+        {
+            signed_at_end += 1;
+            let start = seeded.get(&id).copied().unwrap_or(0);
+            player_label.push((label.name.clone(), start, label.capital));
+        }
+        for label in game.world.labels.values() {
+            min_capital_any = min_capital_any.min(label.capital);
+            max_capital_any = max_capital_any.max(label.capital);
+            if label.capital < 0 {
+                insolvent_instances += 1;
+            }
+        }
+    }
+
+    player_label.sort_by_key(|&(_, _, end)| end);
+    println!(
+        "player's label capital after 15 yrs (label-loyalist, {SEEDS} seeds; signed at end: {signed_at_end}):"
+    );
+    for (name, start, end) in &player_label {
+        println!(
+            "  {name:<22} seeded ${start:>12}  ->  end ${end:>13}  (Δ ${:>+13})",
+            end - start
+        );
+    }
+    println!(
+        "all labels/seeds at end: lowest capital ${min_capital_any}, highest ${max_capital_any}, insolvent instances (capital<0): {insolvent_instances}"
+    );
+
+    for (name, _start, end) in &player_label {
+        assert!(
+            *end > -1_000_000,
+            "player's label {name} ended deeply insolvent (${end}) — the advance/pressing it fronted outran the act's sales margin"
+        );
+    }
+}
+
 /// With both story-event taps silenced (they can hand out fame), a band
 /// that never records is fully deterministic: fame never exceeds
 /// `LIVE_FAME_BASE_CAP`, on every seed, every time.

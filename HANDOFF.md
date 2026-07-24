@@ -180,6 +180,8 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
 
+- 2026-07-24 **L-ENTITY verified at scale** (`label_capital_trajectories_over_fifteen_years`, an L-SIM-preview `#[ignore]` sweep committed to `sim.rs`; run it with `--ignored --nocapture`). 24 seeds × 15 yrs, label-loyalist: **0 insolvent labels** (lowest capital anywhere $25,920, a static boutique seed; highest $12.86M), and the player's label nets **+$2.4M…+$7.5M** — a productive signed act makes its label millions; ledger sound, gangbuster money sane. **Finding that shapes L-ROSTER/L-BID:** the loyalist only ever signs *indies* (renewal keeps it on its first label — PR #22's parked item) so **majors sit fully static** at seed capital (no roster activity until scene bands sign). No bot exercises the major-label path yet — L-ROSTER makes majors book margin off rosters; the major path needs L-BID (a big act reaching a major) before its economics can be swept.
+
 - 2026-07-24 **Wave 2 integrated: L-ENTITY (`9106e1d`), fast-forward.** The
   agent ff-merged `origin/label/v0.8` first (worktree-base lesson applied), so
   it landed clean. Suite **204 pass**, determinism trio unmodified, clippy/fmt
