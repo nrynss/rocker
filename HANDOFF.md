@@ -104,7 +104,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Done |
 |----|------|------|---------|------------------|--------|------------|------|
-| **L-SCALE** | Decompress to one era-real money scale (§B): retire `SALES_INCOME_DIVISOR`, set era-real per-copy income, scale lifestyle/tour/recording/pressing/advance costs in lockstep; re-validate every v0.7 §F ratio in the sim | L | — | income/cost consts across `constants.rs`, `economy.rs` payout math, `data/record_labels.json` advance ranges, coupled cost sites (documented "COUPLED" comments) | 🔒 claimed | agent-lscale (worktree) | — |
+| **L-SCALE** | Decompress to one era-real money scale (§B): retire `SALES_INCOME_DIVISOR`, set era-real per-copy income, scale lifestyle/tour/recording/pressing/advance costs in lockstep; re-validate every v0.7 §F ratio in the sim | L | — | income/cost consts across `constants.rs`, `economy.rs` payout math, `data/record_labels.json` advance ranges, coupled cost sites (documented "COUPLED" comments) | ✅ done | agent-lscale (worktree) | dbb803d |
 | **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ⬜ open | — | — |
 | **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ⬜ open | — | — |
 | **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | ⬜ open | — | — |
@@ -179,6 +179,29 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 1 integrated.** Both L-CERT (`c2be9a0`) and L-SCALE
+  (`dbb803d`) are on `label/v0.8`; combined suite **195 pass**, determinism
+  trio unmodified, clippy/fmt clean. L-SCALE cherry-picked over L-CERT with
+  one trivial conflict (the `SALES_INCOME_DIVISOR` comment block, resolved to
+  L-SCALE's `=1`). **Validation sweep:** every bot's median 15-yr net worth
+  ≈3× the pre-scale baseline (2.8×–3.8×) — uniform decompression confirmed,
+  the step-(a) record-skew gone (road-dog's money tripled with everyone's).
+  Gangbuster money real: signed loyalist $6.3M. No deaths; broke-counts
+  normal. **L-SIM watch-items (formalize as assertions, then tune):**
+  (a) road-dog now out-earns the release grinders by ~1.4× and lands 0/60
+  wins — the sales fix's touring-carries-records-abroad interacts with the
+  ×3 tour gross; decide whether §F's "road-dog must not out-earn grinders"
+  still holds or is superseded by the touring-carry design; (b) studio-rat
+  marginal ($4k median, 15/60 broke — never dies). Neither blocks the cycle.
+
+- 2026-07-24 **Note on worktree bases:** the Agent-tool worktrees checked
+  out at `main`, not `label/v0.8`. L-CERT self-aligned (ff-merge) so it
+  landed as a clean fast-forward; L-SCALE did not (its edits sat on main,
+  uncommitted), so the coordinator committed them in the worktree and
+  cherry-picked onto `label/v0.8` (3-way against the common base). Future
+  waves: tell dispatched agents to `git merge --ff-only origin/label/v0.8`
+  into their worktree FIRST, and to commit + report their SHA.
 
 - 2026-07-24 **Wave 1 dispatched to worktree agents.** L-SCALE and L-CERT
   are the only tasks with prereqs met, and they touch only different
