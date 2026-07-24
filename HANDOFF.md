@@ -105,7 +105,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status | Claimed by | Done |
 |----|------|------|---------|------------------|--------|------------|------|
 | **L-SCALE** | Decompress to one era-real money scale (§B): retire `SALES_INCOME_DIVISOR`, set era-real per-copy income, scale lifestyle/tour/recording/pressing/advance costs in lockstep; re-validate every v0.7 §F ratio in the sim | L | — | income/cost consts across `constants.rs`, `economy.rs` payout math, `data/record_labels.json` advance ranges, coupled cost sites (documented "COUPLED" comments) | ✅ done | agent-lscale (worktree) | dbb803d |
-| **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ⬜ open | — | — |
+| **L-ENTITY** | `Label` world entity + `world/labels.rs` (§A): struct, worldgen seeding from `record_labels.json`, weekly wholesale ledger booking margin on all roster copies, capital debits on advance/pressing/promo | L | L-SCALE | **new** `src/game/world/labels.rs`, `labels` map on `GameWorld` (`world/mod.rs`), ledger hook in `economy.rs` sales pass, label consts in `constants.rs` | ✅ done | agent-lentity (worktree) | 9106e1d |
 | **L-REACH** | Dynamic reach + tier drift (§C): target from capital/hit-window, bounded yearly drift with hysteresis, tier thresholds, live deal reads through to label reach (catalogue tail still freezes `label_market_reach`) | M | L-ENTITY | reach/tier drift in `world/labels.rs`, deal→label read-through in `band.rs`/`economy.rs`, drift consts | ⬜ open | — | — |
 | **L-ROSTER** | Scene-band signing + roster P&L (§D): labels scout/sign scene acts by fit+appetite; roster releases feed label capital; rival act→label visibility | M | L-ENTITY | roster/scouting in `world/labels.rs` + `world/scene.rs` signing hook, roster consts | ⬜ open | — | — |
 | **L-BID** | Competition + bidding (§E): offers priced from live label state, multiple concurrent offers, bidding escalation bounded by capital/financial_power | M | L-REACH, L-ROSTER | offer generation + pricing in `world/deals.rs`, bidding consts | ⬜ open | — | — |
@@ -179,6 +179,23 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **Wave 2 integrated: L-ENTITY (`9106e1d`), fast-forward.** The
+  agent ff-merged `origin/label/v0.8` first (worktree-base lesson applied), so
+  it landed clean. Suite **204 pass**, determinism trio unmodified, clippy/fmt
+  clean, save-compat covered (labels + `label_id` round-trip; pre-0.8 load;
+  v0.4 fixture green). Labels are now world entities with a balance sheet:
+  seeded from `record_labels.json` (capital = financial_power³ × 15 → Columbia
+  ~$12.9M … SST ~$26k), and a signed act's sales book the ~$2.70/copy wholesale
+  spread to its label's `capital` (Gold ~$405k, Platinum ~$1.08M; a sustained
+  hit booked $1.79M). `label_id` added to `RecordDeal` links the player's deal
+  to its entity. **L-SIM watch-item / accounting seam:** per-copy
+  `manufacturing_cost` ($1.00 COGS on a sold copy) and the pressing outlay
+  debited to capital ($0.15/copy pressed, recoup-coupled) both touch the
+  physical run at different magnitudes — implemented per §A, flagged [tune] in
+  `constants.rs` for L-SIM to referee. Forward-compat stubs left with
+  `// L-REACH/L-ROSTER/L-MNA/L-CHAR will` markers. **Wave 3 (L-REACH + L-ROSTER)
+  now unblocked** — both extend `world/labels.rs`, so integrate sequentially.
 
 - 2026-07-24 **Wave 1 integrated.** Both L-CERT (`c2be9a0`) and L-SCALE
   (`dbb803d`) are on `label/v0.8`; combined suite **195 pass**, determinism
