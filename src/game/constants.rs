@@ -815,6 +815,77 @@ pub(super) const TIER_MAJOR_REACH_DEMOTE: u8 = 62;
 pub(super) const TIER_INDEPENDENT_MIN_CAPITAL: i64 = 200_000;
 pub(super) const TIER_MAJOR_MIN_CAPITAL: i64 = 2_000_000;
 
+// ============================================================================
+// L-ROSTER (v0.8 §D): scene-band signing + roster P&L. Labels scout and sign
+// unsigned scene acts by fit (genre specialty overlap) and appetite (weight
+// class + capital), populate their `roster`, and book a plausible weekly
+// wholesale margin off each signed act's chart presence — what finally makes
+// majors *active* instead of sitting static at seed capital (L-ENTITY only ever
+// moved the player's own label). All rolls derive from the injected world seed;
+// labels/bands iterate in a deterministic order. Every number here is [tune],
+// refereed by L-SIM's 15-yr label-solvency sweep (§I): sized to keep a
+// deep-roster major accumulating in the low-to-mid millions over a career —
+// the player-side ledger's ballpark (millions, not billions) — while boutiques
+// stay solvent.
+// ============================================================================
+
+/// A scene act must reach this scene fame before any label will scout it —
+/// below it an act is too small to be worth a contract. [tune]
+pub(super) const ROSTER_SIGN_MIN_FAME: u8 = 20;
+
+/// Scouting cadence: each unsigned, eligible band rolls this once a week to draw
+/// label interest. Kept low so the ~180-band scene turns over gradually rather
+/// than in a signing frenzy. [tune]
+pub(super) const ROSTER_SCOUT_WEEKLY_CHANCE: f64 = 0.04;
+
+/// A signing at/above this scene fame makes the news feed (matches the pre-0.8
+/// scene-signing threshold); smaller signings happen silently. [tune]
+pub(super) const ROSTER_SIGN_NEWS_FAME: u8 = 45;
+
+/// Roster capacity by tier — a major carries a deep roster, a boutique a
+/// handful. A label at capacity stops signing (design §D). [tune]
+pub(super) const ROSTER_CAP_BOUTIQUE: usize = 6;
+pub(super) const ROSTER_CAP_INDEPENDENT: usize = 15;
+pub(super) const ROSTER_CAP_MAJOR: usize = 30;
+
+/// Appetite ceiling: a label reaches for a band whose scene fame is no more than
+/// this many points above its own `financial_power` — a lean boutique cannot
+/// land a marquee act (it can't front the advance and the star wouldn't sign).
+/// [tune]
+pub(super) const ROSTER_APPETITE_FAME_HEADROOM: u8 = 15;
+
+/// Caution: a label only signs when its `capital` covers at least this many
+/// times the advance — so a label deep in the red never signs, and a lean one
+/// signs sparingly (a broke label signs less, design §D). [tune]
+pub(super) const ROSTER_SIGN_CAPITAL_SAFETY: i64 = 2;
+
+/// Genre-fit bonus in label selection: a band whose genre sits in the label's
+/// specialty scores this much higher, so labels lean toward their wheelhouse
+/// without being locked to it (`GenrePurist` strictness is L-CHAR's, §G). [tune]
+pub(super) const ROSTER_FIT_MATCH_BONUS: i32 = 40;
+
+/// Roster-room weight in label selection: an emptier roster scores up to this
+/// many extra points (scaled by how full it is, tier-independent), so signings
+/// spread across peers instead of one label hogging its whole weight class
+/// before any other bites. [tune]
+pub(super) const ROSTER_ROOM_WEIGHT: i32 = 20;
+
+/// Signing advance debited from a label's `capital` when it signs a scene act:
+/// `base + fame × per_fame`. Modest against seed capital so it never bankrupts a
+/// label on its own — the act's roster margin replenishes it (design §D). [tune]
+pub(super) const ROSTER_SIGNING_BASE_COST: i64 = 1_000;
+pub(super) const ROSTER_SIGNING_COST_PER_FAME: i64 = 150;
+
+/// Scene-roster margin: a signed act's effective weekly chart score (summed over
+/// every board it charts on, so a major's wider distribution earns more) × this
+/// books to its label's `capital`. The scene analogue of the player-side
+/// per-copy wholesale spread (a scene act has no `copies_sold` pipeline, so its
+/// chart presence stands in for units moved). Sized so a scene act's per-release
+/// margin lands in the same ballpark as a comparable player release and a
+/// deep-roster major accumulates low-to-mid millions over 15 years — L-SIM
+/// referees against the solvency sweep. [tune]
+pub(super) const ROSTER_MARGIN_PER_CHART_SCORE: f32 = 1.0;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

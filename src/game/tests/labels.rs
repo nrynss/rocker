@@ -5,9 +5,15 @@
 //! own income and recoupment are unchanged — this only adds the label's side.
 
 use crate::data_loader::GameDataFiles;
-use crate::game::world::{GameWorld, Label, LabelTier};
+use crate::game::genre::MusicGenre;
+use crate::game::timeline::MusicTimeline;
+use crate::game::world::{
+    ChartRegion, GameWorld, Label, LabelStatus, LabelTier, RosterSlot, SCENE_MAX_BANDS,
+    SCENE_MIN_BANDS,
+};
 use rand::SeedableRng;
 use rand::rngs::StdRng;
+use std::collections::BTreeMap;
 
 use super::*;
 
@@ -710,4 +716,253 @@ fn frozen_reach_falls_back_to_the_deal_for_an_unseeded_label() {
     // And an unsigned band freezes nothing (an indie release).
     game.band.record_deal = None;
     assert_eq!(game.new_release_frozen_reach(), None);
+}
+
+// ---------------------------------------------------------------------------
+// §D (L-ROSTER): labels scout/sign scene acts by fit + appetite, and a signed
+// act's chart presence books wholesale margin to its label's capital.
+// ---------------------------------------------------------------------------
+
+/// A minimal Independent-tier candidate cloned off a real seed, so every field
+/// is valid; only the levers under test (genres, financial_power, capital) are
+/// set. Empty roster, `Active`.
+fn candidate_label(base: &Label, id: u32, genres: Vec<MusicGenre>, fp: u8, capital: i64) -> Label {
+    let mut label = base.clone();
+    label.id = id;
+    label.tier = LabelTier::Independent;
+    label.status = LabelStatus::Active;
+    label.genres = genres;
+    label.financial_power = fp;
+    label.capital = capital;
+    label.roster.clear();
+    label
+}
+
+/// The advance a signing costs, mirrored from `world::labels::scene_signing_cost`
+/// (private there) so these assertions track the constants if they retune.
+fn signing_cost(fame: u8) -> i64 {
+    ROSTER_SIGNING_BASE_COST + i64::from(fame) * ROSTER_SIGNING_COST_PER_FAME
+}
+
+#[test]
+fn labels_sign_scene_acts_by_fit_and_appetite() {
+    let data = GameDataFiles::load().expect("data files present");
+    let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(1));
+    let base = world.labels[&0].clone();
+
+    // Two otherwise-identical indies at the same weight class, both flush enough
+    // to front the advance: only their genre specialty differs.
+    let fame = 30u8;
+    let fp = 30u8; // weight class sits right on fame 30
+    let flush = 5_000_000i64;
+    world.labels.clear();
+    world.labels.insert(
+        0,
+        candidate_label(&base, 0, vec![MusicGenre::Rock], fp, flush),
+    );
+    world.labels.insert(
+        1,
+        candidate_label(&base, 1, vec![MusicGenre::Punk], fp, flush),
+    );
+
+    // Fit decides: a Punk act goes to the Punk-specialty label, a Rock act to
+    // the Rock one — genre specialty overlap is the tiebreak between equals.
+    assert_eq!(world.pick_signing_label(fame, &MusicGenre::Punk), Some(1));
+    assert_eq!(world.pick_signing_label(fame, &MusicGenre::Rock), Some(0));
+    // Neither's specialty (Jazz): fit ties at 0, so the deterministic lowest-id
+    // tiebreak picks id 0 — a definite, reproducible choice, never a panic.
+    assert_eq!(world.pick_signing_label(fame, &MusicGenre::Jazz), Some(0));
+
+    // Appetite: a broke label signs less. Push the Punk label deep into the red
+    // — now even a Punk act (its own specialty) can't sign there, and the flush
+    // Rock label takes it instead.
+    world.labels.get_mut(&1).unwrap().capital = -1;
+    assert_eq!(
+        world.pick_signing_label(fame, &MusicGenre::Punk),
+        Some(0),
+        "a label in the red is skipped even for a perfect-fit act"
+    );
+
+    // A label that cannot comfortably cover the advance (capital below the
+    // safety margin) also stays out — with both labels lean, nobody signs.
+    world.labels.get_mut(&0).unwrap().capital = signing_cost(fame); // < safety × cost
+    assert_eq!(
+        world.pick_signing_label(fame, &MusicGenre::Punk),
+        None,
+        "no label with the means to sign → the act stays unsigned"
+    );
+
+    // A boutique can't reach a marquee act: fame far above its financial_power
+    // is out of appetite range entirely.
+    world.labels.clear();
+    world.labels.insert(
+        0,
+        candidate_label(&base, 0, vec![MusicGenre::Rock], 15, flush),
+    );
+    assert_eq!(
+        world.pick_signing_label(90, &MusicGenre::Rock),
+        None,
+        "a fame-90 act is beyond a financial_power-15 label's appetite"
+    );
+}
+
+#[test]
+fn a_signed_scene_acts_chart_activity_lifts_its_labels_capital() {
+    let data = GameDataFiles::load().expect("data files present");
+    let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(2));
+
+    // Sign a scene band to a label: register it on the roster and mark the band
+    // (the scene's signed-to source of truth) so a reconcile keeps the slot.
+    let band_name = world.bands[0].name.clone();
+    let label_id = 0u32;
+    let label_name = world.labels[&label_id].name.clone();
+    world.bands[0].label = Some(label_name.clone());
+    world
+        .labels
+        .get_mut(&label_id)
+        .unwrap()
+        .roster
+        .push(RosterSlot {
+            band_name: band_name.clone(),
+            signed_week: 0,
+        });
+
+    // The act charts on two boards. (Scene entries are never `is_player`.)
+    world.submit_chart_entry(
+        ChartRegion::Local,
+        "Breakout".into(),
+        band_name.clone(),
+        false,
+        1000,
+    );
+    world.submit_chart_entry(
+        ChartRegion::Uk,
+        "Breakout".into(),
+        band_name.clone(),
+        false,
+        800,
+    );
+
+    let presence: u64 = world
+        .regional_charts
+        .values()
+        .flat_map(|entries| entries.iter())
+        .filter(|entry| entry.band_name == band_name)
+        .map(|entry| u64::from(entry.score))
+        .sum();
+    assert!(presence > 0, "the act has real chart presence");
+
+    let before = world.labels[&label_id].capital;
+    world.book_scene_roster_margin();
+    let after = world.labels[&label_id].capital;
+
+    assert!(
+        after > before,
+        "the roster act's chart activity lifted its label's capital: {before} → {after}"
+    );
+    assert_eq!(
+        after - before,
+        (presence as f32 * ROSTER_MARGIN_PER_CHART_SCORE) as i64,
+        "capital rose by the summed chart presence × the roster margin scale"
+    );
+
+    // A label with no charting roster act books nothing.
+    let idle = world
+        .labels
+        .values()
+        .find(|l| l.roster.is_empty())
+        .unwrap()
+        .id;
+    let idle_before = world.labels[&idle].capital;
+    world.book_scene_roster_margin();
+    assert_eq!(
+        world.labels[&idle].capital, idle_before,
+        "an empty roster earns nothing"
+    );
+}
+
+#[test]
+fn rosters_activate_the_industry_while_the_scene_stays_bounded() {
+    let data = GameDataFiles::load().expect("data files present");
+    let timeline = MusicTimeline::new(&data);
+    let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(3));
+    let mut rng = StdRng::seed_from_u64(4);
+
+    let seeded: BTreeMap<u32, i64> = world
+        .labels
+        .iter()
+        .map(|(id, l)| (*id, l.capital))
+        .collect();
+
+    // Signing is pure bookkeeping: it sets `label`/`roster`, never the roster
+    // of *bands*. The scene population is the existing sim's job, untouched.
+    let before = world.bands.len();
+    world.scout_and_sign_scene_acts(&mut StdRng::seed_from_u64(9), &mut Vec::new());
+    assert_eq!(
+        world.bands.len(),
+        before,
+        "the signing pass must not add or drop scene bands"
+    );
+
+    for _ in 0..200 {
+        world.update_week(&timeline, &data, &mut rng);
+        let n = world.bands.len();
+        assert!(
+            (SCENE_MIN_BANDS..=SCENE_MAX_BANDS).contains(&n),
+            "scene size {n} left its designed ~180 band bounds"
+        );
+    }
+    // Still bounded at the end — the ~180 scene never blew up or collapsed.
+    assert!((SCENE_MIN_BANDS..=SCENE_MAX_BANDS).contains(&world.bands.len()));
+
+    // The industry is alive: labels signed scene acts and capital moved.
+    assert!(
+        world.labels.values().any(|l| !l.roster.is_empty()),
+        "labels should have signed scene acts to their rosters"
+    );
+    assert!(
+        world.labels.iter().any(|(id, l)| l.capital != seeded[id]),
+        "at least one label's capital should have moved off its seed"
+    );
+    // The point of L-ROSTER: a major now carries a roster instead of sitting
+    // static at seed capital.
+    let major_active = world
+        .labels
+        .values()
+        .any(|l| l.tier == LabelTier::Major && !l.roster.is_empty());
+    assert!(major_active, "a major should be active with a roster");
+}
+
+#[test]
+fn scene_roster_signing_and_booking_is_deterministic() {
+    let data = GameDataFiles::load().expect("data files present");
+    let timeline = MusicTimeline::new(&data);
+    let run = || {
+        let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(5));
+        let mut rng = StdRng::seed_from_u64(6);
+        for _ in 0..120 {
+            world.update_week(&timeline, &data, &mut rng);
+        }
+        world
+    };
+    let summary = |w: &GameWorld| {
+        w.labels
+            .iter()
+            .map(|(id, l)| {
+                (
+                    *id,
+                    l.capital,
+                    l.roster
+                        .iter()
+                        .map(|s| s.band_name.clone())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        summary(&run()),
+        summary(&run()),
+        "same seed → identical rosters and label capital, signing and booking alike"
+    );
 }

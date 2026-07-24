@@ -25,13 +25,18 @@
 use crate::data_loader::{GameDataFiles, RecordLabel};
 use crate::game::constants::{
     HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED, REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS,
-    REACH_DRIFT_STEP, REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, TIER_INDEPENDENT_MIN_CAPITAL,
+    REACH_DRIFT_STEP, REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, ROSTER_APPETITE_FAME_HEADROOM,
+    ROSTER_CAP_BOUTIQUE, ROSTER_CAP_INDEPENDENT, ROSTER_CAP_MAJOR, ROSTER_FIT_MATCH_BONUS,
+    ROSTER_MARGIN_PER_CHART_SCORE, ROSTER_ROOM_WEIGHT, ROSTER_SCOUT_WEEKLY_CHANCE,
+    ROSTER_SIGN_CAPITAL_SAFETY, ROSTER_SIGN_MIN_FAME, ROSTER_SIGN_NEWS_FAME,
+    ROSTER_SIGNING_BASE_COST, ROSTER_SIGNING_COST_PER_FAME, TIER_INDEPENDENT_MIN_CAPITAL,
     TIER_INDEPENDENT_REACH_DEMOTE, TIER_INDEPENDENT_REACH_PROMOTE, TIER_MAJOR_MIN_CAPITAL,
     TIER_MAJOR_REACH_DEMOTE, TIER_MAJOR_REACH_PROMOTE,
 };
 use crate::game::genre::MusicGenre;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::GameWorld;
 
@@ -413,4 +418,274 @@ fn genre_from_specialty(s: &str) -> Option<MusicGenre> {
     } else {
         None
     }
+}
+
+// ============================================================================
+// L-ROSTER (design §D): scene-band signing + roster P&L.
+//
+// Labels scout and sign unsigned scene acts by fit (genre specialty overlap)
+// and appetite (weight class + capital), populate their `roster`, and book a
+// plausible weekly wholesale margin off each signed act's chart presence. This
+// is what makes the *whole industry* move: L-ENTITY only ever booked the
+// player's own label, so majors sat static at seed capital. All rolls derive
+// from the injected world seed; labels and bands iterate in a deterministic
+// order (BTreeMap by id, `bands` by index).
+//
+// The logic lives here in `labels.rs` (the task's ownership); it is wired into
+// the world with a single call, `tick_scene_rosters`, from the scene pass
+// (`scene::update_scene_bands`).
+// ============================================================================
+
+impl GameWorld {
+    /// The weekly scene-roster tick (design §D): reconcile each label's roster
+    /// with the scene, scout and sign unsigned acts by fit + appetite, then book
+    /// the roster's wholesale margin to label capital. Called once a week from
+    /// the scene pass. The only randomness is the per-band scouting roll, drawn
+    /// from the injected world `rng` in band-index order — so a seed replays
+    /// signing and booking identically.
+    pub(super) fn tick_scene_rosters(&mut self, rng: &mut impl Rng, news: &mut Vec<String>) {
+        self.reconcile_rosters();
+        self.scout_and_sign_scene_acts(rng, news);
+        self.book_scene_roster_margin();
+    }
+
+    /// Keep every label's `roster` in step with the scene's `SceneBand::label`
+    /// (the signed-to name — the scene's source of truth): drop slots for bands
+    /// that left the scene or changed label, and register bands signed to a
+    /// seeded label but not yet on its roster. That second pass is where the
+    /// acts the worldgen scene starts *already signed* first appear on a roster:
+    /// L-ENTITY seeds empty rosters (rosters are empty right after `new`), so
+    /// they are picked up on the first weekly tick. Idempotent and RNG-free.
+    ///
+    /// The player is never on a scene roster (a signed player links to its label
+    /// by `RecordDeal::label_id`, not a `RosterSlot`), so pruning by scene
+    /// membership can never drop the player. A later task that puts the player
+    /// on a roster must guard that here.
+    fn reconcile_rosters(&mut self) {
+        // Prune. A slot survives only if its band is still a scene act signed to
+        // *this* label. `signed_to` borrows `self.bands`; the retain borrows
+        // `self.labels` — disjoint fields, so the two borrows never overlap.
+        {
+            let mut signed_to: HashMap<&str, &str> = HashMap::new();
+            for band in &self.bands {
+                if let Some(label_name) = band.label.as_deref() {
+                    signed_to.insert(band.name.as_str(), label_name);
+                }
+            }
+            for label in self.labels.values_mut() {
+                let this = label.name.clone();
+                label.roster.retain(|slot| {
+                    signed_to.get(slot.band_name.as_str()).copied() == Some(this.as_str())
+                });
+            }
+        }
+
+        // Register. Signed bands whose label is a seeded entity but which are
+        // not yet on that label's roster (the worldgen-signed acts, week one).
+        // Collected read-only first (immutable borrows of `bands` + `labels`),
+        // then applied, so the label borrows never overlap.
+        let mut additions: Vec<(u32, String)> = Vec::new();
+        {
+            let name_to_id: HashMap<&str, u32> = self
+                .labels
+                .iter()
+                .map(|(id, label)| (label.name.as_str(), *id))
+                .collect();
+            for band in &self.bands {
+                let Some(label_name) = band.label.as_deref() else {
+                    continue;
+                };
+                // A name that isn't a seeded world entity (e.g. a band poached
+                // to an ad-hoc "unknown label") simply has no balance sheet to
+                // join — skip it.
+                let Some(&id) = name_to_id.get(label_name) else {
+                    continue;
+                };
+                if !self.labels[&id]
+                    .roster
+                    .iter()
+                    .any(|s| s.band_name == band.name)
+                {
+                    additions.push((id, band.name.clone()));
+                }
+            }
+        }
+        for (id, band_name) in additions {
+            if let Some(label) = self.labels.get_mut(&id) {
+                label.roster.push(RosterSlot {
+                    band_name,
+                    // The world tick is week-agnostic (it does not carry the
+                    // absolute game week), so scene-roster slots record 0; the
+                    // player's own slot, when a deal is signed, stamps the real
+                    // week from `Game` (`actions/business.rs`).
+                    signed_week: 0,
+                });
+            }
+        }
+    }
+
+    /// Scout unsigned scene acts and sign the ones a label wants (design §D).
+    /// Each eligible unsigned band draws a weekly scouting roll; a band that
+    /// draws interest is offered to the best-fitting label that can afford it
+    /// (`pick_signing_label`), which debits the advance from its `capital`, adds
+    /// the act to its `roster`, and stamps the band's `label`. Bands iterate in
+    /// index order and the roll is the injected world `rng`, so signing replays
+    /// identically for a seed.
+    pub(crate) fn scout_and_sign_scene_acts(&mut self, rng: &mut impl Rng, news: &mut Vec<String>) {
+        for idx in 0..self.bands.len() {
+            let (fame, genre, unsigned, name) = {
+                let band = &self.bands[idx];
+                (
+                    band.fame,
+                    band.genre.clone(),
+                    band.label.is_none(),
+                    band.name.clone(),
+                )
+            };
+            if !unsigned || fame < ROSTER_SIGN_MIN_FAME {
+                continue;
+            }
+            if !rng.gen_bool(ROSTER_SCOUT_WEEKLY_CHANCE) {
+                continue;
+            }
+            let Some(label_id) = self.pick_signing_label(fame, &genre) else {
+                continue;
+            };
+            let cost = scene_signing_cost(fame);
+            let label_name = {
+                let label = self
+                    .labels
+                    .get_mut(&label_id)
+                    .expect("pick_signing_label only returns live label ids");
+                label.book(-cost);
+                label.roster.push(RosterSlot {
+                    band_name: name.clone(),
+                    signed_week: 0,
+                });
+                label.name.clone()
+            };
+            let band = &mut self.bands[idx];
+            band.label = Some(label_name.clone());
+            band.momentum = (band.momentum + 1).min(3);
+            if fame >= ROSTER_SIGN_NEWS_FAME {
+                news.push(format!("🖋️ {} sign with {}.", name, label_name));
+            }
+        }
+    }
+
+    /// Choose the label that signs a scene act of the given fame/genre, or
+    /// `None` if none will (design §D — fit + appetite). A candidate must be
+    /// `Active`, have roster room, be within reach of the act's fame (the
+    /// appetite ceiling), and hold enough `capital` to front the advance with a
+    /// safety margin — so a label in the red never signs and a lean one signs
+    /// sparingly ("a broke label signs less"). Among candidates the highest
+    /// score wins: genre fit, weight-class match (a label most wants bands near
+    /// its own financial stature, which stratifies signings so majors take the
+    /// big names and boutiques the small), and a mild roster-room nudge for
+    /// spread. Deterministic — BTreeMap id order breaks ties (lowest id wins),
+    /// no RNG.
+    pub(crate) fn pick_signing_label(&self, band_fame: u8, band_genre: &MusicGenre) -> Option<u32> {
+        let cost = scene_signing_cost(band_fame);
+        let mut best: Option<(i32, u32)> = None;
+        for (id, label) in &self.labels {
+            if label.status != LabelStatus::Active {
+                continue;
+            }
+            let cap = roster_cap(label.tier);
+            if label.roster.len() >= cap {
+                continue;
+            }
+            // Appetite ceiling: a label cannot reach far above its means.
+            if band_fame
+                > label
+                    .financial_power
+                    .saturating_add(ROSTER_APPETITE_FAME_HEADROOM)
+            {
+                continue;
+            }
+            // A label cannot spend money it does not have, and only signs when
+            // it can comfortably cover the advance (§D key constraint).
+            if label.capital < cost.saturating_mul(ROSTER_SIGN_CAPITAL_SAFETY) {
+                continue;
+            }
+            let fit = if label.genres.contains(band_genre) {
+                ROSTER_FIT_MATCH_BONUS
+            } else {
+                0
+            };
+            // Higher = a closer match between the act's fame and the label's
+            // financial stature; keeps the big names with the big labels.
+            let weight_class =
+                100 - (i32::from(band_fame) - i32::from(label.financial_power)).abs();
+            let room_pct = (cap - label.roster.len()) as i32 * 100 / cap as i32;
+            let score = weight_class + fit + room_pct * ROSTER_ROOM_WEIGHT / 100;
+            if best.is_none_or(|(bs, _)| score > bs) {
+                best = Some((score, *id));
+            }
+        }
+        best.map(|(_, id)| id)
+    }
+
+    /// Book each label's weekly wholesale margin off its roster's chart presence
+    /// (design §D). A signed scene act has no `copies_sold` pipeline, so its
+    /// effective chart score — summed over every board it currently charts on,
+    /// so a major's wider distribution earns more — stands in for units moved,
+    /// scaled by `ROSTER_MARGIN_PER_CHART_SCORE`. Added to `capital` through
+    /// `Label::book`, the same conserved entry point the player-side ledger
+    /// uses; this only ever ADDS the scene roster's contribution and never
+    /// touches the player's income or recoupment. RNG-free.
+    pub(crate) fn book_scene_roster_margin(&mut self) {
+        // Sum this week's effective chart score per scene act (player entries
+        // excluded — the player's margin is the economy.rs ledger's job). Reads
+        // `self.regional_charts`; the booking loop borrows `self.labels` —
+        // disjoint fields.
+        let mut chart_presence: HashMap<String, u64> = HashMap::new();
+        for entries in self.regional_charts.values() {
+            for entry in entries {
+                if !entry.is_player {
+                    *chart_presence.entry(entry.band_name.clone()).or_insert(0) +=
+                        u64::from(entry.score);
+                }
+            }
+        }
+        for label in self.labels.values_mut() {
+            let mut margin: i64 = 0;
+            for slot in &label.roster {
+                if let Some(&score_sum) = chart_presence.get(slot.band_name.as_str()) {
+                    margin += (score_sum as f32 * ROSTER_MARGIN_PER_CHART_SCORE) as i64;
+                }
+            }
+            if margin > 0 {
+                label.book(margin);
+            }
+        }
+    }
+
+    /// L-ROSTER (§D): which label a charting scene act records for — the "rival
+    /// act → label" readout L-UI (§H) surfaces on the charts. Reads the scene
+    /// band's `label` (the signed-to name — the field L-ROSTER populates);
+    /// `None` for an unsigned act, an ambient/filler chart row with no scene
+    /// band behind it, or the player.
+    #[allow(dead_code)] // consumed by L-UI (§H); the accessor lands with the field it reads.
+    pub fn rival_act_label(&self, band_name: &str) -> Option<&str> {
+        self.bands
+            .iter()
+            .find(|band| band.name == band_name)
+            .and_then(|band| band.label.as_deref())
+    }
+}
+
+/// Roster capacity for a tier (design §D): majors deep, boutiques a handful.
+fn roster_cap(tier: LabelTier) -> usize {
+    match tier {
+        LabelTier::Boutique => ROSTER_CAP_BOUTIQUE,
+        LabelTier::Independent => ROSTER_CAP_INDEPENDENT,
+        LabelTier::Major => ROSTER_CAP_MAJOR,
+    }
+}
+
+/// The advance a label fronts to sign a scene act of the given fame (design §D):
+/// `base + fame × per_fame`. Debited from the label's `capital` at signing.
+fn scene_signing_cost(band_fame: u8) -> i64 {
+    ROSTER_SIGNING_BASE_COST + i64::from(band_fame) * ROSTER_SIGNING_COST_PER_FAME
 }
