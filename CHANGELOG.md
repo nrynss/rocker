@@ -4,6 +4,35 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
+## Unreleased
+
+### Fixed
+
+- **A label's distribution finally reaches the world.** Foreign-territory
+  presence (Europe, America, Japan) was `reach × regional_fame`, and regional
+  fame is only ever raised by *touring that country* — so `market_reach` did
+  nothing abroad and every act, signed or indie, sold UK-only. Signing a
+  major put your record in no foreign shop until you physically toured there.
+  The §D certification thresholds (Silver 50k … Platinum 400k) were sized for
+  an act "present on all four territories → 3–4× the copies," but the mechanic
+  never delivered more than one, so a fame-100 act could hold the charts for a
+  decade and never certify. Distribution now carries a foreign presence
+  *floor*, before any touring:
+  - **Signed acts** floor on the *square* of the label's `market_reach`: a
+    major (reach ~95) ships into all four territories at once (~3.4× the
+    home-only demand, matching §D), while a small independent (reach ~20–45)
+    stays a domestic operation — only a major is genuinely global.
+  - **Self-releasing acts** floor on the distribution channel they buy — a
+    national distributor gets picked up for export, mail order stays home.
+    The international *independent* distribution that had no path before.
+  - **Touring still matters:** its regional fame stacks on top of the floor,
+    deepening a specific market toward full presence.
+
+  Sim lab: the always-signed grinder's 15-year career now certifies (median
+  17 cert events, up from 3 UK-only), and the median first deal recoups its
+  advance at ~23% of term (was ~35%). Determinism trio unmodified; every new
+  constant is `[tune]`.
+
 ## 0.7.1 — 2026-07-17
 
 Money Cycle repairs: two reported bugs (#20, #21) plus everything a sweep

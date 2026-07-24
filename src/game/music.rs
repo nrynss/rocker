@@ -1,5 +1,6 @@
 use crate::game::constants::{
-    DISTRIBUTION_CHANNEL_FAME_GATE, DISTRIBUTION_CHANNEL_FEE, DISTRIBUTION_CHANNEL_REACH_FLOOR,
+    DISTRIBUTION_CHANNEL_FAME_GATE, DISTRIBUTION_CHANNEL_FEE,
+    DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR, DISTRIBUTION_CHANNEL_REACH_FLOOR,
 };
 use crate::game::genre::MusicGenre;
 use serde::{Deserialize, Serialize};
@@ -142,6 +143,15 @@ impl DistributionChannel {
     /// formula)` (design §E-3 table).
     pub fn reach_floor(self) -> f32 {
         DISTRIBUTION_CHANNEL_REACH_FLOOR[self.ordinal()]
+    }
+
+    /// How far this channel reaches into the three foreign sales territories
+    /// on distribution alone, before touring (the indie half of international
+    /// presence). `reach_floor` above governs how well the act sells where it
+    /// is present; this governs whether it is present abroad at all. Touring's
+    /// regional fame adds on top (`economy::territory_presence`).
+    pub fn international_floor(self) -> f32 {
+        DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR[self.ordinal()]
     }
 }
 

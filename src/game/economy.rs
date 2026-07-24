@@ -77,6 +77,37 @@ impl Game {
         }
     }
 
+    /// M11 (design §C): the foreign-territory presence floor a release carries
+    /// from its distribution *before any touring*. This is what makes a label
+    /// deal — or a bought indie channel — actually put the record in foreign
+    /// shops, rather than the pre-M11 model where `market_reach` was multiplied
+    /// by a regional fame that only touring could raise (so a major's reach did
+    /// nothing abroad and every act sold UK-only). A signed release floors at a
+    /// fraction of the label's `market_reach`; an indie release floors at its
+    /// channel's export reach. Touring's regional fame adds on top of this
+    /// (`territory_presence`), so the road still deepens a specific market — it
+    /// is no longer the *only* way to reach one. Same captured-state shape as
+    /// [`Game::reach_for`] so the borrow-constrained tail loop can call it too.
+    fn international_floor_for(
+        market_reach: Option<u8>,
+        channel: Option<DistributionChannel>,
+    ) -> f32 {
+        match market_reach {
+            // Squared, not linear, in the label's reach: only a *major*'s
+            // network is genuinely global, while a small independent (reach
+            // ~20-45) is a domestic/regional operation that barely reaches
+            // abroad on distribution alone. The curve keeps a top major near
+            // the design's "present on all four territories → 3–4× copies"
+            // (reach 95 → floor ~0.81 → ~3.4× demand) while a boutique label
+            // stays close to home (reach 20 → floor ~0.04 → ~1.1×).
+            Some(reach) => {
+                let r = f32::from(reach) / 100.0;
+                r * r * LABEL_INTERNATIONAL_PRESENCE_COEFF
+            }
+            None => channel.unwrap_or_default().international_floor(),
+        }
+    }
+
     /// M10 (design §C): the `regional_fame` country key for a sales
     /// territory. `regional_fame` is keyed `"{country}:{region}"`
     /// (`actions/live.rs`); the four `ChartRegion::TERRITORIES` map onto the
@@ -95,10 +126,12 @@ impl Game {
 
     /// M10 (design §C): how known the act is in a country — the strongest
     /// `regional_fame` it has built across that country's regions, normalized
-    /// to `0..1`. Touring raises regional fame (`actions/live.rs`), so a
-    /// studio-only act reads 0 abroad. Taking the max over the country's
-    /// region entries is order-independent, so iterating the `regional_fame`
-    /// `HashMap` here stays deterministic despite its random iteration order.
+    /// to `0..1`. Touring raises regional fame (`actions/live.rs`); a
+    /// studio-only act reads 0 here and reaches a foreign territory only
+    /// through its distribution floor (M11, `international_floor_for`). Taking
+    /// the max over the country's region entries is order-independent, so
+    /// iterating the `regional_fame` `HashMap` here stays deterministic despite
+    /// its random iteration order.
     fn regional_fame_factor(&self, country: &str) -> f32 {
         let prefix = format!("{country}:");
         let best = self
@@ -111,24 +144,26 @@ impl Game {
         f32::from(best) / REGIONAL_FAME_PRESENCE_DIVISOR
     }
 
-    /// M10 (design §C): the player's presence on one sales territory —
-    /// `reach × regional-fame factor`, with the UK home floor. `reach` is the
-    /// release's distribution reach and is constant across territories, so
-    /// callers compute it once and pass it in; only the regional-fame factor
-    /// varies by territory. Used to scale both the chart submission and the
-    /// demand sum for each of the four `ChartRegion::TERRITORIES`.
-    fn territory_presence(&self, region: world::ChartRegion, reach: f32) -> f32 {
+    /// M10/M11 (design §C): the player's presence on one sales territory.
+    /// `reach` (the release's distribution reach) and `intl_floor` (its
+    /// distribution's foreign presence floor) are constant across territories,
+    /// so callers compute them once and pass them in; only the regional-fame
+    /// factor varies by territory. Used to scale both the chart submission and
+    /// the demand sum for each of the four `ChartRegion::TERRITORIES`.
+    fn territory_presence(&self, region: world::ChartRegion, reach: f32, intl_floor: f32) -> f32 {
         if matches!(region, world::ChartRegion::Uk) {
             // Home market: the act's distribution reach carries it directly.
-            // A label's `market_reach` (or a bought indie channel) sells you
-            // at home without a domestic tour — regional fame only decides
-            // how far you reach *abroad* (design §C: "tours carry your
-            // records abroad"). A non-touring act therefore sells at home
-            // roughly as it did before regional charts; touring adds the
-            // three foreign territories on top.
             reach
         } else {
-            reach * self.regional_fame_factor(Self::territory_country(region))
+            // Foreign markets (M11): distribution puts the record on the shelf
+            // — a label's network or a bought export channel gives a presence
+            // floor with no touring at all — and touring's regional fame adds
+            // on top, deepening a specific market toward full presence. Before
+            // M11 the floor was implicitly 0, so `market_reach` sold nothing
+            // abroad and only the road reached foreign territories.
+            let factor =
+                (intl_floor + self.regional_fame_factor(Self::territory_country(region))).min(1.0);
+            reach * factor
         }
     }
 
@@ -297,9 +332,17 @@ impl Game {
         // moves ~3–4× a home-only act at the same score — which is why the §D
         // certification thresholds sit higher.
         let reach = self.distribution_multiplier(release);
+        let intl_floor = Self::international_floor_for(
+            release
+                .label_market_reach
+                .or_else(|| self.band.current_deal().map(|deal| deal.market_reach)),
+            release.distribution_channel,
+        );
         let demand_units: f32 = world::ChartRegion::TERRITORIES
             .iter()
-            .map(|&territory| sales_score as f32 * self.territory_presence(territory, reach))
+            .map(|&territory| {
+                sales_score as f32 * self.territory_presence(territory, reach, intl_floor)
+            })
             .sum();
         let demand = (demand_units * UNITS_PER_SCORE_POINT) as u32;
         let sold_out = release.copies_pressed > 0 && demand > release.copies_pressed;
@@ -476,6 +519,12 @@ impl Game {
                 // understate a record's peak (a #1 UK single rarely tops the
                 // summed Worldwide 100).
                 let reach = self.distribution_multiplier(&release);
+                let intl_floor = Self::international_floor_for(
+                    release
+                        .label_market_reach
+                        .or_else(|| self.band.current_deal().map(|deal| deal.market_reach)),
+                    release.distribution_channel,
+                );
                 let band_name = self.band.name.clone();
                 let mut best_position: Option<usize> = None;
 
@@ -496,8 +545,9 @@ impl Game {
                 }
 
                 for territory in world::ChartRegion::TERRITORIES {
-                    let territory_score =
-                        (sales_score as f32 * self.territory_presence(territory, reach)) as u32;
+                    let territory_score = (sales_score as f32
+                        * self.territory_presence(territory, reach, intl_floor))
+                        as u32;
                     if let Some(position) = self.world.submit_chart_entry(
                         territory,
                         release.name.clone(),
@@ -748,16 +798,24 @@ impl Game {
                             release.label_market_reach.or(market_reach),
                             release.distribution_channel,
                         );
+                        // M11: the release's own foreign presence floor from
+                        // its distribution, captured per release for the same
+                        // borrow reason as `reach` above.
+                        let intl_floor = Self::international_floor_for(
+                            release.label_market_reach.or(market_reach),
+                            release.distribution_channel,
+                        );
                         // Mirrors `territory_presence`: the UK home market
                         // rides the act's reach directly; the three foreign
-                        // territories scale by regional fame (touring).
+                        // territories ride the distribution floor plus touring's
+                        // regional fame, clamped to full presence.
                         let presence_sum: f32 = territory_fame
                             .iter()
                             .map(|&(region, fame_factor)| {
                                 if matches!(region, world::ChartRegion::Uk) {
                                     reach
                                 } else {
-                                    reach * fame_factor
+                                    reach * (intl_floor + fame_factor).min(1.0)
                                 }
                             })
                             .sum();

@@ -599,6 +599,16 @@ pub(super) const DISTRIBUTION_CHANNEL_FEE: [i32; 3] = [0, 400, 1_500];
 /// Reach floor: effective indie reach is `max(floor, current fame formula)`
 /// (design §E-3 table). [tune]
 pub(super) const DISTRIBUTION_CHANNEL_REACH_FLOOR: [f32; 3] = [0.15, 0.30, 0.50];
+/// International presence floor by channel: how far a self-releasing act
+/// reaches into the three *foreign* sales territories (Europe/America/Japan)
+/// on distribution alone, before any touring. Mail order stays home; a
+/// regional distributor leaks a little across borders; a national
+/// distributor gets picked up for export. This is the indie half of the fix
+/// for "no international independent distribution" — the reach the player can
+/// *buy* into foreign markets, on top of which touring's regional fame still
+/// stacks (`economy::territory_presence`). Kept well below the label network
+/// coefficient: signing is still the real passport abroad. [tune]
+pub(super) const DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR: [f32; 3] = [0.0, 0.08, 0.20];
 
 /// A release counts as eligible for an indie re-press once cumulative sales
 /// reach this fraction of the pressed run — "sold out (or low on stock)"
@@ -627,10 +637,28 @@ pub(super) const REPRESS_LOW_STOCK_SOLD_RATIO: f32 = 0.9;
 pub(super) const LOCAL_PRESENCE: f32 = 1.0;
 
 /// Regional fame (`0..=100`) normalizes by this into the `0..1` "how known
-/// the act is in this country" factor that multiplies reach. Touring is what
-/// raises regional fame (`actions/live.rs`), so a studio-only act reads 0
-/// abroad and sells only at home behind the UK floor. [tune]
+/// the act is in this country" factor that ADDS to the distribution floor
+/// (below) for the three foreign territories. Touring is what raises regional
+/// fame (`actions/live.rs`); on top of whatever floor the act's distribution
+/// already grants abroad, it deepens a specific territory toward full
+/// presence. A studio-only act reads 0 here and rides its distribution floor
+/// alone. [tune]
 pub(super) const REGIONAL_FAME_PRESENCE_DIVISOR: f32 = 100.0;
+
+/// A label's international network, applied to the *square* of its
+/// `market_reach` (`economy::international_floor_for`): the foreign-territory
+/// presence floor a signed act gets on release day, before touring.
+/// Distribution IS what a label sells — a major (reach ~95) puts the record in
+/// Europe/America/Japan shops at once (floor ~0.81 → ~3.4× the home-only
+/// demand), while a small indie label (reach ~20) is a domestic operation that
+/// barely reaches abroad (floor ~0.04). The squared curve is what separates a
+/// global major from a regional indie. This is the core fix for the sales
+/// mechanic: `market_reach` used to be multiplied by a regional fame that only
+/// touring could raise, so a label's reach did *nothing* abroad and every
+/// signed act sold UK-only. The §C/§D thresholds were sized for the "present on
+/// all four territories → 3–4× the copies" act this floor finally delivers.
+/// Touring's regional fame still stacks on top. [tune]
+pub(super) const LABEL_INTERNATIONAL_PRESENCE_COEFF: f32 = 0.9;
 
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
