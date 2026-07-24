@@ -21,7 +21,9 @@ pub(crate) fn draw_charts_modal(frame: &mut Frame, app: &App) {
     let Screen::Charts { region, scroll } = app.screen else {
         return;
     };
-    let area = centered_rect(78, 68, frame.area());
+    // Wider than the v0.7 board (was 78%): L-UI-2 (§H) appends the label a
+    // signed scene act records for beside its name, which needs the room.
+    let area = centered_rect(88, 68, frame.area());
     frame.render_widget(Clear, area);
     let block = Block::bordered()
         .title(" 📈 The Charts ")
@@ -71,14 +73,24 @@ pub(crate) fn draw_charts_modal(frame: &mut Frame, app: &App) {
     let mut lines = Vec::with_capacity(end - start);
     for (idx, entry) in entries[start..end].iter().enumerate() {
         let position = start + idx + 1;
-        lines.push(chart_row(entry, position));
+        // L-UI-2 (§H): surface which label a charting rival records for. The
+        // player is never a scene band, and an unsigned/ambient row has no
+        // label — both resolve to `None` and render exactly as before.
+        let label = if entry.is_player {
+            None
+        } else {
+            app.game.world.rival_act_label(&entry.band_name)
+        };
+        lines.push(chart_row(entry, position, label));
     }
     frame.render_widget(Paragraph::new(lines), list_area);
 }
 
-/// One line: rank, movement, title, act, peak, weeks-on-chart. The
-/// player's own records burn in the accent colour with a star.
-fn chart_row(entry: &ChartEntry, position: usize) -> Line<'static> {
+/// One line: rank, movement, title, act, the act's label (L-UI-2, §H), peak,
+/// weeks-on-chart. The player's own records burn in the accent colour with a
+/// star; `label` is the rival act's label (`None` for the player, unsigned
+/// acts, and ambient rows — those render exactly as before).
+fn chart_row(entry: &ChartEntry, position: usize, label: Option<&str>) -> Line<'static> {
     let (style, marker) = if entry.is_player {
         (Style::new().fg(ACCENT).bold(), "★")
     } else {
@@ -107,7 +119,7 @@ fn chart_row(entry: &ChartEntry, position: usize) -> Line<'static> {
         format!("peak #{}", entry.peak_position)
     };
 
-    Line::from(vec![
+    let mut spans = vec![
         Span::styled(format!("  #{:<3}", position), style),
         Span::styled(format!("{:<4}", marker), style),
         Span::styled(format!("{:<5}", movement), style),
@@ -115,5 +127,15 @@ fn chart_row(entry: &ChartEntry, position: usize) -> Line<'static> {
         Span::styled(format!("{:<22}", entry.band_name), style),
         Span::styled(format!("{:<11}", peak), style),
         Span::styled(weeks, style),
-    ])
+    ];
+    // A signed scene act shows its label as a dim suffix — rival context beside
+    // the row. Appended only when present, so unsigned/ambient/player rows
+    // (label `None`) render byte-for-byte as before.
+    if let Some(label) = label {
+        spans.push(Span::styled(
+            format!("   · {}", label),
+            Style::new().fg(Color::DarkGray),
+        ));
+    }
+    Line::from(spans)
 }

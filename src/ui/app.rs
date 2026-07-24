@@ -597,6 +597,20 @@ impl App {
         self.game.band.current_deal().and_then(|deal| deal.label_id)
     }
 
+    /// The live world `Label` an offer comes from, matched by name — a
+    /// `PotentialDealOffer` carries the label's *name*, not its id. Lets the
+    /// deal picker (L-UI-2, design §H) annotate an offer with the offering
+    /// label's *current* health (capital band, distress) and standing. `None`
+    /// for a pre-0.8 save (no seeded labels) or a name with no live entity, so
+    /// the picker degrades to the plain, un-annotated row there.
+    pub fn label_by_name(&self, name: &str) -> Option<&crate::game::world::Label> {
+        self.game
+            .world
+            .labels
+            .values()
+            .find(|label| label.name == name)
+    }
+
     // --- Logging ---
 
     pub(crate) fn push_log(&mut self, kind: LogKind, text: impl Into<String>) {

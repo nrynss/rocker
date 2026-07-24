@@ -490,4 +490,167 @@ mod tests {
             "the player's own label should show its exact capital; got:\n{text}"
         );
     }
+
+    /// L-UI-2 / design §H: the deal picker annotates each offer with the
+    /// offering label's *live* health — its qualitative capital band (never a
+    /// spied exact figure) and a distress flag — so "rising indie vs safe
+    /// major" is legible at the table. The detail view adds the label's current
+    /// standing (tier, reach, band). Rendered wide so the row's tail is in-buffer.
+    #[test]
+    fn deal_picker_annotates_offers_with_label_health() {
+        use crate::data_loader::RecordLabel;
+        use crate::game::world::{LabelStatus, PotentialDealOffer};
+
+        let backend = TestBackend::new(110, 30);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_main();
+
+        // Two real seeded labels, forced to contrasting health: a flush, active
+        // one and one bleeding red into distress.
+        let ids: Vec<u32> = app.game.world.labels.keys().take(2).copied().collect();
+        assert!(ids.len() >= 2, "worldgen should seed at least two labels");
+        let flush_name = app.game.world.labels[&ids[0]].name.clone();
+        let sick_name = app.game.world.labels[&ids[1]].name.clone();
+        {
+            let flush = app
+                .game
+                .world
+                .labels
+                .get_mut(&ids[0])
+                .expect("label present");
+            flush.capital = 5_000_000; // past the "flush" floor
+            flush.status = LabelStatus::Active;
+            flush.market_reach = 82;
+        }
+        {
+            let sick = app
+                .game
+                .world
+                .labels
+                .get_mut(&ids[1])
+                .expect("label present");
+            sick.capital = -50_000; // in the red
+            sick.status = LabelStatus::Distressed;
+            sick.market_reach = 21;
+        }
+
+        let week = app.game.week;
+        let make_offer = |label_name: &str, advance: u32| PotentialDealOffer {
+            label_name: label_name.to_string(),
+            label_tier: "Independent".to_string(),
+            advance,
+            royalty_rate: 0.12,
+            albums_required: 2,
+            original_label_data: RecordLabel {
+                name: label_name.to_string(),
+                grade: "B".to_string(),
+                market_reach: 55,
+                financial_power: 50,
+                artist_development: 55,
+                creative_freedom: 60,
+                royalty_rate: 12,
+                advance_range: [10_000, 80_000],
+                specialty_genres: Vec::new(),
+                founded: 1975,
+                reputation: "Respected".to_string(),
+            },
+            expires_week: Some(week + 4),
+            term_weeks: 104,
+            carry_forward_unrecouped: 0,
+        };
+        app.game.pending_deal_offers = vec![
+            make_offer(&flush_name, 40_000),
+            make_offer(&sick_name, 250_000),
+        ];
+
+        // List view: both offers carry their label's live capital band, and the
+        // distressed one is flagged.
+        app.screen = Screen::Deals {
+            selected: 0,
+            detail: false,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let list_text = buffer_text(&terminal);
+        assert!(
+            list_text.contains("flush"),
+            "the healthy offer should show a 'flush' band; got:\n{list_text}"
+        );
+        assert!(
+            list_text.contains("in the red"),
+            "the struggling offer should show an 'in the red' band; got:\n{list_text}"
+        );
+        assert!(
+            list_text.contains("distressed"),
+            "a distressed label should be flagged on its offer row; got:\n{list_text}"
+        );
+
+        // Detail view of the flush offer: the live "current standing" block
+        // renders the tier, reach, and band.
+        app.screen = Screen::Deals {
+            selected: 0,
+            detail: true,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let detail_text = buffer_text(&terminal);
+        assert!(
+            detail_text.contains("Where they stand now"),
+            "detail should show the live standing section; got:\n{detail_text}"
+        );
+        assert!(
+            detail_text.contains("reach 82/100"),
+            "detail should show the label's live reach; got:\n{detail_text}"
+        );
+        assert!(
+            detail_text.contains("flush"),
+            "detail should show the label's live capital band; got:\n{detail_text}"
+        );
+    }
+
+    /// L-UI-2 / design §H: the charts modal shows which label a signed scene
+    /// act records for, wiring `GameWorld::rival_act_label`. Rendered wide so
+    /// the row's label suffix is in-buffer.
+    #[test]
+    fn charts_modal_shows_a_signed_scene_acts_label() {
+        use crate::game::genre::MusicGenre;
+        use crate::game::world::{ChartRegion, SceneBand};
+
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_main();
+
+        // A scene act signed to a named label, charting high on the UK board.
+        let band_name = "Zzyzx Test Quartet".to_string();
+        let label_name = "Testlabel Records".to_string();
+        app.game.world.bands.push(SceneBand {
+            name: band_name.clone(),
+            fame: 55,
+            peak_fame: 55,
+            latest_release: "Kicks".to_string(),
+            genre: MusicGenre::ALL[0].clone(),
+            label: Some(label_name.clone()),
+            momentum: 1,
+        });
+        app.game.world.submit_chart_entry(
+            ChartRegion::Uk,
+            "Kicks".to_string(),
+            band_name.clone(),
+            false,
+            900,
+        );
+
+        app.screen = Screen::Charts {
+            region: ChartRegion::Uk,
+            scroll: 0,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        assert!(
+            text.contains(&band_name),
+            "the charting act should render; got:\n{text}"
+        );
+        assert!(
+            text.contains(&label_name),
+            "a signed scene act should show its label on its chart row; got:\n{text}"
+        );
+    }
 }

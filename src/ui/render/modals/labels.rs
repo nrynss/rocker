@@ -27,8 +27,10 @@ use crate::ui::app::{App, Screen};
 use super::super::{ACCENT, centered_rect, group_thousands};
 
 /// Human label for a label's tier (`LabelTier` has no display impl of its
-/// own, so this UI-local mapping stands in).
-fn tier_label(tier: LabelTier) -> &'static str {
+/// own, so this UI-local mapping stands in). `pub(super)` so the deal picker
+/// (L-UI-2) annotates an offer with its label's *current* tier from the same
+/// vocabulary.
+pub(super) fn tier_label(tier: LabelTier) -> &'static str {
     match tier {
         LabelTier::Boutique => "Boutique",
         LabelTier::Independent => "Independent",
@@ -38,7 +40,9 @@ fn tier_label(tier: LabelTier) -> &'static str {
 
 /// The qualitative capital band for a rival label, from the sign and
 /// magnitude of its balance sheet (§H). Word plus the colour it reads in.
-fn capital_band(capital: i64) -> (&'static str, Color) {
+/// `pub(super)` so the deal picker (L-UI-2) reads an offering label's health
+/// with the same never-a-spied-exact-figure wording used here.
+pub(super) fn capital_band(capital: i64) -> (&'static str, Color) {
     if capital < 0 {
         ("in the red", Color::Red)
     } else if capital < CAPITAL_STEADY_FLOOR {
