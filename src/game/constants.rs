@@ -131,6 +131,21 @@ pub(super) const CERT_GOLD_THRESHOLD: u32 = 150_000;
 pub(super) const CERT_PLATINUM_THRESHOLD: u32 = 400_000;
 pub(super) const CERT_MULTIPLATINUM_STEP: u32 = 400_000;
 
+// Certification year gates (L-CERT, design §I). The copy thresholds above are
+// era-agnostic; only the *availability* of each tier gates on the game year,
+// so the 1970→1993 timeline stops handing out awards that did not yet exist:
+//   - No sales-certification scheme existed before 1973 (the BPI's UK Silver/
+//     Gold scheme — which this game's UK-scaled thresholds track — launched in
+//     1973). Before then, nothing certifies.
+//   - RIAA-style Platinum did not exist before 1976.
+//   - Multi-platinum did not exist before 1984.
+// Applied at award-check time (`era_max_certification_level`), so a record that
+// keeps selling into a later era can still reach a tier once it becomes
+// available — the cap is on the awardable level, never on `copies_sold`.
+pub(super) const CERT_YEAR_SCHEME_START: u32 = 1973;
+pub(super) const CERT_YEAR_PLATINUM: u32 = 1976;
+pub(super) const CERT_YEAR_MULTIPLATINUM: u32 = 1984;
+
 // Award bumps for each certification level (silver/gold/platinum; multi-platinum repeats platinum).
 pub(super) const CERT_FAME_BUMP: &[u8] = &[2, 4, 6]; // Silver, Gold, Platinum
 pub(super) const CERT_HAPPINESS_BUMP: &[u8] = &[5, 8, 12]; // Silver, Gold, Platinum

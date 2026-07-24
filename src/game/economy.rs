@@ -371,6 +371,10 @@ impl Game {
 
     /// Compute the certification level (0 = none, 1 = silver, 2 = gold,
     /// 3 = platinum, 4+ = multi-platinum count) from copies_sold.
+    ///
+    /// Pure and era-agnostic — the copy thresholds never move. The game-year
+    /// availability of each tier is applied separately at award-check time via
+    /// [`Self::era_max_certification_level`] (L-CERT, design §I).
     pub(crate) fn compute_certification_level(copies_sold: u32) -> u8 {
         if copies_sold < CERT_SILVER_THRESHOLD {
             0
@@ -386,10 +390,41 @@ impl Game {
         }
     }
 
+    /// The highest certification level awardable in a given game year (L-CERT,
+    /// design §I). Certifications are gated to real industry history: the copy
+    /// thresholds are unchanged, but a tier the era has not introduced yet is
+    /// simply unreachable.
+    ///
+    /// - `year < 1973` → 0: no sales-certification scheme yet, nothing awards.
+    /// - `1973..1976` → 2 (Gold): Platinum not yet introduced.
+    /// - `1976..1984` → 3 (Platinum): multi-platinum not yet introduced.
+    /// - `year >= 1984` → all levels (multi-platinum, 4+).
+    ///
+    /// This is the cap applied to `new_level` at award-check time, so a record
+    /// still selling in a later era can reach a tier the week it crosses the
+    /// threshold in a year where that tier exists.
+    pub(crate) fn era_max_certification_level(year: u32) -> u8 {
+        if year < CERT_YEAR_SCHEME_START {
+            0
+        } else if year < CERT_YEAR_PLATINUM {
+            2 // Gold is the ceiling; Platinum does not exist yet.
+        } else if year < CERT_YEAR_MULTIPLATINUM {
+            3 // Platinum is the ceiling; multi-platinum does not exist yet.
+        } else {
+            u8::MAX // Every tier is available.
+        }
+    }
+
     /// Compute certification awards for a release that has crossed a threshold.
     /// Returns a tuple of (old_level, new_level) if a new level was crossed, or None.
-    pub(crate) fn compute_certification_awards(release: &Release) -> Option<(u8, u8)> {
-        let new_level = Self::compute_certification_level(release.copies_sold);
+    ///
+    /// `era_max` caps the awardable level to what the game year allows (L-CERT,
+    /// design §I) — callers pass [`Self::era_max_certification_level`] for the
+    /// current year. Capping `new_level` *before* comparing to `release.certified`
+    /// is what makes the gate honest: pre-1973 nothing certifies, and a Platinum-
+    /// volume record in 1974 tops out at Gold until Platinum exists.
+    pub(crate) fn compute_certification_awards(release: &Release, era_max: u8) -> Option<(u8, u8)> {
+        let new_level = Self::compute_certification_level(release.copies_sold).min(era_max);
         if new_level > release.certified {
             Some((release.certified, new_level))
         } else {
@@ -585,7 +620,13 @@ impl Game {
                 // must follow the 💿/📦 sales lines that caused it.
                 let mut certified_this_pass = false;
                 let mut cert_lines = Vec::new();
-                if let Some((old_level, new_level)) = Self::compute_certification_awards(&release) {
+                // L-CERT (§I): cap the awardable tier to what this game year
+                // allows before deciding the transition — early years award
+                // less (or nothing) even at hit volume.
+                let era_max = Self::era_max_certification_level(self.timeline.get_current_year());
+                if let Some((old_level, new_level)) =
+                    Self::compute_certification_awards(&release, era_max)
+                {
                     let release_name = release.name.clone();
                     let copies_sold = release.copies_sold;
                     release.certified = new_level;
@@ -739,6 +780,10 @@ impl Game {
 
         // Collect certifications to apply after the loop (to avoid borrow checker issues).
         let mut certifications_to_award: Vec<(String, u8, u8, u32)> = Vec::new();
+        // L-CERT (§I): the era's certification ceiling, captured up front for
+        // the same borrow reason as the deal terms above — the tail loop holds
+        // a `&mut self.band` and can't call `&self`. Constant across the pass.
+        let era_max = Self::era_max_certification_level(self.timeline.get_current_year());
 
         // M5 (§E-1, label half — tail path): a signed release runs its stock
         // down over months, and certification (§D) lands here on the tail, not
@@ -859,8 +904,11 @@ impl Game {
 
                         // Check for certification milestones after each tail sale (§D).
                         // We collect these and apply them after the loop to avoid borrow checker issues.
+                        // L-CERT (§I): `era_max` gates the awardable tier to the
+                        // game year, so a record that keeps selling into a later
+                        // era catches up to a tier once it becomes available.
                         if let Some((old_level, new_level)) =
-                            Self::compute_certification_awards(release)
+                            Self::compute_certification_awards(release, era_max)
                         {
                             certifications_to_award.push((
                                 release.name.clone(),

@@ -201,6 +201,11 @@ fn sold_out_triggers_a_label_auto_repress() {
 #[test]
 fn certification_triggers_a_label_auto_repress() {
     let mut game = test_game();
+    // L-CERT (§I): the game opens in 1970, before any certification scheme
+    // existed. Advance into a valid era so this test still exercises the
+    // certify → auto-repress path it is about (the year gate itself is covered
+    // in `tests/certifications.rs`).
+    game.timeline.current_year = 1976;
     game.band.fame = 60;
     // M10: a touring act's regional presence so first-run demand can reach
     // the certification threshold under the sum-over-territories model.
@@ -270,6 +275,11 @@ fn certification_triggers_a_label_auto_repress() {
 #[test]
 fn signed_release_re_presses_on_the_tail_and_can_certify() {
     let mut game = test_game();
+    // L-CERT (§I): advance past the 1973 scheme start so the sustained-tail
+    // release can still cross Silver here (the year gate is covered in
+    // `tests/certifications.rs`). Set before the tail loop, which never
+    // advances the year, so the whole run sits in a certification-valid era.
+    game.timeline.current_year = 1976;
     game.band.fame = 70;
     // M10: a signed, touring act — regional presence so the sustained tail
     // moves real volume across territories and can cross Silver.
