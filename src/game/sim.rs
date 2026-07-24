@@ -1474,6 +1474,29 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
+    // Review follow-up (design §A "full production profitable only at 75+"):
+    // the assertions below deliberately stop at fame 80, but the real superstar
+    // tours at 95-100. Observe (no assert) whether the top rigs ever escape the
+    // red there, so a "permanent trap" (full production never profitable, an
+    // inherited v0.7 question) is visible in the report rather than hidden.
+    for fame in [95u8, 100] {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .collect();
+            if nets.is_empty() {
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  fame {fame:>3}  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+            avgs.push((fame, rig, avg));
+        }
+    }
+
     let avg_for = |fame: u8, rig: TourRig| {
         avgs.iter()
             .find(|&&(f, r, _)| f == fame && r == rig)

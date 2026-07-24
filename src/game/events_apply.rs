@@ -85,14 +85,14 @@ impl Game {
             event if event.contains("Beatles") => {
                 if self.band.dominant_genres_match(&["Rock", "Folk Rock"]) {
                     self.band.gain_fame(5);
-                    self.player.money += 200;
+                    self.player.money += 600; // L-SCALE §B: ×3
                 }
             }
             event if event.contains("MTV") => {
                 if self.timeline.get_image_importance() > 80 {
                     if self.band.reputation.media_presence > 60 {
                         self.band.gain_fame(10);
-                        let earnings = rng.gen_range(1000..3000);
+                        let earnings = rng.gen_range(3000..9000); // L-SCALE §B: ×3
                         self.player.money += earnings;
                     } else {
                         self.band.fame = self.band.fame.saturating_sub(5);
@@ -102,7 +102,7 @@ impl Game {
             event if event.contains("Grunge emerges") => {
                 if self.band.dominant_genres_match(&["Grunge", "Alternative"]) {
                     self.band.gain_fame(12);
-                    let major_earnings = rng.gen_range(2000..5000);
+                    let major_earnings = rng.gen_range(6000..15000); // L-SCALE §B: ×3
                     self.player.money += major_earnings;
                 } else if self
                     .band
@@ -115,7 +115,7 @@ impl Game {
                 0 => {
                     self.band.gain_fame(1);
                 }
-                1 => self.player.money += rng.gen_range(50..200),
+                1 => self.player.money += rng.gen_range(150..600), // L-SCALE §B: ×3
                 _ => {
                     self.band.reputation.critical_acclaim =
                         (self.band.reputation.critical_acclaim + 1).min(100)

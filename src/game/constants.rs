@@ -66,9 +66,14 @@ pub(super) const LABEL_INCOME_PER_COPY: u32 = 3;
 // clock, and the §D/§F certification balance — median signed 15-year career
 // reaches 1–3 silvers; a home-market act can reach Silver at all — was
 // unknowingly calibrated on that bonus volume. These put the legitimate
-// weekly tail where the exploit-inflated one effectively was: the sweep's
-// label-loyalist lands med 3 certs (was 5 with the exploit, 0 without the
-// retune). Re-check that sweep column before moving either. [tune]
+// weekly tail where the exploit-inflated one effectively was. NOTE (v0.8): the
+// "med 3 certs" that was calibrated to no longer holds — the international
+// record-sales fix plus the L-SCALE rescale lifted the label-loyalist to med
+// ~71 cert *events* over a ~77-album career (records now sell worldwide as
+// intended — the "gangbuster" direction the cycle was for). The §D cert
+// thresholds are unchanged; whether ~71 is the right new normal, or the
+// thresholds should rise to keep gold/platinum special, is an open L-SIM call.
+// Re-check that sweep column before moving either. [tune]
 pub(super) const TAIL_DIVISOR_WEEKS_PER_STEP: u32 = 4;
 pub(super) const TAIL_MARKETING_WEIGHT: f32 = 1.8;
 pub(super) const TAIL_FAME_WEIGHT: f32 = 0.3;
@@ -812,8 +817,11 @@ pub(super) const TIER_INDEPENDENT_REACH_PROMOTE: u8 = 38;
 pub(super) const TIER_INDEPENDENT_REACH_DEMOTE: u8 = 30;
 pub(super) const TIER_MAJOR_REACH_PROMOTE: u8 = 70;
 pub(super) const TIER_MAJOR_REACH_DEMOTE: u8 = 62;
-pub(super) const TIER_INDEPENDENT_MIN_CAPITAL: i64 = 200_000;
-pub(super) const TIER_MAJOR_MIN_CAPITAL: i64 = 2_000_000;
+// `pub` (re-exported via `game::mod`): the UI's label-ledger qualitative
+// capital bands reference these directly so they can't silently desync from
+// the tier logic (single source of truth).
+pub const TIER_INDEPENDENT_MIN_CAPITAL: i64 = 200_000;
+pub const TIER_MAJOR_MIN_CAPITAL: i64 = 2_000_000;
 
 // ============================================================================
 // L-ROSTER (v0.8 §D): scene-band signing + roster P&L. Labels scout and sign

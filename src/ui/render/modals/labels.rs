@@ -14,17 +14,17 @@ use ratatui::{
 };
 
 use crate::game::world::{Label, LabelTier};
+// The qualitative capital bands (§H — never expose a rival's exact figure)
+// key off the game's own tier capital thresholds, aliased here so a retune of
+// the tier floors can never silently desync the ledger's "steady"/"flush"
+// bands from the tier logic (single source of truth, review follow-up).
+use crate::game::{
+    TIER_INDEPENDENT_MIN_CAPITAL as CAPITAL_STEADY_FLOOR,
+    TIER_MAJOR_MIN_CAPITAL as CAPITAL_FLUSH_FLOOR,
+};
 use crate::ui::app::{App, Screen};
 
 use super::super::{ACCENT, centered_rect, group_thousands};
-
-/// Capital floors for the qualitative band shown for labels that are not the
-/// player's own (§H — never expose a rival's exact figure). These mirror the
-/// game's own tier capital thresholds (`TIER_INDEPENDENT_MIN_CAPITAL` = $200k,
-/// `TIER_MAJOR_MIN_CAPITAL` = $2M); kept as UI-local constants because those
-/// game constants are `pub(super)` to `crate::game` and not visible here.
-const CAPITAL_STEADY_FLOOR: i64 = 200_000;
-const CAPITAL_FLUSH_FLOOR: i64 = 2_000_000;
 
 /// Human label for a label's tier (`LabelTier` has no display impl of its
 /// own, so this UI-local mapping stands in).

@@ -109,6 +109,7 @@ pub enum LabelStatus {
 pub struct RosterSlot {
     /// The signed act, matched by name (how the scene identifies acts today,
     /// `SceneBand::name`).
+    #[serde(default)]
     pub band_name: String,
     /// Week the act signed to this label.
     #[serde(default)]
@@ -205,9 +206,11 @@ impl Label {
     /// most-recent ids (older ones roll off the front) and de-duplicated, so a
     /// record that re-enters a chart never stacks. Deterministic (pure `Vec`
     /// ops). The player's charting releases feed the player's label from the
-    /// sales pass (`Game::record_label_chart_hit`); scene-band chart hits are
-    /// L-ROSTER's feed (§D) — see `// L-ROSTER feeds scene hits` in
-    /// `GameWorld::drift_labels`.
+    /// sales pass (`Game::record_label_chart_hit`). Scene-band chart hits do
+    /// **not** yet feed this — a deferred enhancement (a later task would call
+    /// it at the scene charting site); until then a scene label's reach drifts
+    /// on its `capital` term alone (still moved by roster margin), without the
+    /// explicit recent-hits bonus.
     pub(in crate::game) fn record_chart_hit(&mut self, release_id: u32) {
         if self.hit_window.contains(&release_id) {
             return;
@@ -331,11 +334,12 @@ impl GameWorld {
     /// `BTreeMap` in id order, so the determinism trio is unaffected (design §C:
     /// "World RNG injected, not ambient" — this pass needs none).
     ///
-    /// `// L-ROSTER feeds scene hits here`: a scene band's charting release
-    /// pushes into its label's `hit_window` (via `Label::record_chart_hit`) at
-    /// the scene sim's charting site (§D). This pass then drives reach/tier off
-    /// the combined capital + hit-window signal for *every* label — the player's
-    /// and the scene's alike — so a rival act's breakout lifts its label too.
+    /// Drives reach/tier off the combined capital + hit-window signal for every
+    /// label. NOTE: today only the *player's* label has its `hit_window` fed
+    /// (from the sales pass); scene labels' hit-window feed is deferred, so their
+    /// reach drifts on the `capital` term alone. A rival act's breakout still
+    /// lifts its label — via roster margin → capital — just without the explicit
+    /// recent-hits bonus until that feed is wired.
     pub(in crate::game) fn drift_labels(&mut self) {
         self.label_reach_tick = self.label_reach_tick.wrapping_add(1);
         if !self
@@ -696,7 +700,10 @@ impl GameWorld {
     /// band's `label` (the signed-to name — the field L-ROSTER populates);
     /// `None` for an unsigned act, an ambient/filler chart row with no scene
     /// band behind it, or the player.
-    #[allow(dead_code)] // consumed by L-UI (§H); the accessor lands with the field it reads.
+    // Pending consumer: L-UI-2 (§H) surfaces this "rival act → label" readout on
+    // the charts modal (L-UI-1 shipped the discography + label-ledger views but
+    // not this). Kept ready so the field it reads doesn't go orphaned.
+    #[allow(dead_code)]
     pub fn rival_act_label(&self, band_name: &str) -> Option<&str> {
         self.bands
             .iter()

@@ -131,7 +131,7 @@ fn sales_line(release: &Release) -> Line<'static> {
         sep(),
         Span::styled(
             format!(
-                "${}",
+                "${} gross",
                 group_thousands(u64::from(release.total_income_generated))
             ),
             Style::new().fg(Color::Green),
