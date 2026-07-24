@@ -59,6 +59,14 @@ pub struct GameWorld {
     /// it — a signed player on such a save keeps earning exactly as before).
     #[serde(default)]
     pub labels: BTreeMap<u32, Label>,
+    /// L-REACH (§C): a monotonic tick for the reach-drift cadence. The drift
+    /// pass (`drift_labels`) runs on the weekly tick but only *acts* every
+    /// `REACH_DRIFT_PERIOD_WEEKS`, so the yearly reach movement stays bounded
+    /// even though the pass is called weekly. `#[serde(default)]` → 0 on a
+    /// pre-0.8 save (the cadence simply restarts from load; drift is idempotent
+    /// on an empty label map anyway).
+    #[serde(default)]
+    pub label_reach_tick: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,6 +111,8 @@ impl GameWorld {
             // Seeded from record_labels.json; RNG-free, so it does not perturb
             // the world stream the determinism trio replays (design §A).
             labels: Self::seed_labels(data_files),
+            // L-REACH (§C): the drift cadence starts at 0.
+            label_reach_tick: 0,
         }
     }
 
@@ -120,6 +130,9 @@ impl GameWorld {
         self.update_scene_bands(rng, timeline, data_files, &mut news);
         self.update_scene_population(rng, timeline, data_files, &mut news);
         self.update_trends_with_timeline(timeline, rng);
+        // L-REACH (§C): labels' reach + tier drift toward their capital/hit-
+        // window health. RNG-free and gated to a monthly cadence inside the call.
+        self.drift_labels();
 
         // Decay dynamic genre modifiers
         let mut new_modifiers = std::collections::HashMap::new();

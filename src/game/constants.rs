@@ -753,6 +753,68 @@ pub(super) const LABEL_WHOLESALE_PER_COPY: f32 = 4.0;
 pub(super) const LABEL_MANUFACTURING_PER_COPY: f32 = 1.0;
 pub(super) const LABEL_MECHANICAL_PER_COPY: f32 = 0.30;
 
+// ============================================================================
+// L-REACH (v0.8 §C): reach + tier drift. `market_reach` and `tier` stop being
+// constants and drift toward a target derived from the label's health — its
+// `capital` and its recent charting `hit_window` — bounded per period with a
+// hysteresis dead-band so a label's rise or fall reads as a multi-year
+// trajectory, never a jitter or a teleport (design §C). Because the sales fix
+// made reach drive international distribution, a label's climb literally widens
+// where its acts sell, and its fall contracts it. All numbers [tune] — L-SIM
+// (§I) referees them against "boutiques can rise a tier, majors can fall,
+// nobody teleports, the population stays mobile but stable" over 15 years.
+// ============================================================================
+
+/// How many charting releases a label's rolling `hit_window` holds (design §C).
+/// The most-recent N charting record ids; older ones roll off the front, so the
+/// window means "recent form", not a lifetime tally. Kept short. [tune]
+pub(super) const HIT_WINDOW_LEN: usize = 5;
+
+/// Reach points one recent hit adds to the drift target, and the cap on the
+/// total hit bonus. The cap is below the Boutique→Major reach gap on purpose: a
+/// hot streak lifts a label meaningfully, but hits alone can't peg reach to the
+/// top — capital still gates the ceiling ("rich before big", §C). [tune]
+pub(super) const REACH_PER_HIT: u8 = 4;
+pub(super) const REACH_HIT_BONUS_CAP: u8 = 20;
+
+/// Reach-drift cadence + rate (design §C: "drift, not teleport, bounded per
+/// year"). The drift pass is wired into the weekly world tick but only *acts*
+/// every `REACH_DRIFT_PERIOD_WEEKS` (monthly — the same rhythm as deal offers),
+/// moving reach at most `REACH_DRIFT_STEP` points toward target each period.
+/// `REACH_DRIFT_PER_YEAR` is the annual cap this yields (the documented [tune]
+/// knob); `REACH_DRIFT_STEP` is derived from it so the per-period bound and the
+/// yearly bound can never drift apart: a 2-point monthly step over 13 periods
+/// ≈ 26 points/year, so a boutique climbing from ~20 toward a major's ~70 is a
+/// ~2-year arc, not an overnight jump. [tune]
+pub(super) const REACH_DRIFT_PER_YEAR: u8 = 26;
+pub(super) const REACH_DRIFT_PERIOD_WEEKS: u32 = 4;
+pub(super) const REACH_DRIFT_STEP: u8 =
+    ((REACH_DRIFT_PER_YEAR as u32 * REACH_DRIFT_PERIOD_WEEKS) / WEEKS_PER_YEAR) as u8;
+
+/// Hysteresis dead-band (design §C): reach only moves when it is more than this
+/// many points from target, so a label already sitting at its natural reach
+/// stays put instead of oscillating ±1 every period. [tune]
+pub(super) const REACH_DRIFT_DEADBAND: u8 = 3;
+
+/// The reach ceiling (reach is a 0..=`REACH_MAX` scale, mirroring the JSON
+/// `market_reach`). Drift and the target are clamped to it.
+pub(super) const REACH_MAX: u8 = 100;
+
+/// Tier thresholds (design §C): `tier` follows `market_reach` across these
+/// bands. Promotion needs BOTH reach past the promote threshold AND a capital
+/// floor — a hit can spike a boutique's reach, but it isn't called big until
+/// its balance sheet backs it ("a one-hit boutique gets rich before it gets
+/// big", §C). Demotion is pure reach through a lower threshold: a label that
+/// loses its distribution falls regardless of cash. The promote/demote gap is
+/// the hysteresis that stops a label hovering at a boundary from flip-flopping
+/// tier every period. [tune]
+pub(super) const TIER_INDEPENDENT_REACH_PROMOTE: u8 = 38;
+pub(super) const TIER_INDEPENDENT_REACH_DEMOTE: u8 = 30;
+pub(super) const TIER_MAJOR_REACH_PROMOTE: u8 = 70;
+pub(super) const TIER_MAJOR_REACH_DEMOTE: u8 = 62;
+pub(super) const TIER_INDEPENDENT_MIN_CAPITAL: i64 = 200_000;
+pub(super) const TIER_MAJOR_MIN_CAPITAL: i64 = 2_000_000;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).

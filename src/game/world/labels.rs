@@ -23,7 +23,12 @@
 //!   `Distressed`/`Folding`/`Acquired` (§F).
 
 use crate::data_loader::{GameDataFiles, RecordLabel};
-use crate::game::constants::LABEL_CAPITAL_PER_FP_CUBED;
+use crate::game::constants::{
+    HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED, REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS,
+    REACH_DRIFT_STEP, REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, TIER_INDEPENDENT_MIN_CAPITAL,
+    TIER_INDEPENDENT_REACH_DEMOTE, TIER_INDEPENDENT_REACH_PROMOTE, TIER_MAJOR_MIN_CAPITAL,
+    TIER_MAJOR_REACH_DEMOTE, TIER_MAJOR_REACH_PROMOTE,
+};
 use crate::game::genre::MusicGenre;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -162,6 +167,101 @@ impl Label {
         self.capital += delta;
         self.ledger_ytd += delta;
     }
+
+    /// L-REACH (§C): record a charting release in the rolling `hit_window` — the
+    /// recent-form half of the reach-drift target. Bounded to `HIT_WINDOW_LEN`
+    /// most-recent ids (older ones roll off the front) and de-duplicated, so a
+    /// record that re-enters a chart never stacks. Deterministic (pure `Vec`
+    /// ops). The player's charting releases feed the player's label from the
+    /// sales pass (`Game::record_label_chart_hit`); scene-band chart hits are
+    /// L-ROSTER's feed (§D) — see `// L-ROSTER feeds scene hits` in
+    /// `GameWorld::drift_labels`.
+    pub(in crate::game) fn record_chart_hit(&mut self, release_id: u32) {
+        if self.hit_window.contains(&release_id) {
+            return;
+        }
+        self.hit_window.push(release_id);
+        let overflow = self.hit_window.len().saturating_sub(HIT_WINDOW_LEN);
+        if overflow > 0 {
+            self.hit_window.drain(0..overflow);
+        }
+    }
+
+    /// L-REACH (§C): the reach this label's health justifies — the drift target.
+    /// A capital-derived base (the inverse of `seed_capital`, so a label whose
+    /// balance sheet matches financial-power `fp` sits near reach ≈ `fp`, i.e.
+    /// roughly its seed reach) plus a bounded bonus for recent charting hits.
+    /// Flush + hot → a high target it drifts up toward; broke + cold → ~0, which
+    /// it drifts down toward. Bounded 0..=`REACH_MAX`. Pure and deterministic.
+    pub(in crate::game) fn reach_target(&self) -> u8 {
+        // capital = fp³ × k  ⇒  fp = ∛(capital / k). Negative/zero capital
+        // (a label bleeding red) floors the base at 0 → the label cools toward 0.
+        let base = ((self.capital.max(0) as f64) / (LABEL_CAPITAL_PER_FP_CUBED as f64))
+            .cbrt()
+            .round()
+            .clamp(0.0, f64::from(REACH_MAX)) as i32;
+        let hits = self.hit_window.len() as i32;
+        let bonus = (hits * i32::from(REACH_PER_HIT)).min(i32::from(REACH_HIT_BONUS_CAP));
+        (base + bonus).clamp(0, i32::from(REACH_MAX)) as u8
+    }
+
+    /// L-REACH (§C): nudge `market_reach` one period toward `reach_target`,
+    /// moving at most `REACH_DRIFT_STEP` points and only when the gap exceeds
+    /// the `REACH_DRIFT_DEADBAND` hysteresis band (so a label at rest doesn't
+    /// jitter), then let `tier` follow the new reach via `tier_for`. Bounded
+    /// 0..=`REACH_MAX`. Pure and deterministic — no RNG (design §C).
+    pub(in crate::game) fn drift_reach_and_tier(&mut self) {
+        let target = i32::from(self.reach_target());
+        let reach = i32::from(self.market_reach);
+        let gap = target - reach;
+        if gap.unsigned_abs() > u32::from(REACH_DRIFT_DEADBAND) {
+            let step = i32::from(REACH_DRIFT_STEP).min(gap.abs());
+            let moved = reach + step * gap.signum();
+            self.market_reach = moved.clamp(0, i32::from(REACH_MAX)) as u8;
+        }
+        self.tier = Self::tier_for(self.tier, self.market_reach, self.capital);
+    }
+
+    /// L-REACH (§C): the `tier` a label's reach + capital support, relative to
+    /// its current tier. Promotion requires reach past the promote threshold AND
+    /// a capital floor (a hit can spike reach, but the label isn't "big" until
+    /// its balance sheet backs it — "rich before big"); demotion is pure reach
+    /// falling through a lower threshold (the promote/demote gap is the
+    /// hysteresis that stops boundary flip-flop). No capital gate on the way
+    /// down: a label that loses its distribution falls however rich it is.
+    pub(in crate::game) fn tier_for(current: LabelTier, reach: u8, capital: i64) -> LabelTier {
+        let cap_major = capital >= TIER_MAJOR_MIN_CAPITAL;
+        let cap_indie = capital >= TIER_INDEPENDENT_MIN_CAPITAL;
+        match current {
+            LabelTier::Major => {
+                if reach < TIER_INDEPENDENT_REACH_DEMOTE {
+                    LabelTier::Boutique
+                } else if reach < TIER_MAJOR_REACH_DEMOTE {
+                    LabelTier::Independent
+                } else {
+                    LabelTier::Major
+                }
+            }
+            LabelTier::Independent => {
+                if reach >= TIER_MAJOR_REACH_PROMOTE && cap_major {
+                    LabelTier::Major
+                } else if reach < TIER_INDEPENDENT_REACH_DEMOTE {
+                    LabelTier::Boutique
+                } else {
+                    LabelTier::Independent
+                }
+            }
+            LabelTier::Boutique => {
+                if reach >= TIER_MAJOR_REACH_PROMOTE && cap_major {
+                    LabelTier::Major
+                } else if reach >= TIER_INDEPENDENT_REACH_PROMOTE && cap_indie {
+                    LabelTier::Independent
+                } else {
+                    LabelTier::Boutique
+                }
+            }
+        }
+    }
 }
 
 impl GameWorld {
@@ -189,6 +289,32 @@ impl GameWorld {
             }
         }
         labels
+    }
+
+    /// L-REACH (§C): the per-period reach/tier drift pass, wired into the weekly
+    /// world tick (`update_week`). It is *called* every week but only *acts*
+    /// every `REACH_DRIFT_PERIOD_WEEKS` (monthly), so the yearly movement stays
+    /// inside `REACH_DRIFT_PER_YEAR`; between period boundaries it is a cheap
+    /// no-op. Deterministic and RNG-free, and it iterates the `labels`
+    /// `BTreeMap` in id order, so the determinism trio is unaffected (design §C:
+    /// "World RNG injected, not ambient" — this pass needs none).
+    ///
+    /// `// L-ROSTER feeds scene hits here`: a scene band's charting release
+    /// pushes into its label's `hit_window` (via `Label::record_chart_hit`) at
+    /// the scene sim's charting site (§D). This pass then drives reach/tier off
+    /// the combined capital + hit-window signal for *every* label — the player's
+    /// and the scene's alike — so a rival act's breakout lifts its label too.
+    pub(in crate::game) fn drift_labels(&mut self) {
+        self.label_reach_tick = self.label_reach_tick.wrapping_add(1);
+        if !self
+            .label_reach_tick
+            .is_multiple_of(REACH_DRIFT_PERIOD_WEEKS)
+        {
+            return;
+        }
+        for label in self.labels.values_mut() {
+            label.drift_reach_and_tier();
+        }
     }
 }
 

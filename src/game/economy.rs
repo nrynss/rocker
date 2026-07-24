@@ -289,6 +289,41 @@ impl Game {
         }
     }
 
+    /// L-REACH (§C): record the player's charting release in its label's rolling
+    /// `hit_window` — the recent-form input to the label's reach-drift target.
+    /// Resolved the same way as the wholesale ledger (`player_label_id`), so it
+    /// no-ops when unsigned or when the label isn't a seeded world entity (a
+    /// pre-0.8 save / the "Test Records" placeholder). Scene-band chart hits are
+    /// L-ROSTER's feed (§D); this books only the player's.
+    fn record_label_chart_hit(&mut self, release_id: u32) {
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        if let Some(label) = self.world.labels.get_mut(&id) {
+            label.record_chart_hit(release_id);
+        }
+    }
+
+    /// L-REACH (§C): the reach a NEW signed release freezes onto itself at record
+    /// time. It reads the label's *live* `market_reach` (which now drifts, §C) —
+    /// not the value frozen into `RecordDeal` at signing — so a record cut after
+    /// the label has risen or fallen carries the label's reach *now*. That value
+    /// is then frozen on the release as `label_market_reach` for its catalogue
+    /// tail: the sales-fix invariant is preserved because the tail reads the
+    /// per-release frozen reach via `reach_for` / `international_floor_for`, never
+    /// the still-drifting label. Falls back to the deal's signing reach when the
+    /// label isn't a seeded world entity (a pre-0.8 save / the test placeholder),
+    /// and `None` for an unsigned (indie) release — exactly the previous value in
+    /// both those cases, so nothing changes for an unsigned or unseeded deal.
+    pub(super) fn new_release_frozen_reach(&self) -> Option<u8> {
+        let deal = self.band.current_deal()?;
+        let live = self
+            .player_label_id()
+            .and_then(|id| self.world.labels.get(&id))
+            .map(|label| label.market_reach);
+        Some(live.unwrap_or(deal.market_reach))
+    }
+
     /// L-ENTITY (§A): the label's wholesale margin on `copies` sold, given the
     /// royalty that actually reached the artist for this batch
     /// (`royalty_to_artist` — the recoupment-netted `to_player`). The label
@@ -664,6 +699,12 @@ impl Game {
                 }
                 if let Some(position) = best_position {
                     release.peak_chart_position = Some(position.min(u8::MAX as usize) as u8);
+                    // L-REACH (§C): a roster release that charts feeds its
+                    // label's rolling hit window — the recent-form input to the
+                    // reach-drift target, so a label riding a hit trends up. The
+                    // player's charting releases feed the player's label here;
+                    // scene-band hits are L-ROSTER's feed (§D).
+                    self.record_label_chart_hit(release.id);
                 }
 
                 let (income, units_sold, sold_out) =
