@@ -1,5 +1,17 @@
 # Rocker — Label Cycle Handoff (v0.8)
 
+> **✅ CYCLE COMPLETE — all 11 tasks (L-SCALE, L-CERT, L-ENTITY, L-REACH,
+> L-ROSTER, L-BID, L-MNA, L-UI-1/2, L-CHAR, L-SIM) done + integrated, closed
+> as 0.8.0.** Cargo bumped, CHANGELOG written, board audited, reviewed
+> (4-dimension review + CodeRabbit, no major bugs). Cycle **PR #23**
+> (branch `label/v0.8`) is ready for the human's review and merge to `main`;
+> **archive this board to `docs/archive/HANDOFF-v0.8-cycle.md` after the
+> merge** (as prior cycles did). The protocol below is historical now — do
+> not claim tasks. Known follow-ups (not blockers) live in the CHANGELOG's
+> "Known follow-ups" + the Notes below: full-production tour never profits
+> (v0.7-inherited), M&A distress floor $0 (dormant safety valve), cert
+> frequency ~71/career (ratified as the gangbuster direction).
+
 > **Feature cycle: the record labels become a living economy.** A label
 > is no longer inert JSON — it is a world entity with a balance sheet that
 > rises on hits and falls on flops, a roster of real acts, reach and tier
@@ -114,8 +126,8 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-CERT** | Year-gate certifications to the era (§I): no scheme <1973, no Platinum <1976, no multi-platinum <1984; thresholds unchanged, only availability gates on year | S | — | certification pass in `economy.rs`, year-gate consts in `constants.rs` | ✅ done | agent-lcert (worktree) | c2be9a0 |
 | **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/{discography,labels}.rs` + mod/input wiring in `src/ui/app.rs`+`input/main.rs` | ✅ done | agent-lui1 (worktree) | 0cae070 |
 | **L-UI-2** | UI slice 2 (§H): deal-picker health/trajectory annotations + industry news lines (mergers/foldings/distress/rival breakouts) at their source sites | S | L-BID, L-MNA, L-UI-1 | deal-picker annotations in `pickers.rs`, news lines at their source sites | ✅ done | agent-lui2 (worktree) | 980d5c4 |
-| **L-SIM** | Sim-lab validation (§I): label-solvency + gangbuster-target + bidding + graceful-failure bots and assertions; scale re-validation harness for L-SCALE | M | L-SCALE (continuous thereafter) | `src/game/sim.rs`, `src/game/tests/**` (new files) | 🔒 claimed | agent-lsim (worktree) | — |
-| **L-CLOSE** | Cycle close: board audit, CHANGELOG, bump 0.8.0, archive this board, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | — | — |
+| **L-SIM** | Sim-lab validation (§I): label-solvency + gangbuster-target + bidding + graceful-failure bots and assertions; scale re-validation harness for L-SCALE | M | L-SCALE (continuous thereafter) | `src/game/sim.rs`, `src/game/tests/**` (new files) | ✅ done | agent-lsim (worktree) | 6bbeaac |
+| **L-CLOSE** | Cycle close: board audit, CHANGELOG, bump 0.8.0, archive this board, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | coordinator | (this commit) |
 
 Dependency spine: **L-SCALE → L-ENTITY → {L-REACH, L-ROSTER} → {L-BID,
 L-MNA, L-CHAR} → L-UI**. L-CERT is independent (claimable anytime).
@@ -180,6 +192,17 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-25 **Wave 5–6 + close.** L-UI-2 (`980d5c4`, ff) + L-CHAR (`83599a9`,
+  clean cherry-pick) + L-SIM (`6bbeaac`, ff) integrated; CodeRabbit's one PR
+  finding (singular label-ledger grammar) fixed (`a6634d8`). L-SIM pinned the
+  cycle's balance as assertions (0 insolvent, player median $16.7M, star draws
+  $1.17M advance vs unknown $7k, upkeep 21% of income, signed $16.75M ≫ indie
+  $3.5M, failures 12.5% but median-Active) and refereed the design-calls
+  (distress floor $0 = documented safety valve; cert ~71 ratified; full-prod
+  tour trap = v0.7 follow-up). **L-CLOSE:** Cargo 0.7.1→0.8.0, CHANGELOG 0.8.0
+  entry, this banner. Final: **243 tests + 8 sweeps green**, determinism trio
+  unmodified, clippy/fmt clean, v0.4 saves load. Archive this board post-merge.
 
 - 2026-07-24 **Review phase (4 parallel reviewers) + fixes (`80c7726`).**
   Correctness / determinism+save-compat / economy+balance / integration+UI —

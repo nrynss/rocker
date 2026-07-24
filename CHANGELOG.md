@@ -4,34 +4,79 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
-## Unreleased
+## 0.8.0 — 2026-07-25
+
+**The Label Cycle** — record labels become a living economy. Labels stop being
+inert JSON and gain a balance sheet that rises on hits and falls on flops, a
+roster of real acts, reach and tier that grow and decline, competing offers and
+bidding wars, mergers and failures — on a money scale where a superstar and
+their label both earn what the era actually paid. Design lives in
+`docs/DESIGN-v0.8-label-cycle.md`. Closed green: **243 tests** (from a 188
+baseline) + 8 balance sweeps, determinism trio unmodified, clippy `-D warnings`
+clean, fmt clean, v0.4 saves still load.
+
+### Added
+
+- **Labels are world entities with a balance sheet.** Each seeds from
+  `record_labels.json` with real `capital`; every copy its roster sells books
+  the ~$2.70/copy wholesale margin to it, and advances/pressing/promo debit it.
+  Recoupment stops vanishing into a void — the player's royalty is *retained to
+  the label* while unrecouped, exactly the historical mechanic. A Gold record
+  nets its label ~$405k; a platinum act's catalogue, millions.
+- **Reach and tier that rise and fall.** `market_reach`/tier drift toward a
+  target set by capital and recent hits, bounded per period with hysteresis — a
+  boutique with a breakout can climb toward major, a major that loses its stars
+  declines. A signed act's new releases read the label's live reach; catalogue
+  tails keep the reach they were released with.
+- **A living roster.** Labels scout and sign scene bands by genre fit and
+  appetite; their chart activity moves label capital — the whole industry's
+  fortunes turn, not just the player's.
+- **Competition and bidding.** Deal offers are priced from a label's live
+  capital/reach/financial-power (not a static row); a hot act draws multiple
+  offers and a bidding war, each label bounded by what it can actually advance.
+- **Label character (A&R).** Strategies have teeth — a hit-factory major pays
+  big advances at low royalty and cuts singles aggressively; an artist-friendly
+  indie pays higher royalty and is patient; a genre purist only signs its
+  specialty. Creative freedom now shapes single-cut aggression.
+- **Mergers, acquisitions, and failure.** A label bleeding money goes
+  distressed, gets acquired (your contract transfers to the buyer), or folds
+  (you're freed, the debt written off) — each surfaced in the news.
+- **See it in-game.** A Discography browser (`d`) shows each record's sales —
+  copies, gross earnings, chart peak, certification; a label-ledger browser
+  (`b`) shows tiers, reach, and balance sheets (your own label's exact capital,
+  rivals' as a qualitative band). Deal offers are annotated with the offering
+  label's health; the charts show which label a rival act records for.
+
+### Changed
+
+- **One honest, era-real money scale.** The v0.7 income compression is retired;
+  every dollar — record royalties, tours, gigs, advances, and all costs — moved
+  ×3 in lockstep, so a signed superstar's career now clears era-real millions
+  (sim lab: median ~$16.7M) while the affordability ratios hold.
+- **Distribution reaches the world.** Foreign-territory sales (Europe, America,
+  Japan) used to require touring each country; now a label's reach — and a
+  bought indie distribution channel — puts records in foreign shops on release,
+  with touring deepening a market on top. This is what makes records actually
+  sell: a fame-100 act could previously hold the charts for a decade and never
+  certify, and the international *independent* path never existed at all.
 
 ### Fixed
 
-- **A label's distribution finally reaches the world.** Foreign-territory
-  presence (Europe, America, Japan) was `reach × regional_fame`, and regional
-  fame is only ever raised by *touring that country* — so `market_reach` did
-  nothing abroad and every act, signed or indie, sold UK-only. Signing a
-  major put your record in no foreign shop until you physically toured there.
-  The §D certification thresholds (Silver 50k … Platinum 400k) were sized for
-  an act "present on all four territories → 3–4× the copies," but the mechanic
-  never delivered more than one, so a fame-100 act could hold the charts for a
-  decade and never certify. Distribution now carries a foreign presence
-  *floor*, before any touring:
-  - **Signed acts** floor on the *square* of the label's `market_reach`: a
-    major (reach ~95) ships into all four territories at once (~3.4× the
-    home-only demand, matching §D), while a small independent (reach ~20–45)
-    stays a domestic operation — only a major is genuinely global.
-  - **Self-releasing acts** floor on the distribution channel they buy — a
-    national distributor gets picked up for export, mail order stays home.
-    The international *independent* distribution that had no path before.
-  - **Touring still matters:** its regional fame stacks on top of the floor,
-    deepening a specific market toward full presence.
+- **Certifications gate on the era.** No certification scheme before 1973, no
+  RIAA-style Platinum before 1976, no multi-platinum before 1984 — the timeline
+  stops handing out awards that did not yet exist.
 
-  Sim lab: the always-signed grinder's 15-year career now certifies (median
-  17 cert events, up from 3 UK-only), and the median first deal recoups its
-  advance at ~23% of term (was ~35%). Determinism trio unmodified; every new
-  constant is `[tune]`.
+### Known follow-ups
+
+- Full-production tours never turn a profit, even at fame 100 (−$26k) — a trap
+  inherited from v0.7 tour economics, awaiting a cost/capacity retune.
+- M&A's distress floor is $0, so it's a safety valve that doesn't fire in
+  natural play (the solvent economy only grows labels); attrition is exercised
+  by an injected-distress sweep.
+- Certification frequency is now ~71 events over a relentless 15-year signed
+  career — the intended "records sell worldwide" direction, an order above the
+  retired v0.7 "1–3 silver" target (which described the pre-fix, UK-only economy
+  in the 0.7.1 notes below).
 
 ## 0.7.1 — 2026-07-17
 
