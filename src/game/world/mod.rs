@@ -133,6 +133,10 @@ impl GameWorld {
         // L-REACH (§C): labels' reach + tier drift toward their capital/hit-
         // window health. RNG-free and gated to a monthly cadence inside the call.
         self.drift_labels();
+        // L-MNA (§F): distress, acquisition, folding. Runs last so it only draws
+        // from the tail of the world stream (the determinism trio is unaffected);
+        // its one roll is the injected `rng`, in deterministic label id order.
+        self.run_label_mna(rng, &mut news);
 
         // Decay dynamic genre modifiers
         let mut new_modifiers = std::collections::HashMap::new();

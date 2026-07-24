@@ -304,6 +304,82 @@ impl Game {
         }
     }
 
+    /// L-MNA (§F): reconcile the PLAYER's contract with any M&A that hit the
+    /// label it is signed to. The weekly world pass (`GameWorld::run_label_mna`)
+    /// transitions label *status* and moves scene rosters, but the player's deal
+    /// lives on `self.band`, so its transfer/void happens here — the
+    /// deal-transfer/void call-site (design §F). Invoked once a week from the
+    /// sales pass, after the world tick has run its M&A pass and before this
+    /// week's margin books, so an acquisition's new owner books the week's
+    /// margin and a fold's void lets the week sell at indie rates.
+    ///
+    /// - **Acquired:** retag the deal onto the acquirer via
+    ///   `Band::transfer_deal_to_acquirer` — terms carry; the acquirer's
+    ///   reach/tier apply going forward (L-REACH's read-through handles new
+    ///   releases once `label_id` points at the acquirer).
+    /// - **Folding:** void the deal via `Band::void_deal_on_label_fold` (the
+    ///   breach write-off path: free agent, any `unrecouped` written off, no
+    ///   punitive cooldown — a fold is not the band's breach).
+    ///
+    /// Idempotent: after a transfer the deal points at an `Active` acquirer, so a
+    /// later week no-ops; a chain (the acquirer itself later folds or is
+    /// acquired) resolves one hop per week. No-op when unsigned, or when the
+    /// label isn't a seeded world entity (a pre-0.8 save / the test placeholder).
+    pub(super) fn reconcile_player_label_mna(&mut self) {
+        let Some(id) = self.player_label_id() else {
+            return;
+        };
+        let (status, acquired_by) = {
+            let Some(label) = self.world.labels.get(&id) else {
+                return;
+            };
+            (label.status, label.acquired_by)
+        };
+        match status {
+            world::LabelStatus::Acquired => {
+                let Some(acquirer_id) = acquired_by else {
+                    return;
+                };
+                let (acquirer_name, acquirer_tier, acquirer_reach) = {
+                    let Some(acquirer) = self.world.labels.get(&acquirer_id) else {
+                        return;
+                    };
+                    (
+                        acquirer.name.clone(),
+                        acquirer.tier.deal_tier(),
+                        acquirer.market_reach,
+                    )
+                };
+                if let Some(former_label) = self.band.transfer_deal_to_acquirer(
+                    acquirer_id,
+                    acquirer_name.clone(),
+                    acquirer_tier,
+                    acquirer_reach,
+                ) {
+                    self.log(format!(
+                        "🏦 {} has been acquired by {} — your contract moves with it, terms unchanged.",
+                        former_label, acquirer_name
+                    ));
+                }
+            }
+            world::LabelStatus::Folding => {
+                if let Some(voided) = self.band.void_deal_on_label_fold() {
+                    self.log(format!(
+                        "🏚️ {} has folded — you're a free agent again.",
+                        voided.label_name
+                    ));
+                    if voided.written_off > 0 {
+                        self.log(format!(
+                            "🗑️ ${} still owed is written off with the label — you're clear.",
+                            voided.written_off
+                        ));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// L-REACH (§C): the reach a NEW signed release freezes onto itself at record
     /// time. It reads the label's *live* `market_reach` (which now drifts, §C) —
     /// not the value frozen into `RecordDeal` at signing — so a record cut after
@@ -621,6 +697,11 @@ impl Game {
             return;
         }
         self.last_sales_pass_week = Some(self.week);
+        // L-MNA (§F): once a week, right after the weekly world tick has run its
+        // M&A pass, reconcile the player's contract with any acquisition/folding
+        // of its label — before this week's margin books, so the new owner (on
+        // acquisition) or indie rates (on a fold void) apply to this same pass.
+        self.reconcile_player_label_mna();
         let current_week = self.week;
 
         // M5 (§E-2): snapshot the recoupment ledger so the weekly status line

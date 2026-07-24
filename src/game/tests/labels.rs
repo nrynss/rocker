@@ -966,3 +966,446 @@ fn scene_roster_signing_and_booking_is_deterministic() {
         "same seed → identical rosters and label capital, signing and booking alike"
     );
 }
+
+// ===========================================================================
+// §F (L-MNA): distress, acquisition, folding. A label whose capital stays in
+// the red long enough goes Distressed; a distressed label with a roster worth
+// buying is acquired by a flush major (roster + the player's contract transfer,
+// terms carrying), and one nobody buys folds (active deals void via the breach
+// write-off path). All rolls derive from the injected world seed.
+// ===========================================================================
+
+/// §F requirement 1: a label held below the distress floor for N consecutive
+/// weeks flips to `Distressed`; climbing back out restores `Active`.
+#[test]
+fn a_label_below_the_floor_for_n_weeks_goes_distressed_then_can_recover() {
+    let data = GameDataFiles::load().expect("data files present");
+    let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(1));
+    let mut rng = StdRng::seed_from_u64(2);
+    let mut news = Vec::new();
+
+    // A seeded label pushed into the red, empty roster (so no acquirer bids —
+    // this isolates the distress clock from the acquisition/fold resolution).
+    let id = *world.labels.keys().next().expect("labels seeded");
+    {
+        let label = world.labels.get_mut(&id).unwrap();
+        label.capital = -50_000;
+        label.roster.clear();
+    }
+    assert_eq!(world.labels[&id].status, LabelStatus::Active);
+
+    // It does not distress until the clock crosses the threshold.
+    for wk in 1..DISTRESS_WEEKS {
+        world.run_label_mna(&mut rng, &mut news);
+        assert_eq!(
+            world.labels[&id].status,
+            LabelStatus::Active,
+            "still Active after {wk} weeks in the red (threshold is {DISTRESS_WEEKS})"
+        );
+    }
+    world.run_label_mna(&mut rng, &mut news);
+    assert_eq!(
+        world.labels[&id].status,
+        LabelStatus::Distressed,
+        "{DISTRESS_WEEKS} consecutive weeks below the floor flips the label Distressed"
+    );
+    assert!(
+        news.iter().any(|n| n.contains("distress")),
+        "a label going distressed is a news line, got {news:?}"
+    );
+
+    // Recovery (§F: a label that can be saved is not lost): back above the floor
+    // restores Active and resets the clock.
+    world.labels.get_mut(&id).unwrap().capital = 5_000_000;
+    world.run_label_mna(&mut rng, &mut news);
+    assert_eq!(
+        world.labels[&id].status,
+        LabelStatus::Active,
+        "climbing back out of the red recovers the label to Active"
+    );
+    assert_eq!(world.labels[&id].weeks_below_floor, 0, "the clock resets");
+}
+
+/// §F requirement 2: an acquisition transfers the distressed label's roster to
+/// the acquirer AND retags the player's `label_id` onto the acquirer — terms
+/// carry, the acquirer's reach applies going forward.
+#[test]
+fn acquisition_transfers_the_roster_and_retags_the_players_deal() {
+    let mut game = test_game();
+    game.band.fame = 55;
+
+    // Sign the player to a seeded (Independent) label — the acquisition target.
+    let offer = test_deal_offer(&game, None);
+    game.pending_deal_offers.push(offer);
+    game.action_accept_deal(0).expect("signing succeeds");
+    let target_id = game.band.current_deal().unwrap().label_id.unwrap();
+    let deal_before = game.band.current_deal().unwrap().clone();
+
+    // Put a real scene band on the target's roster (the acquirer will absorb it).
+    let scene_band = game.world.bands[0].name.clone();
+    let target_name = game.world.labels[&target_id].name.clone();
+    game.world.bands[0].label = Some(target_name.clone());
+    game.world
+        .labels
+        .get_mut(&target_id)
+        .unwrap()
+        .roster
+        .push(RosterSlot {
+            band_name: scene_band.clone(),
+            signed_week: 0,
+        });
+
+    // Force the target into distress (a flush major acquirer is seeded already).
+    {
+        let label = game.world.labels.get_mut(&target_id).unwrap();
+        label.status = LabelStatus::Distressed;
+        label.capital = -100_000;
+    }
+
+    // Drive the world M&A until the acquisition bid lands.
+    let mut rng = StdRng::seed_from_u64(7);
+    let mut news = Vec::new();
+    let mut acquirer_id = None;
+    for _ in 0..500 {
+        game.world.run_label_mna(&mut rng, &mut news);
+        if game.world.labels[&target_id].status == LabelStatus::Acquired {
+            acquirer_id = game.world.labels[&target_id].acquired_by;
+            break;
+        }
+    }
+    let acquirer_id =
+        acquirer_id.expect("a flush major should acquire a distressed rostered label");
+    assert_ne!(acquirer_id, target_id);
+    assert_eq!(
+        game.world.labels[&acquirer_id].tier,
+        LabelTier::Major,
+        "only a flush major acquires"
+    );
+
+    // Roster transferred to the acquirer; the scene act is retagged; the
+    // acquired label is dormant with an empty roster.
+    let acquirer_name = game.world.labels[&acquirer_id].name.clone();
+    assert!(
+        game.world.labels[&acquirer_id]
+            .roster
+            .iter()
+            .any(|s| s.band_name == scene_band),
+        "the acquired roster moved to the acquirer"
+    );
+    assert_eq!(
+        game.world.bands[0].label.as_deref(),
+        Some(acquirer_name.as_str()),
+        "the scene act now records for the acquirer"
+    );
+    assert!(
+        game.world.labels[&target_id].roster.is_empty(),
+        "the acquired label's roster is emptied"
+    );
+
+    // The player's contract retags onto the acquirer; terms carry unchanged.
+    game.reconcile_player_label_mna();
+    let deal_after = game
+        .band
+        .current_deal()
+        .expect("still under contract after an acquisition");
+    assert_eq!(
+        deal_after.label_id,
+        Some(acquirer_id),
+        "the deal's label_id retags to the acquirer"
+    );
+    assert_eq!(deal_after.label_name, acquirer_name, "and its label name");
+    assert_eq!(
+        deal_after.market_reach, game.world.labels[&acquirer_id].market_reach,
+        "the acquirer's reach now applies going forward"
+    );
+    assert_eq!(deal_after.advance, deal_before.advance, "advance carries");
+    assert_eq!(
+        deal_after.royalty_rate, deal_before.royalty_rate,
+        "royalty carries"
+    );
+    assert_eq!(
+        deal_after.albums_required, deal_before.albums_required,
+        "albums owed carry"
+    );
+    assert_eq!(
+        deal_after.unrecouped, deal_before.unrecouped,
+        "the recoupment ledger carries"
+    );
+    assert_eq!(
+        deal_after.term_weeks, deal_before.term_weeks,
+        "the term carries"
+    );
+    assert_eq!(
+        deal_after.signed_week, deal_before.signed_week,
+        "the signing week carries"
+    );
+    assert!(
+        game.take_turn_log()
+            .iter()
+            .any(|l| l.contains("acquired by") && l.contains("contract moves")),
+        "the player sees the acquisition on their own deal"
+    );
+}
+
+/// §F requirement 3: a fold voids the player's deal into free agency, writing
+/// off any `unrecouped` balance (reusing the breach write-off path) WITHOUT the
+/// punitive breach cooldown — a fold is not the band's breach — and it is news.
+#[test]
+fn a_fold_voids_the_players_deal_into_clean_free_agency() {
+    let mut game = test_game();
+    game.band.fame = 40;
+    let offer = test_deal_offer(&game, None);
+    game.pending_deal_offers.push(offer);
+    game.action_accept_deal(0).expect("signing succeeds");
+    let target_id = game.band.current_deal().unwrap().label_id.unwrap();
+
+    // A real balance still owed, to be written off; capture the money + cooldown.
+    game.band.record_deal.as_mut().unwrap().unrecouped = 25_000;
+    let money_before = game.player.money;
+    let cooldown_before = game.band.deal_cooldown;
+
+    // Force the label to fold: distressed, empty roster (nobody buys it), and
+    // already at the fold horizon.
+    {
+        let label = game.world.labels.get_mut(&target_id).unwrap();
+        label.status = LabelStatus::Distressed;
+        label.capital = -100_000;
+        label.roster.clear();
+        label.weeks_below_floor = FOLD_WEEKS;
+    }
+    let mut rng = StdRng::seed_from_u64(3);
+    let mut news = Vec::new();
+    game.world.run_label_mna(&mut rng, &mut news);
+    assert_eq!(
+        game.world.labels[&target_id].status,
+        LabelStatus::Folding,
+        "a distressed label nobody buys, past the fold horizon, folds"
+    );
+    assert!(
+        news.iter().any(|n| n.contains("folded")),
+        "a folding label is a news line, got {news:?}"
+    );
+
+    // The player's deal voids into free agency.
+    game.reconcile_player_label_mna();
+    assert!(
+        game.band.current_deal().is_none(),
+        "the player is a free agent after the fold"
+    );
+    assert_eq!(
+        game.player.money, money_before,
+        "the write-off is never charged to the player"
+    );
+    assert_eq!(
+        game.band.deal_cooldown, cooldown_before,
+        "a fold is not the band's breach — no punitive cooldown"
+    );
+    let log = game.take_turn_log();
+    assert!(
+        log.iter().any(|l| l.contains("free agent")),
+        "the player sees a free-agent news line, got {log:?}"
+    );
+    assert!(
+        log.iter().any(|l| l.contains("written off")),
+        "the $25,000 still owed is written off, and it is announced, got {log:?}"
+    );
+}
+
+/// §F / determinism: the whole M&A pass replays identically for a seed — the
+/// same distress transitions, the same acquisition/fold outcomes, the same news
+/// line for line (the one roll is the injected world rng, labels iterate in
+/// BTreeMap id order).
+#[test]
+fn the_mna_pass_is_deterministic_per_seed() {
+    let data = GameDataFiles::load().expect("data files present");
+    let run = || {
+        let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(9));
+        // Push every non-major label into distress with a roster, so the pass
+        // exercises acquisition rolls (and, for any nobody buys, folding).
+        let ids: Vec<u32> = world.labels.keys().copied().collect();
+        for (n, id) in ids.iter().enumerate() {
+            let label = world.labels.get_mut(id).unwrap();
+            if label.tier != LabelTier::Major {
+                label.status = LabelStatus::Distressed;
+                label.capital = -10_000;
+                label.weeks_below_floor = DISTRESS_WEEKS;
+                label.roster.push(RosterSlot {
+                    band_name: format!("Roster Act {n}"),
+                    signed_week: 0,
+                });
+            }
+        }
+        let mut rng = StdRng::seed_from_u64(4);
+        let mut news = Vec::new();
+        for _ in 0..120 {
+            world.run_label_mna(&mut rng, &mut news);
+        }
+        (world, news)
+    };
+    let summary = |w: &GameWorld| {
+        w.labels
+            .iter()
+            .map(|(id, l)| {
+                (
+                    *id,
+                    l.status,
+                    l.capital,
+                    l.acquired_by,
+                    l.weeks_below_floor,
+                    l.roster.len(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let (world_a, news_a) = run();
+    let (world_b, news_b) = run();
+    assert_eq!(
+        summary(&world_a),
+        summary(&world_b),
+        "same seed → identical M&A outcomes across every label"
+    );
+    assert_eq!(
+        news_a, news_b,
+        "same seed → identical M&A news, line for line"
+    );
+    // The setup must actually have exercised M&A for the determinism to mean
+    // something: at least one label was acquired.
+    assert!(
+        world_a
+            .labels
+            .values()
+            .any(|l| l.status == LabelStatus::Acquired),
+        "the pass should have resolved some distressed labels by acquisition"
+    );
+}
+
+/// §F / serde: the L-MNA fields default cleanly on a save written before they
+/// existed, and round-trip once present.
+#[test]
+fn mna_fields_default_on_pre_l_mna_saves_and_round_trip() {
+    let data = GameDataFiles::load().expect("data files present");
+    let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(7));
+    let id = *world.labels.keys().next().unwrap();
+    {
+        let label = world.labels.get_mut(&id).unwrap();
+        label.status = LabelStatus::Distressed;
+        label.weeks_below_floor = 12;
+        label.acquired_by = Some(3);
+    }
+    // Round-trip preserves the new fields.
+    let json = serde_json::to_string(&world).expect("serializes");
+    let loaded: GameWorld = serde_json::from_str(&json).expect("round-trips");
+    assert_eq!(loaded.labels[&id].weeks_below_floor, 12);
+    assert_eq!(loaded.labels[&id].acquired_by, Some(3));
+    assert_eq!(loaded.labels[&id].status, LabelStatus::Distressed);
+
+    // A label object written before the L-MNA fields existed loads with the
+    // defaults (0 / None / Active) via serde(default).
+    let mut value = serde_json::to_value(&world).expect("serializes");
+    let label_val = &mut value["labels"][id.to_string()];
+    let obj = label_val.as_object_mut().expect("label is an object");
+    obj.remove("weeks_below_floor");
+    obj.remove("acquired_by");
+    obj.remove("status");
+    let loaded: GameWorld =
+        serde_json::from_value(value).expect("a pre-L-MNA label must still load");
+    assert_eq!(loaded.labels[&id].weeks_below_floor, 0);
+    assert_eq!(loaded.labels[&id].acquired_by, None);
+    assert_eq!(loaded.labels[&id].status, LabelStatus::Active);
+}
+
+/// L-SIM preview (§F/§I): with M&A active, distress resolves into acquisition or
+/// folding rather than leaving a label sitting deep in the red. The
+/// L-ENTITY/L-ROSTER economy keeps labels solidly solvent (the companion
+/// `game::sim::label_capital_trajectories_over_fifteen_years` sweep bottoms in
+/// the high six figures, zero insolvent), so M&A is a *safety valve* natural
+/// play rarely trips. To exercise the valve deterministically this sweep bleeds
+/// the two leanest labels into the red at the start of each run (one is also
+/// handed a roster outright), then plays 15 years of world ticks. A label with a
+/// roster a flush major wants is acquired; a label left with no roster nobody
+/// buys folds — so the run naturally produces acquisitions in the majority and
+/// foldings as the rarer outcome, matching §F's "majors consolidated the
+/// independents". It confirms every red label is resolved within the fold
+/// horizon and none lingers past it. Prints the tally; the calibrated
+/// population bounds are L-SIM's to own.
+#[test]
+#[ignore = "L-MNA safety-valve sweep: cargo test -- --ignored --nocapture"]
+fn mna_resolves_injected_distress_within_the_fold_horizon() {
+    let data = GameDataFiles::load().expect("data files present");
+    let timeline = MusicTimeline::new(&data);
+    const SEEDS: u64 = 24;
+    let horizon = 15 * WEEKS_PER_YEAR;
+
+    let mut acquisitions = 0u32;
+    let mut foldings = 0u32;
+    let mut distress_events = 0u32;
+    let mut deepest_capital = i64::MAX;
+    let mut max_weeks_in_red = 0u16;
+
+    for seed in 1..=SEEDS {
+        let mut world = GameWorld::new(&data, &mut StdRng::seed_from_u64(seed));
+        let mut rng = StdRng::seed_from_u64(seed.wrapping_mul(2).wrapping_add(100));
+
+        // Bleed the two leanest labels into the red to exercise the valve.
+        let mut by_capital: Vec<(u32, i64)> = world
+            .labels
+            .iter()
+            .map(|(id, l)| (*id, l.capital))
+            .collect();
+        by_capital.sort_by_key(|&(_, cap)| cap);
+        let rostered = by_capital[0].0;
+        let orphan = by_capital[1].0;
+        // Give the rostered one a real scene band so a major has something to buy.
+        let band_name = world.bands[0].name.clone();
+        world.bands[0].label = Some(world.labels[&rostered].name.clone());
+        {
+            let label = world.labels.get_mut(&rostered).unwrap();
+            label.capital = -200_000;
+            label.roster.push(RosterSlot {
+                band_name,
+                signed_week: 0,
+            });
+        }
+        world.labels.get_mut(&orphan).unwrap().capital = -200_000;
+
+        for _ in 0..horizon {
+            let news = world.update_week(&timeline, &data, &mut rng);
+            for line in &news {
+                if line.contains("has folded") {
+                    foldings += 1;
+                } else if line.contains("acquires the distressed") {
+                    acquisitions += 1;
+                } else if line.contains("is in financial distress") {
+                    distress_events += 1;
+                }
+            }
+            for label in world.labels.values() {
+                deepest_capital = deepest_capital.min(label.capital);
+                max_weeks_in_red = max_weeks_in_red.max(label.weeks_below_floor);
+            }
+        }
+    }
+
+    println!("L-MNA safety valve over 15 yrs × {SEEDS} seeds (two labels bled red per seed):");
+    println!(
+        "  distress events {distress_events}, acquisitions {acquisitions}, foldings {foldings}"
+    );
+    println!("  deepest capital any label reached: ${deepest_capital}");
+    println!(
+        "  longest any label sat in the red: {max_weeks_in_red} weeks (fold horizon {FOLD_WEEKS})"
+    );
+
+    // Every seed bled two labels red — M&A must have resolved them, not left
+    // them bleeding: at least one resolution per seed (acquisition or folding).
+    assert!(
+        acquisitions + foldings >= SEEDS as u32,
+        "M&A should resolve the injected distress (acquisitions {acquisitions} + foldings {foldings} \
+         over {SEEDS} seeds)"
+    );
+    // No label sits in the red past the fold horizon — the valve always fires.
+    assert!(
+        max_weeks_in_red <= FOLD_WEEKS + REACH_DRIFT_PERIOD_WEEKS as u16,
+        "a label sat in the red for {max_weeks_in_red} weeks, past the fold horizon {FOLD_WEEKS} — \
+         the valve failed to fire"
+    );
+}

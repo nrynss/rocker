@@ -735,6 +735,8 @@ mod tests {
             roster: Vec::new(),
             hit_window: Vec::new(),
             ledger_ytd: 0,
+            weeks_below_floor: 0,
+            acquired_by: None,
         }
     }
 

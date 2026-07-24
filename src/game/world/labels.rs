@@ -24,8 +24,10 @@
 
 use crate::data_loader::{GameDataFiles, RecordLabel};
 use crate::game::constants::{
-    HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED, REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS,
-    REACH_DRIFT_STEP, REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, ROSTER_APPETITE_FAME_HEADROOM,
+    ACQUISITION_COST, ACQUISITION_MIN_ACQUIRER_CAPITAL, ACQUISITION_WEEKLY_CHANCE,
+    DISTRESS_CAPITAL_FLOOR, DISTRESS_WEEKS, FOLD_WEEKS, HIT_WINDOW_LEN, LABEL_CAPITAL_PER_FP_CUBED,
+    LABEL_FOUNDING_ENABLED, REACH_DRIFT_DEADBAND, REACH_DRIFT_PERIOD_WEEKS, REACH_DRIFT_STEP,
+    REACH_HIT_BONUS_CAP, REACH_MAX, REACH_PER_HIT, ROSTER_APPETITE_FAME_HEADROOM,
     ROSTER_CAP_BOUTIQUE, ROSTER_CAP_INDEPENDENT, ROSTER_CAP_MAJOR, ROSTER_FIT_MATCH_BONUS,
     ROSTER_MARGIN_PER_CHART_SCORE, ROSTER_ROOM_WEIGHT, ROSTER_SCOUT_WEEKLY_CHANCE,
     ROSTER_SIGN_CAPITAL_SAFETY, ROSTER_SIGN_MIN_FAME, ROSTER_SIGN_NEWS_FAME,
@@ -50,6 +52,19 @@ pub enum LabelTier {
     Major,
 }
 
+impl LabelTier {
+    /// The `RecordDeal::label_tier` string form (design §E-4 vocabulary,
+    /// matching the offer/deal path). L-MNA (§F) uses it when an acquisition
+    /// retags the player's deal onto the acquirer's tier.
+    pub(in crate::game) fn deal_tier(self) -> &'static str {
+        match self {
+            LabelTier::Boutique => "Boutique",
+            LabelTier::Independent => "Independent",
+            LabelTier::Major => "Major",
+        }
+    }
+}
+
 /// A label's A&R personality (design §G). L-ENTITY seeds every label to
 /// `Balanced`; the named variants are the §G vocabulary that L-CHAR assigns
 /// and wires into offer pricing, single-cut aggression, and renewals.
@@ -71,12 +86,12 @@ pub enum LabelStrategy {
     GenrePurist,
 }
 
-/// Where a label is in its lifecycle (design §A/§F). L-ENTITY seeds every
-/// label `Active`; `// L-MNA will` drive the other states (§F).
-///
-/// `#[allow(dead_code)]`: the non-`Active` variants are constructed by L-MNA
-/// (§F) — present now so the serialized shape is stable across the cycle.
-#[allow(dead_code)]
+/// Where a label is in its lifecycle (design §A/§F). L-ENTITY seeds every label
+/// `Active`; L-MNA's weekly M&A pass (`run_label_mna`) drives the transitions:
+/// `Active → Distressed` when capital stays in the red past `DISTRESS_WEEKS`,
+/// `Distressed → Acquired` when a flush major buys it, and `Distressed →
+/// Folding` when it cannot be saved or sold (§F). `Distressed → Active` on
+/// recovery. `Acquired`/`Folding` are terminal (dormant).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum LabelStatus {
     #[default]
@@ -161,6 +176,18 @@ pub struct Label {
     /// tier-drift curve (§C).
     #[serde(default)]
     pub ledger_ytd: i64,
+    /// L-MNA (§F): consecutive weeks `capital` has stayed below the distress
+    /// floor. Ticks up in the red, resets to 0 on recovery; crossing
+    /// `DISTRESS_WEEKS` flips the label `Distressed`, crossing `FOLD_WEEKS` (if
+    /// still unsold) folds it. `#[serde(default)]` → 0 on any pre-L-MNA save.
+    #[serde(default)]
+    pub weeks_below_floor: u16,
+    /// L-MNA (§F): when this label has been acquired, the `id` of the acquirer.
+    /// The player's deal reconcile reads it to retarget a contract signed to an
+    /// acquired label onto its new owner. `None` for every label that has not
+    /// been acquired. `#[serde(default)]` → `None` on any pre-L-MNA save.
+    #[serde(default)]
+    pub acquired_by: Option<u32>,
 }
 
 impl Label {
@@ -343,6 +370,9 @@ impl Label {
             roster: Vec::new(),
             hit_window: Vec::new(),
             ledger_ytd: 0,
+            // L-MNA (§F): a fresh label starts solvent and un-acquired.
+            weeks_below_floor: 0,
+            acquired_by: None,
         }
     }
 }
@@ -688,4 +718,198 @@ fn roster_cap(tier: LabelTier) -> usize {
 /// `base + fame × per_fame`. Debited from the label's `capital` at signing.
 fn scene_signing_cost(band_fame: u8) -> i64 {
     ROSTER_SIGNING_BASE_COST + i64::from(band_fame) * ROSTER_SIGNING_COST_PER_FAME
+}
+
+// ============================================================================
+// L-MNA (design §F): mergers, acquisitions, and failure.
+//
+// Labels rise and fall all the way — including out of existence. This pass runs
+// last in the weekly world tick (after `drift_labels`), so it only ever draws
+// from the tail of the world stream and never perturbs the existing passes'
+// rolls (the determinism trio is unaffected). All state transitions and rolls
+// are deterministic per world seed: labels iterate in BTreeMap id order and the
+// one roll — a flush major's acquisition bid — is the injected world `rng`.
+//
+// The pass owns only *world* state: label `status`, the distress clock, and the
+// scene-band ↔ label retag on acquisition/folding. The PLAYER's contract lives
+// on `Game::band`, so its transfer (acquisition) or void (folding) happens at
+// the `Game` layer — see `Game::reconcile_player_label_mna` in `economy.rs`,
+// which reads the `status`/`acquired_by` this pass writes.
+// ============================================================================
+
+impl GameWorld {
+    /// The weekly M&A pass (design §F): tick each label's distress clock and
+    /// flip `Active ↔ Distressed`, then resolve every distressed label by
+    /// acquisition (a flush major absorbs its roster) or folding. Wired once
+    /// into `update_week`, after `drift_labels` (same "one call line" shape a
+    /// sibling used for `drift_labels`/`tick_scene_rosters`).
+    pub(in crate::game) fn run_label_mna(&mut self, rng: &mut impl Rng, news: &mut Vec<String>) {
+        self.update_label_distress(news);
+        self.resolve_distressed_labels(rng, news);
+        // §F: label founding is OFF by default (coordinator decision). When
+        // L-SIM flips `LABEL_FOUNDING_ENABLED`, new-boutique founding lands in
+        // this branch to backfill the low tier as acquisitions thin it; while
+        // the flag is false the pass creates no labels (it must not add any).
+        if LABEL_FOUNDING_ENABLED {
+            // L-SIM (§F): found new boutiques here.
+        }
+    }
+
+    /// Tick the distress clock (design §F). A label in the red past the floor
+    /// accumulates weeks and flips `Distressed` at `DISTRESS_WEEKS`; one that
+    /// climbs back above the floor resets its clock and — if it was distressed —
+    /// recovers to `Active` (a label that can be saved is not lost). RNG-free.
+    /// `Acquired`/`Folding` are terminal, so their clocks stop.
+    fn update_label_distress(&mut self, news: &mut Vec<String>) {
+        for label in self.labels.values_mut() {
+            if matches!(label.status, LabelStatus::Acquired | LabelStatus::Folding) {
+                continue;
+            }
+            if label.capital < DISTRESS_CAPITAL_FLOOR {
+                label.weeks_below_floor = label.weeks_below_floor.saturating_add(1);
+                if label.status == LabelStatus::Active && label.weeks_below_floor >= DISTRESS_WEEKS
+                {
+                    label.status = LabelStatus::Distressed;
+                    news.push(format!("📉 {} is in financial distress.", label.name));
+                }
+            } else {
+                if label.status == LabelStatus::Distressed {
+                    label.status = LabelStatus::Active;
+                    news.push(format!(
+                        "📈 {} has clawed its way back out of the red.",
+                        label.name
+                    ));
+                }
+                label.weeks_below_floor = 0;
+            }
+        }
+    }
+
+    /// Resolve each distressed label (design §F), in deterministic id order: a
+    /// flush major may acquire one that still has a roster worth buying (the
+    /// only RNG in the pass); a label nobody buys that has bled past the fold
+    /// horizon folds. A distressed label that is neither acquired nor past the
+    /// horizon simply waits — it may still recover (its clock keeps ticking in
+    /// `update_label_distress`) or be bought next week.
+    fn resolve_distressed_labels(&mut self, rng: &mut impl Rng, news: &mut Vec<String>) {
+        let distressed: Vec<u32> = self
+            .labels
+            .iter()
+            .filter(|(_, l)| l.status == LabelStatus::Distressed)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in distressed {
+            let (has_roster, weeks) = {
+                let label = &self.labels[&id];
+                (!label.roster.is_empty(), label.weeks_below_floor)
+            };
+            // The acquisition bid is the pass's only roll — drawn only when a
+            // willing acquirer actually exists for a label worth buying, so the
+            // world stream stays stable in the common case where none does.
+            if has_roster
+                && let Some(acquirer_id) = self.pick_acquirer(id)
+                && rng.gen_bool(ACQUISITION_WEEKLY_CHANCE)
+            {
+                self.acquire_label(acquirer_id, id, news);
+                continue;
+            }
+            if weeks >= FOLD_WEEKS {
+                self.fold_label(id, news);
+            }
+        }
+    }
+
+    /// The flush major that would buy a distressed label, or `None` (design §F).
+    /// A candidate must be `Active`, a `Major`, hold at least
+    /// `ACQUISITION_MIN_ACQUIRER_CAPITAL` (it "cannot spend money it does not
+    /// have", §A), and not be the distressed label itself. The richest willing
+    /// major wins; the strict `>` plus BTreeMap id order makes the tie-break the
+    /// lowest id — fully deterministic, no RNG.
+    fn pick_acquirer(&self, distressed_id: u32) -> Option<u32> {
+        let mut best: Option<(i64, u32)> = None;
+        for (id, label) in &self.labels {
+            if *id == distressed_id
+                || label.status != LabelStatus::Active
+                || label.tier != LabelTier::Major
+                || label.capital < ACQUISITION_MIN_ACQUIRER_CAPITAL
+            {
+                continue;
+            }
+            if best.is_none_or(|(cap, _)| label.capital > cap) {
+                best = Some((label.capital, *id));
+            }
+        }
+        best.map(|(_, id)| id)
+    }
+
+    /// Acquisition (design §F): the acquirer absorbs the distressed label's
+    /// roster and pays `ACQUISITION_COST`; the acquired label's scene acts are
+    /// retagged onto the acquirer (the band's `label` is the scene's signed-to
+    /// source of truth, so `reconcile_rosters` keeps the moved roster in step
+    /// next tick). The acquired label goes dormant: `Acquired`, its debts
+    /// written off (capital dissolved to 0), pointing at its new owner via
+    /// `acquired_by` — which the player-deal reconcile reads to move a contract
+    /// signed to it onto the acquirer.
+    fn acquire_label(&mut self, acquirer_id: u32, target_id: u32, news: &mut Vec<String>) {
+        let (target_name, roster) = {
+            let target = self
+                .labels
+                .get_mut(&target_id)
+                .expect("resolve_distressed_labels only passes live ids");
+            (target.name.clone(), std::mem::take(&mut target.roster))
+        };
+        let acquirer_name = self.labels[&acquirer_id].name.clone();
+
+        for band in &mut self.bands {
+            if band.label.as_deref() == Some(target_name.as_str()) {
+                band.label = Some(acquirer_name.clone());
+            }
+        }
+        {
+            let acquirer = self
+                .labels
+                .get_mut(&acquirer_id)
+                .expect("pick_acquirer only returns live ids");
+            acquirer.roster.extend(roster);
+            acquirer.book(-ACQUISITION_COST);
+        }
+        {
+            let target = self.labels.get_mut(&target_id).expect("live id");
+            target.status = LabelStatus::Acquired;
+            target.acquired_by = Some(acquirer_id);
+            target.capital = 0;
+            target.weeks_below_floor = 0;
+        }
+        news.push(format!(
+            "🏦 {acquirer_name} acquires the distressed {target_name} and takes on its roster."
+        ));
+    }
+
+    /// Folding (design §F): a label that cannot be saved or sold goes dormant.
+    /// Its `status` becomes `Folding`, its roster clears, its debts fold with it
+    /// (capital dissolved to 0), and its signed scene acts become free agents
+    /// (`label = None`). The PLAYER's contract, if it was with this label, is
+    /// voided separately at the `Game` layer (free agent, `unrecouped` written
+    /// off) — see `Game::reconcile_player_label_mna`.
+    fn fold_label(&mut self, target_id: u32, news: &mut Vec<String>) {
+        let target_name = {
+            let target = self
+                .labels
+                .get_mut(&target_id)
+                .expect("resolve_distressed_labels only passes live ids");
+            target.status = LabelStatus::Folding;
+            target.roster.clear();
+            target.capital = 0;
+            target.weeks_below_floor = 0;
+            target.name.clone()
+        };
+        for band in &mut self.bands {
+            if band.label.as_deref() == Some(target_name.as_str()) {
+                band.label = None;
+            }
+        }
+        news.push(format!(
+            "🏚️ {target_name} has folded — its catalogue goes dormant and its acts are free agents."
+        ));
+    }
 }

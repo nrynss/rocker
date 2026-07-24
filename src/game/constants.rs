@@ -963,6 +963,69 @@ pub(super) const BID_ESCALATION_FRACTION: f32 = 0.5;
 pub(super) const GENRE_FIT_CHANCE_MULTIPLIER: f64 = 1.5;
 pub(super) const OFFER_CHANCE_MAX: f64 = 0.95;
 
+// ============================================================================
+// L-MNA (v0.8 §F): mergers, acquisitions, and failure. Labels rise and fall all
+// the way — including out of existence. A label whose `capital` stays in the red
+// for long enough goes `Distressed` (stops signing, leans on single-cuts, sheds
+// unrecouped acts at term via the existing breach path); a `Distressed` label is
+// then either acquired by a flush major (its roster — and the player's contract
+// — transfer to the acquirer) or, if it cannot be sold, folds (active deals void
+// via the breach write-off path, catalogue goes dormant). All rolls derive from
+// the injected world seed; labels iterate in a deterministic BTreeMap order.
+//
+// M&A is a *safety valve*, not the median label's fate: L-ENTITY/L-ROSTER tuning
+// keeps labels solvent (the 15-yr sweep bottoms in the high six figures), so the
+// distress floor sits at the red line — a label only distresses if it genuinely
+// bleeds out. Every number here is [tune], refereed by L-SIM's solvency sweep
+// (§I): "failures/foldings real but rare", "no label sits far below zero for
+// long", and "a player signed to a folding label is handled gracefully".
+// ============================================================================
+
+/// A label is "in the red" — and its distress clock ticks — while its `capital`
+/// is strictly below this floor (design §F). Set at 0: the wholesale ledger
+/// keeps healthy labels well positive, so crossing zero is the honest signal
+/// that a label is bleeding out, not merely lean. [tune]
+pub(super) const DISTRESS_CAPITAL_FLOOR: i64 = 0;
+
+/// Consecutive weeks below the floor before a label flips `Active → Distressed`
+/// (design §F: "capital below a floor for N consecutive weeks"). Half a game
+/// year of red ink — long enough that a one-off dip that recovers never trips
+/// it. Climbing back above the floor resets the clock and restores `Active`. [tune]
+pub(super) const DISTRESS_WEEKS: u16 = 26;
+
+/// Consecutive weeks below the floor before a `Distressed` label that could not
+/// be sold **folds** (design §F). Longer than `DISTRESS_WEEKS`, so a label gets
+/// a window in which a flush major might still acquire it before it dies; only a
+/// label nobody buys, still bleeding after a year and a half, actually folds. [tune]
+pub(super) const FOLD_WEEKS: u16 = 78;
+
+/// A label must be an `Active` Major holding at least this much `capital` to
+/// acquire a distressed peer — "a flush major may acquire" (design §F), and "a
+/// label cannot spend money it does not have" (§A key constraint). Mirrors the
+/// Major-tier capital floor: a genuinely flush major, not one just over the
+/// line. [tune]
+pub(super) const ACQUISITION_MIN_ACQUIRER_CAPITAL: i64 = TIER_MAJOR_MIN_CAPITAL;
+
+/// Weekly chance a willing, flush major actually bids for a given distressed
+/// label that still has a roster worth buying (design §F: a major *may* acquire).
+/// Over the `DISTRESS_WEEKS..FOLD_WEEKS` window a rostered distressed label is
+/// very likely to be acquired before it would fold — so acquisitions are the
+/// common resolution and outright foldings (an empty-roster label nobody wants)
+/// the rarer one, matching the era's "majors consolidated the independents". [tune]
+pub(super) const ACQUISITION_WEEKLY_CHANCE: f64 = 0.15;
+
+/// What an acquirer pays to absorb a distressed label — debited from its
+/// `capital` (§A: money is conserved). Modest against a flush major's balance
+/// sheet; the real value it buys is the roster's future margin, not the cash. [tune]
+pub(super) const ACQUISITION_COST: i64 = 100_000;
+
+/// §F founding gate — **OFF by default** (coordinator decision, 2026-07-24):
+/// "leave a clearly-gated stub that L-SIM can flip; do not add new labels this
+/// pass." While `false`, the M&A pass creates no labels. L-SIM flips this to
+/// repopulate the low tier as acquisitions thin it, once the population sweep
+/// shows it is needed.
+pub(super) const LABEL_FOUNDING_ENABLED: bool = false;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).
