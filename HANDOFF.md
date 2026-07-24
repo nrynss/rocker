@@ -112,7 +112,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | 🔒 claimed | agent-lmna (worktree) | — |
 | **L-CHAR** | Label character / A&R (§G): `LabelStrategy` enum + creative-freedom effects wired into offer pricing, single-cut aggression/memos, renewal behavior | M | L-BID | `LabelStrategy` in `world/labels.rs`, hooks in `label_moves.rs` + `world/deals.rs`, strategy consts | ⬜ open | — | — |
 | **L-CERT** | Year-gate certifications to the era (§I): no scheme <1973, no Platinum <1976, no multi-platinum <1984; thresholds unchanged, only availability gates on year | S | — | certification pass in `economy.rs`, year-gate consts in `constants.rs` | ✅ done | agent-lcert (worktree) | c2be9a0 |
-| **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/labels.rs` + mod/input wiring in `src/ui/app.rs` | 🔒 claimed | agent-lui1 (worktree) | — |
+| **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/{discography,labels}.rs` + mod/input wiring in `src/ui/app.rs`+`input/main.rs` | ✅ done | agent-lui1 (worktree) | 0cae070 |
 | **L-UI-2** | UI slice 2 (§H): deal-picker health/trajectory annotations + industry news lines (mergers/foldings/distress/rival breakouts) at their source sites | S | L-BID, L-MNA, L-UI-1 | deal-picker annotations in `pickers.rs`, news lines at their source sites | ⬜ open | — | — |
 | **L-SIM** | Sim-lab validation (§I): label-solvency + gangbuster-target + bidding + graceful-failure bots and assertions; scale re-validation harness for L-SCALE | M | L-SCALE (continuous thereafter) | `src/game/sim.rs`, `src/game/tests/**` (new files) | ⬜ open | — | — |
 | **L-CLOSE** | Cycle close: board audit, CHANGELOG, bump 0.8.0, archive this board, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ⬜ open | — | — |
@@ -180,6 +180,17 @@ L-SIM opens with L-SCALE and runs continuously as the [tune] contract.
   **Exact-value tests will break** (income/recoup dollar assertions in
   `tests/recoupment.rs`, `tests/deals.rs`, smoke). Recompute, don't delete.
   Determinism trio stays unmodified.
+
+- 2026-07-24 **L-UI-1 integrated (`0cae070`), clean fast-forward.** 218 pass,
+  clippy/fmt clean, determinism green. Per-record sales now visible: a **new
+  Discography browser** (`d`) shows each record's copies/earnings/peak/cert;
+  a **label-ledger browser** (`b`) shows tiers/reach/roster, exact capital for
+  the player's own label, qualitative bands for others (§H). **Board pointer
+  correction:** the L-UI-1 row (and my note) said `modals/file.rs` — that's the
+  Save/Load modal; no discography view existed, so the agent correctly built a
+  dedicated `modals/discography.rs`. **Coupling flag:** the UI's qualitative
+  capital bands duplicate the game's `TIER_*_MIN_CAPITAL` thresholds ($200k/$2M)
+  as UI-local consts (the game ones are `pub(super)`); keep in step if they move.
 
 - 2026-07-24 **Wave 4 dispatched + L-UI reordered forward.** User asked (mid-
   cycle) for **per-record sales in the UI** ("no way to see the sales of each
