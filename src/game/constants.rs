@@ -886,6 +886,83 @@ pub(super) const ROSTER_SIGNING_COST_PER_FAME: i64 = 150;
 /// referees against the solvency sweep. [tune]
 pub(super) const ROSTER_MARGIN_PER_CHART_SCORE: f32 = 1.0;
 
+// ============================================================================
+// L-BID (v0.8 §E): the deal-offer stream priced from live label state. An
+// offer's advance and royalty come from the offering `Label`'s CURRENT
+// `capital` / `market_reach` / `financial_power` / `tier` and the act's fame —
+// not the static `record_labels.json` row. A label cannot advance money it does
+// not have (advance bounded by `capital`), more than one label can table an
+// offer in the same window, and when two-plus want the act their terms escalate
+// toward the richer/hungrier label's ceiling, each bounded by its own means.
+// Every number here is [tune], refereed by L-SIM (§I): the bidding must draw a
+// hot act better offers than an unknown without making advances unrecoupable or
+// bankrupting labels (the recoup + 15-yr solvency sweeps).
+// ============================================================================
+
+/// Affordability bound: a label will front at most this fraction of its
+/// `capital` as a single advance — the hard "cannot advance money it does not
+/// have" ceiling (design §E / "a label cannot spend money it does not have").
+/// Well below 1.0 so signing never approaches insolvency; at seed
+/// (`capital = fp³ × 15`) this ceiling is `fp³ × 2.25`, which sits above the
+/// stature figure below, so a *healthy* label pays on stature/heat and only a
+/// cash-strapped one is squeezed by affordability. [tune]
+pub(super) const ADVANCE_CAPITAL_FRACTION: f32 = 0.15;
+
+/// The marquee advance a label's *stature* justifies, `financial_power³ × this`
+/// — what it would pay a fame-100 act before the affordability bound. Cubed so
+/// the tier spread is steep (a major reaches for far more than a boutique),
+/// matching the seed-capital curve. Sized so an indie's top advance lands in the
+/// low tens of thousands and a major's in the high six/low seven figures — the
+/// era-real ballpark the recoup sweep already validated. [tune]
+pub(super) const ADVANCE_STATURE_PER_FP_CUBED: f32 = 1.1;
+
+/// Fame's pull on the advance: the fraction of the stature figure an act commands
+/// scales linearly from this floor (a total unknown) at fame 0 to 1.0 (the full
+/// marquee figure) at fame 100 — "a hot act draws better offers than an unknown"
+/// (design §E). [tune]
+pub(super) const ADVANCE_FAME_FLOOR: f32 = 0.15;
+
+/// A label only tables an offer when the advance it could afford
+/// (`capital × ADVANCE_CAPITAL_FRACTION`) clears this floor — below it the label
+/// is too cash-strapped to compete and stays quiet ("a label deep in the red
+/// signs cautiously or not at all", design §E). At the seed scale even the
+/// leanest label clears this comfortably; it bites only once `capital` has bled
+/// far below seed. [tune]
+pub(super) const ADVANCE_MIN_VIABLE_AFFORDABLE: i64 = 2_000;
+
+/// Royalty priced from reach (design §E): a low-reach label competes on royalty
+/// (it cannot compete on advance), a high-reach major pays the least. The rate
+/// runs linearly from `MAX` at reach 0 down to `MIN` at reach 100, reproducing
+/// the JSON shape (majors ~10-11%, indies ~22-25%) from *live* reach so it tracks
+/// L-REACH drift. [tune]
+pub(super) const ROYALTY_REACH_MAX: f32 = 0.32;
+pub(super) const ROYALTY_REACH_MIN: f32 = 0.10;
+
+/// A hot act also commands a better rate: fame adds up to this many points to the
+/// reach-set royalty, linearly by fame. [tune]
+pub(super) const ROYALTY_FAME_BONUS_MAX: f32 = 0.03;
+
+/// Bidding room on royalty (design §E): under competition a label will sweeten
+/// its reach-set rate by up to this premium, never past the hard cap. Royalty is
+/// the cheap lever a poorer label can still pull when it cannot match a rival's
+/// advance. [tune]
+pub(super) const ROYALTY_BID_PREMIUM: f32 = 0.05;
+pub(super) const ROYALTY_HARD_CAP: f32 = 0.35;
+
+/// Bidding escalation (design §E): with two-plus offers on the table, each
+/// closes this fraction of the gap to the best competing terms — advance toward
+/// the top advance (bounded by the label's own affordability, so a broke label
+/// cannot outbid a flush one) and royalty toward the top royalty (bounded by the
+/// label's royalty ceiling). Half-way is a firm but not runaway war. [tune]
+pub(super) const BID_ESCALATION_FRACTION: f32 = 0.5;
+
+/// Genre fit sharpens appetite (design §E): a label whose specialty includes the
+/// act's genre is this much likelier to table an offer, so a genre-fitting act
+/// draws more concurrent suitors (and thus more bidding). Multiplies the tiered
+/// base chance, clamped to a sane ceiling. [tune]
+pub(super) const GENRE_FIT_CHANCE_MULTIPLIER: f64 = 1.5;
+pub(super) const OFFER_CHANCE_MAX: f64 = 0.95;
+
 // Determinism salts — stream construction lives in `rng.rs`.
 // ACTION_STREAM_SALT keeps the action stream uncorrelated with the world
 // stream (π's fractional bits: arbitrary, fixed forever).
