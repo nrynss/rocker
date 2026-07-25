@@ -4,17 +4,61 @@
 
 use rand::Rng;
 
-use crate::data_loader::Incident;
+use crate::data_loader::{ActivityScope, Incident};
 
 use super::constants;
 use super::*;
 
+/// The event scope a commitment in progress puts the band in (design §G).
+///
+/// The catch-all is deliberate and load-bearing: `OngoingActivity::Recording`
+/// is S-MASTER's to land (§D), and the studio pool in `data/incidents.json`
+/// is already written and already gated `"recording"`. Mapping anything this
+/// task cannot yet name to `Recording` means the studio's incidents start
+/// firing the week the variant appears, with no edit here — which is the
+/// whole point of gating on data rather than on code.
+fn scope_of_activity(activity: &OngoingActivity) -> ActivityScope {
+    match activity {
+        OngoingActivity::Tour(_) => ActivityScope::Tour,
+        OngoingActivity::SupportTour(_) => ActivityScope::SupportTour,
+        OngoingActivity::Break(_) => ActivityScope::Break,
+        #[allow(unreachable_patterns)]
+        _ => ActivityScope::Recording,
+    }
+}
+
 impl Game {
-    /// Roll the weekly incident gate; if it fires, pick a weighted incident
-    /// from those eligible for the current fame/signed state and apply it.
-    /// Gate, selection, and effect rolls all draw on the action stream
-    /// (design §F/§G). The single entry point `turn.rs` calls.
+    /// §G tap point — the one line `turn.rs`'s `resolve_activity_week` adds,
+    /// at the top, *before* the activity is taken and possibly settled.
+    /// Without it the week that ends a tour looks, to the event taps, like a
+    /// week at home; with it every week of a commitment is in scope.
+    pub(in crate::game) fn note_activity_week(&mut self) {
+        let scope = self.ongoing_activity.as_ref().map(scope_of_activity);
+        if let Some(scope) = scope {
+            self.events.pending_activity = Some(scope);
+        }
+    }
+
+    /// §G tap point — the one line `actions/live.rs`'s `action_play_gig`
+    /// adds, once its guards have passed. A one-off gig is a night on a
+    /// stage, not an `OngoingActivity`, so nothing else can tell the tap it
+    /// happened.
+    pub(in crate::game) fn note_gig_week(&mut self) {
+        self.events.pending_activity = Some(ActivityScope::Gig);
+    }
+
+    /// Roll the week's incident taps (design §G). The activity tap goes
+    /// first: if the band is in the middle of something that has its own
+    /// hazards, that is the more specific story, and it takes the week's one
+    /// incident. Otherwise the ordinary weekly tap runs exactly as it always
+    /// has. Gate, selection, and effect rolls all draw on the action stream
+    /// (design §F/§G) — never the activity stream, whose steps belong to the
+    /// tour's nights and must keep rolling what they rolled before §G. The
+    /// single entry point `turn.rs` calls.
     pub(super) fn maybe_trigger_incident(&mut self, rng: &mut impl Rng) -> Result<(), String> {
+        if self.maybe_trigger_activity_incident(rng) {
+            return Ok(());
+        }
         if !self.events.try_trigger_event(self.week, rng) {
             return Ok(());
         }
@@ -33,6 +77,51 @@ impl Game {
             self.apply_incident(&incident, rng);
         }
         Ok(())
+    }
+
+    /// The §G activity tap. Returns whether it fired — a hit takes the week's
+    /// one incident and the general tap is skipped.
+    ///
+    /// Two orderings here are deliberate. The latch is consumed
+    /// **unconditionally**, so a week's scope can never leak into the next
+    /// one. And the pool is resolved **before** the gate is rolled: an
+    /// activity with nothing eligible (a break, or a fame tier no scoped
+    /// incident admits) consumes no rng and cannot burn the week's incident
+    /// on an empty pick — which is what lets the general tap keep firing on
+    /// the road.
+    fn maybe_trigger_activity_incident(&mut self, rng: &mut impl Rng) -> bool {
+        let latched = self.events.pending_activity.take();
+        let Some(scope) = latched.or_else(|| self.ongoing_activity.as_ref().map(scope_of_activity))
+        else {
+            return false;
+        };
+
+        let fame = self.band.fame;
+        let signed = self.band.has_record_deal();
+        if self
+            .data_files
+            .incidents_data
+            .eligible_activity_incidents(fame, signed, scope)
+            .is_empty()
+        {
+            return false;
+        }
+        if !self.events.try_trigger_activity_event(self.week, rng) {
+            return false;
+        }
+
+        // Cloned out of `data_files` for the same borrow reason as above.
+        let chosen = {
+            let eligible = self
+                .data_files
+                .incidents_data
+                .eligible_activity_incidents(fame, signed, scope);
+            events::weighted_pick(&eligible, rng).cloned()
+        };
+        if let Some(incident) = chosen {
+            self.apply_incident(&incident, rng);
+        }
+        true
     }
 
     /// Apply one incident's effect ranges to the four bars, money, and fame.

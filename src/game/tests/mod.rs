@@ -12,6 +12,7 @@ use crate::game::world::PotentialDealOffer;
 use super::constants::{self, *};
 use super::*;
 
+mod activity_events;
 mod certifications;
 mod charts;
 mod deal_lifecycle;
