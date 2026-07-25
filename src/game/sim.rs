@@ -2024,30 +2024,40 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
-    // T-LEN: the same tour at every bookable length. The gross pot had no
-    // `weeks` term while shows and cost both scaled with it, so this column
-    // used to fall monotonically for every rig — touring longer was a strict
-    // loss, and the top rig's collapse (+$17,854 at one week to −$50,948 at
-    // four) was mostly this bug wearing the rig's name.
-    println!("\nsame tours by length (fame 80, regional fame 40):");
-    let mut by_weeks: Vec<(u8, TourRig, f32)> = Vec::new();
-    for weeks in 1..=TOUR_LENGTH_MAX_WEEKS {
-        for rig in TourRig::ALL {
-            let nets: Vec<i64> = (1..=20u64)
-                .filter_map(|seed| net_at(seed, 80, 40, rig, weeks))
-                .collect();
-            if nets.is_empty() {
-                continue;
+    // T-LEN: the same tour at every bookable length, on a territory the act
+    // has built (so every rig is somewhere it belongs — see the softer
+    // moderate-territory probe below). The gross pot had no `weeks` term while
+    // shows and cost both scaled with it, so this column used to fall
+    // monotonically for *every* rig at *every* state — touring longer was a
+    // strict loss, and the top rig's collapse (+$17,854 at one week to
+    // −$50,948 at four) was mostly this bug wearing the rig's name.
+    const BUILT_TERRITORY: u8 = 80;
+    const MODERATE_TERRITORY: u8 = 40;
+    let by_weeks_at = |regional_fame: u8| -> Vec<(u8, TourRig, f32)> {
+        let mut rows = Vec::new();
+        for weeks in 1..=TOUR_LENGTH_MAX_WEEKS {
+            for rig in TourRig::ALL {
+                let nets: Vec<i64> = (1..=20u64)
+                    .filter_map(|seed| net_at(seed, 80, regional_fame, rig, weeks))
+                    .collect();
+                if nets.is_empty() {
+                    continue;
+                }
+                let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+                println!(
+                    "  {weeks} week(s)  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                    rig.label(),
+                    nets.len()
+                );
+                rows.push((weeks, rig, avg));
             }
-            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
-            println!(
-                "  {weeks} week(s)  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
-                rig.label(),
-                nets.len()
-            );
-            by_weeks.push((weeks, rig, avg));
         }
-    }
+        rows
+    };
+    println!("\nsame tours by length (fame 80, regional fame {BUILT_TERRITORY} — built):");
+    let by_weeks = by_weeks_at(BUILT_TERRITORY);
+    println!("\nsame tours by length (fame 80, regional fame {MODERATE_TERRITORY} — moderate):");
+    let by_weeks_moderate = by_weeks_at(MODERATE_TERRITORY);
 
     let avg_for = |fame: u8, rig: TourRig| {
         avgs.iter()
@@ -2062,6 +2072,13 @@ fn tour_profitability_by_rig_and_fame_sweep() {
     };
     let weeks_avg_for = |weeks: u8, rig: TourRig| {
         by_weeks
+            .iter()
+            .find(|&&(w, r, _)| w == weeks && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig and length is available at fame 80")
+    };
+    let moderate_weeks_avg_for = |weeks: u8, rig: TourRig| {
+        by_weeks_moderate
             .iter()
             .find(|&&(w, r, _)| w == weeks && r == rig)
             .map(|&(_, _, a)| a)
@@ -2145,17 +2162,59 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         );
     }
 
-    // T-LEN: playing more nights must earn more money, for every rig. The
-    // pot's missing `weeks` term made this monotonically *decreasing*.
+    // T-LEN: on a territory the act has built, playing more nights must earn
+    // more money — for every rig. The pot's missing `weeks` term made this
+    // monotonically *decreasing* everywhere, which is what made length a
+    // strictly dominated choice rather than a trade-off.
     for rig in TourRig::ALL {
         for weeks in 2..=TOUR_LENGTH_MAX_WEEKS {
             let shorter = weeks_avg_for(weeks - 1, rig);
             let longer = weeks_avg_for(weeks, rig);
             assert!(
                 longer > shorter,
-                "{}: a {weeks}-week tour (avg net ${longer:.0}) should out-earn a \
-                 {}-week one (avg net ${shorter:.0}) — length must be a trade-off, \
-                 not a strict loss",
+                "{}: on a built territory a {weeks}-week tour (avg net ${longer:.0}) should \
+                 out-earn a {}-week one (avg net ${shorter:.0}) — length must be a \
+                 trade-off, not a strict loss",
+                rig.label(),
+                weeks - 1
+            );
+        }
+    }
+
+    // On a territory that is only *moderately* built, the same must hold for
+    // every rig the act should actually be booking there — but deliberately
+    // not for one it shouldn't. A rig's weekly cost is flat while the pot
+    // saturates, so dragging a rig too big for the market around it for a
+    // month is supposed to bleed: at regional fame 40 the truck & crew is the
+    // right call and full production is not, so full production is the one rig
+    // allowed to fall off with length. Pin both halves — the "right rig scales
+    // with length" rule *and* the fact that the exception is an over-booked
+    // rig, not an arbitrary one.
+    let best_moderate_rig = TourRig::ALL
+        .iter()
+        .copied()
+        .max_by(|&a, &b| {
+            moderate_weeks_avg_for(TOUR_LENGTH_MAX_WEEKS, a)
+                .partial_cmp(&moderate_weeks_avg_for(TOUR_LENGTH_MAX_WEEKS, b))
+                .expect("net averages are finite")
+        })
+        .expect("TourRig::ALL is non-empty");
+    assert_ne!(
+        best_moderate_rig,
+        TourRig::Full,
+        "full production should not be the best rig on a moderately built territory"
+    );
+    for rig in TourRig::ALL {
+        if rig == TourRig::Full {
+            continue;
+        }
+        for weeks in 2..=TOUR_LENGTH_MAX_WEEKS {
+            let shorter = moderate_weeks_avg_for(weeks - 1, rig);
+            let longer = moderate_weeks_avg_for(weeks, rig);
+            assert!(
+                longer > shorter,
+                "{}: at regional fame {MODERATE_TERRITORY} a {weeks}-week tour (avg net \
+                 ${longer:.0}) should still out-earn a {}-week one (avg net ${shorter:.0})",
                 rig.label(),
                 weeks - 1
             );

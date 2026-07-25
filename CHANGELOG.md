@@ -30,12 +30,27 @@ close of the Label Cycle, plus the length bug found underneath it.
   `weeks^0.65`, normalized at one week: a fourth week still earns less than the
   first (a territory saturates) but it earns something, which is the trade-off
   design §A actually asked for rather than a strictly dominated button.
+- **Touring pays well without crowning itself.** Giving length a real gross
+  term multiplied the longest bookings' box office ~2.5×, and the sim lab
+  caught what that did to a whole career: the road-dog bot's 15-year median
+  went $4.26M → $18.99M and *passed the signed superstar's $16.75M*, inverting
+  the Label Cycle's thesis that a label's worldwide reach is the top of the
+  economy. The bug had been suppressing an entire playstyle; un-suppressing it
+  shouldn't crown it. The box-office coefficient comes down (0.45 → 0.30) with
+  a matching trim to the top two rigs' weekly cost, which moves magnitude
+  without disturbing any ordering the pass exists to fix. Touring lands at a
+  road-dog median of **$12.23M** — a real career, roughly triple what the bugs
+  allowed, still under the signed superstar. Every other bot's 15-year median
+  is byte-identical to main: the headline tour is the only thing that moved.
 - **The v0.8 "permanent money-loser" reading was measuring one point.** The
   balance sweep only ever toured *cold* territories (regional fame 0), and
   regional fame is the dominant term in the gross pot — a 0–100 range against a
   fame contribution capped at 33. The sweep now varies it, and pins the rig
   ladder's inversion, the cold-territory ordering, and length monotonicity so
-  none of the three can silently drift back.
+  none of the three can silently drift back. It also pins the texture the
+  retune produced: on a *moderately* built territory the truck & crew is the
+  right rig and full production plateaus with length — a rig too big for the
+  market it's dragged around is supposed to bleed.
 
 ### Changed
 

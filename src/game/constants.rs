@@ -481,7 +481,15 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 /// L-SCALE (§B): ×3 to the era-real scale (was [120, 400, 1_200, 3_000]), in
 /// lockstep with the ×3 on `TOUR_GROSS_COEFFICIENT` — box office and rig cost
 /// both triple, so every rig's profit/loss sign and ordering are preserved.
-pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 3_600, 9_000];
+///
+/// T-RIG (tour-economics pass): the top two trimmed (3_600 → 2_800,
+/// 9_000 → 6_500). This is the other half of re-seating the ladder's
+/// crossovers, and it is what lets `TOUR_GROSS_COEFFICIENT` come *down* (see
+/// there) without pushing full production back out of reach: the crossover is
+/// `Δcost / Δcapacity`, so trimming the numerator buys the same headroom a
+/// bigger pot would. Nothing below the truck moves — the small act's economy
+/// is untouched.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 2_800, 6_500];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
 ///
@@ -507,7 +515,19 @@ pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.4, 2.0];
 /// so touring's profitability ratios (§F: van profitable, heavy rigs a
 /// capacity bet) hold while magnitude triples. Missing it would leave touring
 /// bots (road-dog) flat against the ×3 record economy.
-pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.45;
+///
+/// T-LEN (tour-economics pass): 0.45 → 0.30. Giving tour length a real gross
+/// term (`TOUR_GROSS_WEEKS_EXPONENT`) multiplied the box office of the longest
+/// bookings by ~2.5×, and the sim lab caught what that did to a career: the
+/// road-dog bot's 15-year median went $4.26M → $18.99M and **passed the
+/// signed superstar's $16.75M**, inverting the cycle's thesis that a label's
+/// worldwide reach is the top of the economy. The bug had been suppressing an
+/// entire playstyle; un-suppressing it must not crown it. This pulls the whole
+/// pot back uniformly — every rig, length, and territory in the same
+/// proportion — so it changes magnitude, not any of the orderings the pass
+/// exists to fix. Paired with the trim to the top two `TOUR_RIG_COST_PER_WEEK`
+/// entries so the rig-ladder crossovers stay inside reachable state. [tune]
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.30;
 
 /// How the tour box office grows with tour length, via `weeks.powf(this)`
 /// normalized at one week (design §A — "a long tour is a bigger investment,
