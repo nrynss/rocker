@@ -1007,15 +1007,20 @@ fn a_big_act_reaching_a_major_draws_bigger_priced_offers_than_an_unknown() {
     let mut roy_by_strategy: std::collections::BTreeMap<String, Vec<f32>> =
         std::collections::BTreeMap::new();
 
-    for seed in 1..=SEEDS {
-        let game = seeded_game(seed);
-        let strategy_of: std::collections::HashMap<String, LabelStrategy> = game
-            .world
-            .labels
-            .values()
-            .map(|l| (l.name.clone(), l.strategy))
-            .collect();
+    // Label state is RNG-free (`seed_labels` is a pure function of
+    // `record_labels.json`), so one world serves every seed — `strategy_of` and
+    // every input `generate_deal_offers` reads are seed-independent. Only the
+    // per-(seed, fame) offer-market rng below varies. Hoisting the world out of
+    // the loop keeps the draws byte-identical while paying worldgen once.
+    let game = seeded_game(1);
+    let strategy_of: std::collections::HashMap<String, LabelStrategy> = game
+        .world
+        .labels
+        .values()
+        .map(|l| (l.name.clone(), l.strategy))
+        .collect();
 
+    for seed in 1..=SEEDS {
         for fame in [UNKNOWN_FAME, STAR_FAME] {
             let band = act(fame);
             // A fresh rng per (seed, fame) so the two draws are independent and
