@@ -102,6 +102,26 @@ pub(super) fn seeded_game(seed: u64) -> Game {
     game
 }
 
+/// Play a multi-week commitment out to its end (design §F).
+///
+/// Booking a tour used to resolve the whole thing inside one `process_turn`;
+/// since §F it resolves *one week*, and the rest arrive a week per turn with
+/// the full weekly tick — sales, chart decay, rent — running in between. Any
+/// non-overriding action drives the next week, so the measurement sweeps that
+/// want a finished tour say so explicitly rather than reading a report that
+/// isn't written yet.
+///
+/// This is deliberately *not* `tests::finish_activity_in_one_sitting`: that
+/// helper skips the weekly tick to serve as the economic-equivalence
+/// reference, whereas a balance sweep wants the real calendar it now costs.
+fn play_out_the_commitment(game: &mut Game) {
+    while game.ongoing_activity().is_some() && !game.game_over {
+        if game.process_turn(GameAction::LazeAround).is_err() {
+            break;
+        }
+    }
+}
+
 /// Silence both story-event taps so a run exercises only the core loop:
 /// mark every era's historical events as already told, and park the
 /// random-event clock on the current week (the caller re-parks it each
@@ -213,6 +233,27 @@ impl Bot {
 /// real break before burning out, otherwise carry on with the day job.
 fn self_care(game: &Game) -> Option<GameAction> {
     let player = &game.player;
+    // §F: a commitment owns the turn, so the doctor's appointment or the break
+    // below would simply be *discarded* while one is running — the bot would
+    // reach for help every week and be ignored every week, which is how a
+    // four-week booking turned into a death spiral (road-dog died 12/60 before
+    // this). Walking out is the only action a commitment yields to, and it is
+    // exactly what a player staring at 30 health would do. Before §F there was
+    // nothing to walk out of, so no bot ever needed to know this.
+    //
+    // Only walk out of the road, though. A break *is* the treatment — it heals
+    // across its weeks — so abandoning one for being unwell cancels the cure
+    // and re-books it next turn, thrashing without ever healing. (Measured:
+    // doing this indiscriminately killed the homebody 28/60 and the studio-rat
+    // 19/60, two bots that barely tour and simply rest badly.)
+    if let Some(activity) = game.ongoing_activity() {
+        let on_the_road = matches!(
+            activity,
+            OngoingActivity::Tour(_) | OngoingActivity::SupportTour(_)
+        );
+        return (on_the_road && player.health < HEALTH_FLOOR)
+            .then_some(GameAction::AbandonActivity);
+    }
     if player.health < HEALTH_FLOOR {
         return Some(if player.can_afford(constants::DOCTOR_VISIT_COST) {
             GameAction::VisitDoctor
@@ -452,6 +493,17 @@ fn plan_biggest_tour(game: &Game) -> Option<(usize, TourRig, u8)> {
         }
         for weeks in (1..=4u8).rev() {
             if !game.tour_length_is_available(weeks) {
+                continue;
+            }
+            // §F: don't start what you can't finish. A booking is now weeks of
+            // wear the band is locked into — the guard that let this through
+            // (`health >= TOUR_HEALTH_GUARD`) was calibrated when a tour cost
+            // one turn, so it happily sent a band with 32 health out for four
+            // weeks of it. Book the longest length whose own wear still lands
+            // clear of the floor; the shorter lengths below are tried in turn.
+            let (health_per_week, _) = rig.wear_per_week();
+            let wear = health_per_week.saturating_mul(weeks);
+            if game.player.health.saturating_sub(wear) < HEALTH_FLOOR {
                 continue;
             }
             if let Ok(quote) = game.quote_tour(region_index, rig, weeks)
@@ -1893,6 +1945,7 @@ fn tour_gross_by_skill_tier_sweep() {
 
         game.process_turn(GameAction::GoOnTour(region_index, FIXED_RIG, FIXED_WEEKS))
             .expect("tour should be affordable and unblocked");
+        play_out_the_commitment(&mut game);
         let report = game.last_tour_report.expect("tour produces a report");
 
         // Momentum isn't stored on the report — replay it from each show's
@@ -1981,7 +2034,8 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         let money_before = game.player.money;
         game.process_turn(GameAction::GoOnTour(region_index, rig, weeks))
             .ok()?;
-        // Net of the whole turn: box office earned minus the tour cost
+        play_out_the_commitment(&mut game);
+        // Net of the whole booking: box office earned minus the tour cost
         // spent (Squat upkeep is 0, no catalog to pay a tail).
         Some(game.player.money as i64 - money_before as i64)
     }
