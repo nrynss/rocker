@@ -106,7 +106,6 @@ pub struct SupportTourOffer {
 /// and a commitment is *state*: starting one charges its up-front cost and
 /// resolves its first week, every turn after that resolves one more (the
 /// submitted action is ignored), and the last one settles and clears.
-///
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum OngoingActivity {
     /// A booked studio session (design §B/§D) — S-MASTER filled the seam
