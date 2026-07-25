@@ -290,12 +290,26 @@ fn gig_or_rest(game: &Game) -> GameAction {
 /// make for them behind its own back.
 const BOT_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
 
-/// How many songs a bot's booking takes (design §A): the format's default,
-/// trimmed to what is actually banked.
+/// How many songs a bot's booking takes (design §A): the format's **minimum**.
+///
+/// Not the player-facing default (10 for an album), which is what this used
+/// after S-RECORD. Before §A an album took exactly `MIN_ALBUM_SONGS`, because
+/// that was the only length there was — so booking the minimum is what keeps a
+/// bot's records comparable to its own pre-cycle baseline, and it is what the
+/// garage acts in this lab would actually book: §B prices a session in weeks as
+/// well as dollars, so two extra tracks are two extra bills *and* most of an
+/// extra week off the calendar. Choosing to make a longer record is a real
+/// decision, and one S-SIM should teach a bot on purpose (§I) rather than have
+/// every bot inherit by accident.
 fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
+    let minimum = match kind {
+        ReleaseType::Single => constants::MIN_SINGLE_SONGS,
+        ReleaseType::Album => constants::MIN_ALBUM_SONGS,
+    };
     game.band
         .default_booking_songs(&kind)
         .unwrap_or_else(|| studios::default_song_count(&kind))
+        .min(minimum)
 }
 
 /// The record action a bot dispatches, so the booking it is billed for
@@ -327,12 +341,25 @@ fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
 /// still weighs the whole bill. That keeps the pre-§D booking behaviour, which
 /// is what makes the sweeps comparable across the split.
 fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
-    let mut bill = game.recording_cost(BOT_STUDIO, bot_songs(game, kind));
+    let songs = bot_songs(game, kind);
+    let mut bill = game.recording_cost(BOT_STUDIO, songs);
     if game.band.current_deal().is_none() {
         let (_, copies) = PRESSING_TIERS[pressing.unwrap_or(GARAGE_RUN)];
         bill += game.pressing_cost(&kind, copies);
     }
-    bill
+    // §B + §D: the studio bill is due at booking and the pressing bill weeks
+    // later, and in between the band still has to live — the weekly tick now
+    // runs during a session (§F), charging rent every week of it. Weighing only
+    // the two bills lets a bot book a session it can *just* afford, get eaten
+    // by upkeep while the tape rolls, and land a finished master it can no
+    // longer press. That master earns nothing, and for a bot with no other
+    // income there is no way back: measured, the studio-rat went broke 36/60
+    // and finished on median fame 7, having recorded records it could never
+    // put out. Reserve the session's running costs alongside its bills.
+    let weeks = game
+        .quote_recording(kind, songs, BOT_STUDIO)
+        .map_or(0, |quote| quote.weeks);
+    bill + (weeks as i32) * (game.player.lifestyle.upkeep_per_week() as i32)
 }
 
 /// S-MASTER (§D): a finished record sitting in the vault earns nothing. Put
@@ -373,6 +400,12 @@ fn studio_rat(game: &Game) -> GameAction {
         // the eight banked for the album) as a single to raise the cash.
         // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
         // has to mean spare *after* the album pile, not one song over it.
+        //
+        // (Tried throttling this — only single when the album is still far out
+        // of reach, on the theory that churning singles stops the bot ever
+        // banking the album bill. It made things *worse*, 26 broke of 60 to
+        // 34: for a bot that never plays live the singles are the only income
+        // there is, and withholding them starves it. Left un-throttled.)
         if game.band.unreleased_songs.len()
             >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
             && game

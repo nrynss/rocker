@@ -60,8 +60,8 @@ Commit prefix: `studio(S-XXX): <short description>`.
 | **S-RECORD** | §A + §C — singles/albums diverge (2–3 vs 8–14 songs, player-chosen, best-N selection, per-song cost, single sales factor) **and** the five recording studios (quality bonus, per-song rate, weeks/song, fame gates, quote) | L | — | `game/studios.rs` (**new**), `actions/studio.rs`, `economy.rs` recording/pressing cost fns, `band.rs` `can_record_*`, recording consts in `constants.rs`, `data/mod.rs` song-count consts | ✅ done |
 | **S-TIME** | §F — the calendar never skips. `Game::week` incremented in exactly one place; tours / support tours / breaks become `OngoingActivity` state resolved one week per turn. Tour economics must be *spread*, not changed | L | — | `core.rs`, `turn.rs`, `actions/live.rs`, `actions/business.rs`, `actions/rest.rs` | ✅ done |
 | **S-CHARTS** | §E — separate singles and albums charts per territory, with save migration (existing entries → albums board) and the charts modal toggle | M | — | `world/charts.rs`, `regional_charts` on `world/mod.rs`, `ui/render/modals/charts.rs` | ✅ done |
-| **S-MASTER** | §D — recording is not pressing. Masters vault, Release action, pressing/distribution move off the record action | M | S-RECORD, S-TIME | `music.rs` `Master`, `band.rs` `masters`, release action in `actions/studio.rs`, vault UI | ⬜ open |
-| **S-EVENTS** | §G — random events during recording / gigs / tours / support tours, data-driven and activity-gated | M | S-TIME | `events.rs`, `events_apply.rs`, `data/incidents.json` | ⬜ open |
+| **S-MASTER** | §D — recording is not pressing. Masters vault, Release action, pressing/distribution move off the record action | M | S-RECORD, S-TIME | `music.rs` `Master`, `band.rs` `masters`, release action in `actions/studio.rs`, vault UI | ✅ done |
+| **S-EVENTS** | §G — random events during recording / gigs / tours / support tours, data-driven and activity-gated | M | S-TIME | `events.rs`, `events_apply.rs`, `data/incidents.json` | ✅ done |
 | **S-UI** | §H — record picker (format → songs → studio, quote-first), activity screen, discography split | M | S-RECORD, S-TIME, S-MASTER | `ui/render/modals/pickers.rs`, `ui/input/*`, `ui/app.rs`, discography modal | ⬜ open |
 | **S-SIM** | §I — bots for the new action shape, studio-ladder and singles-vs-albums balance, **calendar-integrity assertion**, §F economic-neutrality check | M | all | `sim.rs` | ⬜ open |
 
@@ -126,3 +126,54 @@ needs in its handoff notes and the coordinator integrates.
     homebody $305k, studio-rat $488. The loyalist is still top and the
     hard assertions pass, but §D and §G aren't in yet; re-tune at the end
     of the cycle, not now.
+- 2026-07-25 **Wave 2 integrated** (S-MASTER, S-EVENTS). Both agents were
+  again cut off by a session limit — this time mid-sweep, with their work
+  committed and their trees clean. Each verified green on its own, then
+  merged; **no conflicts at all**. **306 tests**, clippy `-D warnings`
+  clean, fmt clean.
+  - S-MASTER filled the `Recording` seam S-TIME left in `OngoingActivity`.
+    A session freezes its outcome at booking for the same reason
+    `TourInProgress` does — release quality reads stress/happiness/skill,
+    all of which the weekly tick moves, so rolling at the *end* would make
+    the same booking depend on how the calendar chopped it up.
+  - `GameAction::{RecordSingle, RecordAlbum}` lost `pressing`; it lives on
+    the new `ReleaseMaster { master, pressing }`, which is instant — the
+    weeks a record costs were the session's.
+  - S-EVENTS needed only a 5-line hook in `turn.rs` and 6 in
+    `actions/live.rs`; the rest is contained in `events*.rs` and a 484-line
+    `incidents.json` extension.
+- 2026-07-25 **⚠️ ONE SWEEP ASSERTION IS RED — read before claiming S-SIM.**
+  `fifteen_year_careers_never_panic_and_print_the_balance_report` fails on
+  `studio-rat went broke 20/60` (the bar is `broke * 3 < runs`, i.e. ≤ 19).
+  The other 7 sweeps pass. This is **not** dismissed as noise; it is one run
+  over a threshold after a long climb, and the diagnosis is recorded here so
+  Wave 4 doesn't start from scratch:
+  - **`SINGLE_SALES_FACTOR` 0.35 → 0.55 (fixed, real bug).** §A moved two
+    things at once — a single went from one song to a two-song minimum *and*
+    its income was cut — so revenue per song fell ~5.7× while the bill
+    doubled, and a garage-run single could not recoup its own pressing.
+    Measured: the studio-rat shipped 53 singles across 346 weeks with its
+    bank flat at ~$100 and 343 unreleased songs it could never afford to make
+    an album from. Same defect class as the full-production rig in PR #25 —
+    a choice you can never come out ahead on isn't a trade-off. This took
+    broke 36 → 26 and median fame 7 → 22.
+  - **`bot_songs` now books the format minimum (fixed).** It was booking the
+    *player-facing* default (10 for an album); pre-§A an album was exactly
+    `MIN_ALBUM_SONGS`, so the minimum is what keeps a bot comparable to its
+    own pre-cycle baseline — and §B prices a session in weeks as well as
+    dollars. Took broke 26 → **20**, fame 22 → **62**, peak 87, deaths 0,
+    wins 15% → 45%.
+  - **Tried and reverted:** throttling the bootstrap single until the album
+    was within reach. It made things *worse* (26 → 34) — for a bot that never
+    plays live the singles are the only income there is. The comment in
+    `studio_rat` records this so it isn't retried.
+  - **Open question for S-SIM, deliberately not answered by more constant
+    nudging:** the studio-rat never performs, and §B means it now spends ~3
+    weeks per album in the studio with no live income where a record used to
+    be instant. Its output roughly halved, and 8 → 20 bankruptcies is about
+    what that predicts. That may be the *intended* difficulty of "records
+    take time" biting an extreme policy, in which case the invariant — written
+    when records were instant — is what should move, not the economy. §I
+    already calls for a proper singles-bot / album-bot pair; decide it there,
+    with the whole cycle in place, rather than tuning global constants to
+    rescue one bot.

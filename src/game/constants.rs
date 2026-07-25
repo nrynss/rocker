@@ -644,8 +644,23 @@ pub(super) const RECORDING_MAX_WEEKS: u8 = 12;
 /// A single is the cheap, fast, low-ceiling release: the way you buy chart
 /// presence and fame between albums, not the way you get rich. Before this it
 /// sold exactly what an album of the same quality sold, which made the album
-/// strictly the worse deal per dollar of studio time. [tune]
-pub(super) const SINGLE_SALES_FACTOR: f32 = 0.35;
+/// strictly the worse deal per dollar of studio time.
+///
+/// Raised 0.35 → 0.55 after the sim lab caught the first value making a
+/// garage-run single **unrecoupable**. §A moved two things at once: a single
+/// went from one song to a two-song minimum *and* its income was cut, so its
+/// revenue per song fell by roughly 5.7× while its bill doubled. The result
+/// wasn't a low-ceiling release, it was a release that couldn't pay for its
+/// own pressing — the studio-rat shipped 53 of them across 346 weeks with its
+/// bank flat at ~$100, banked 343 unreleased songs it could never afford to
+/// make an album out of, and went broke in 36 of 60 careers.
+///
+/// That is the same defect class as the full-production tour rig the
+/// tour-economics pass fixed: a choice the player can never come out ahead on
+/// is not a trade-off. At 0.55 a two-song single still earns 45% less than an
+/// album for 20% of its tracklist — decisively the cheap, fast, low-ceiling
+/// option §A asks for — while clearing its own bill. [tune]
+pub(super) const SINGLE_SALES_FACTOR: f32 = 0.55;
 
 // ============================================================================
 // M5: Label recoupment + label auto-repress
