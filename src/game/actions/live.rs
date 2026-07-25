@@ -368,6 +368,12 @@ impl Game {
                 venue_name, verdict.label(), attendance, capacity, earnings
             ));
         }
+
+        // §G tap point (S-EVENTS): the night happened, so this week's
+        // incident tap is the stage's. Draws no rng, so the show above rolls
+        // exactly what it rolled before. One line; the rest lives in
+        // `events_apply.rs`.
+        self.note_gig_week();
         Ok(())
     }
 

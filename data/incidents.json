@@ -578,6 +578,490 @@
         ]
       },
       "message": "🌐 A clip of your set is making the rounds — strangers know your name."
+    },
+    {
+      "id": "studio_producer_clash",
+      "category": "studio",
+      "weight": 4,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {},
+      "effects": {
+        "creativity": [
+          -8,
+          -3
+        ],
+        "stress": [
+          4,
+          10
+        ],
+        "happiness": [
+          -6,
+          -2
+        ]
+      },
+      "message": "🎛️ The producer wants it slower, you want it louder — two days gone to the argument."
+    },
+    {
+      "id": "studio_breakthrough_take",
+      "category": "studio",
+      "weight": 3,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {},
+      "effects": {
+        "creativity": [
+          5,
+          12
+        ],
+        "happiness": [
+          4,
+          10
+        ],
+        "stress": [
+          -4,
+          -1
+        ]
+      },
+      "message": "🎚️ Take nine. The booth goes quiet halfway through — everyone knows that's the one."
+    },
+    {
+      "id": "studio_gear_failure",
+      "category": "studio",
+      "weight": 3,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {},
+      "effects": {
+        "money": [
+          -900,
+          -250
+        ],
+        "stress": [
+          3,
+          9
+        ],
+        "happiness": [
+          -5,
+          -1
+        ]
+      },
+      "message": "🔌 The desk died mid-take — a day of studio time billed for nothing but a hum."
+    },
+    {
+      "id": "studio_rewrite",
+      "category": "studio",
+      "weight": 3,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {},
+      "effects": {
+        "creativity": [
+          3,
+          9
+        ],
+        "stress": [
+          3,
+          8
+        ],
+        "happiness": [
+          -3,
+          2
+        ]
+      },
+      "message": "✍️ You tore a song down to the frame and rebuilt it on the studio floor."
+    },
+    {
+      "id": "studio_all_nighter",
+      "category": "studio",
+      "weight": 3,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {},
+      "effects": {
+        "health": [
+          -7,
+          -2
+        ],
+        "stress": [
+          3,
+          8
+        ],
+        "creativity": [
+          2,
+          6
+        ]
+      },
+      "message": "🌙 Another all-nighter in the live room — the tape sounds better than you feel."
+    },
+    {
+      "id": "studio_label_visit",
+      "category": "studio",
+      "weight": 2,
+      "activity": [
+        "recording"
+      ],
+      "conditions": {
+        "signed": true
+      },
+      "effects": {
+        "stress": [
+          4,
+          10
+        ],
+        "happiness": [
+          -6,
+          -1
+        ],
+        "creativity": [
+          -5,
+          0
+        ]
+      },
+      "message": "👔 Somebody from the label 'dropped by to listen'. Nobody played well after that."
+    },
+    {
+      "id": "gig_amp_dies_onstage",
+      "category": "stage",
+      "weight": 4,
+      "activity": [
+        "gig"
+      ],
+      "conditions": {},
+      "effects": {
+        "money": [
+          -500,
+          -120
+        ],
+        "stress": [
+          3,
+          8
+        ],
+        "happiness": [
+          -5,
+          -1
+        ]
+      },
+      "message": "🔊 The rig cut out three songs in — you finished the set on a borrowed amp."
+    },
+    {
+      "id": "gig_scout_in_the_crowd",
+      "category": "stage",
+      "weight": 3,
+      "activity": [
+        "gig"
+      ],
+      "conditions": {
+        "min_fame": 10
+      },
+      "effects": {
+        "fame": [
+          1,
+          3
+        ],
+        "happiness": [
+          3,
+          8
+        ]
+      },
+      "message": "👀 Somebody with a laminate watched the whole set from the back and left without a word."
+    },
+    {
+      "id": "gig_crowd_fight",
+      "category": "stage",
+      "weight": 3,
+      "activity": [
+        "gig"
+      ],
+      "conditions": {},
+      "effects": {
+        "health": [
+          -6,
+          -1
+        ],
+        "stress": [
+          4,
+          10
+        ],
+        "money": [
+          -400,
+          -80
+        ]
+      },
+      "message": "💢 A fight broke out by the monitors — you played through it and paid for the damage."
+    },
+    {
+      "id": "gig_legendary_night",
+      "category": "stage",
+      "weight": 2,
+      "activity": [
+        "gig"
+      ],
+      "conditions": {},
+      "effects": {
+        "fame": [
+          1,
+          3
+        ],
+        "happiness": [
+          6,
+          14
+        ],
+        "creativity": [
+          3,
+          8
+        ]
+      },
+      "message": "🔥 One of those nights people describe wrong for years afterwards."
+    },
+    {
+      "id": "gig_empty_room",
+      "category": "stage",
+      "weight": 3,
+      "activity": [
+        "gig"
+      ],
+      "conditions": {
+        "max_fame": 45
+      },
+      "effects": {
+        "happiness": [
+          -8,
+          -3
+        ],
+        "money": [
+          -200,
+          -40
+        ],
+        "stress": [
+          2,
+          6
+        ]
+      },
+      "message": "💡 Eleven people, four of them staff. You played the full set anyway."
+    },
+    {
+      "id": "tour_van_breakdown",
+      "category": "road",
+      "weight": 4,
+      "activity": [
+        "tour",
+        "support_tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "money": [
+          -900,
+          -250
+        ],
+        "stress": [
+          5,
+          12
+        ],
+        "happiness": [
+          -6,
+          -2
+        ]
+      },
+      "message": "🛻 The van died on the hard shoulder — a tow, a garage, and a night nobody slept."
+    },
+    {
+      "id": "tour_member_ill",
+      "category": "road",
+      "weight": 3,
+      "activity": [
+        "tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "money": [
+          -1200,
+          -350
+        ],
+        "health": [
+          -6,
+          -1
+        ],
+        "stress": [
+          4,
+          10
+        ]
+      },
+      "message": "🤒 Somebody went down with a fever and two shows came off the board."
+    },
+    {
+      "id": "tour_riot",
+      "category": "road",
+      "weight": 2,
+      "activity": [
+        "tour"
+      ],
+      "conditions": {
+        "min_fame": 30
+      },
+      "effects": {
+        "money": [
+          -1500,
+          -400
+        ],
+        "fame": [
+          1,
+          4
+        ],
+        "stress": [
+          6,
+          14
+        ],
+        "health": [
+          -5,
+          0
+        ]
+      },
+      "message": "🚨 The barrier went over and the venue pulled the plug — the papers loved it, the promoter did not."
+    },
+    {
+      "id": "tour_sold_out_surprise",
+      "category": "road",
+      "weight": 3,
+      "activity": [
+        "tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "money": [
+          350,
+          1400
+        ],
+        "happiness": [
+          5,
+          12
+        ],
+        "fame": [
+          0,
+          2
+        ]
+      },
+      "message": "🎟️ A town nobody expected sold out — they added a second show and it sold too."
+    },
+    {
+      "id": "tour_press_pickup",
+      "category": "road",
+      "weight": 3,
+      "activity": [
+        "tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "fame": [
+          1,
+          3
+        ],
+        "happiness": [
+          3,
+          8
+        ]
+      },
+      "message": "📰 A regional paper ran the tour on its arts page — the next town knew who you were."
+    },
+    {
+      "id": "tour_road_exhaustion",
+      "category": "road",
+      "weight": 3,
+      "activity": [
+        "tour",
+        "support_tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "health": [
+          -7,
+          -2
+        ],
+        "stress": [
+          4,
+          10
+        ],
+        "happiness": [
+          -5,
+          -1
+        ]
+      },
+      "message": "🛣️ Six hundred miles, a service-station dinner, load-in at seven. The road is taking its cut."
+    },
+    {
+      "id": "support_headliner_friction",
+      "category": "road",
+      "weight": 4,
+      "activity": [
+        "support_tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "stress": [
+          5,
+          12
+        ],
+        "happiness": [
+          -8,
+          -3
+        ]
+      },
+      "message": "🎭 The headliner's crew cut your soundcheck to ten minutes and your set to twenty-five."
+    },
+    {
+      "id": "support_poached_crowd",
+      "category": "road",
+      "weight": 3,
+      "activity": [
+        "support_tour"
+      ],
+      "conditions": {},
+      "effects": {
+        "happiness": [
+          -7,
+          -2
+        ],
+        "fame": [
+          -1,
+          0
+        ],
+        "stress": [
+          2,
+          6
+        ]
+      },
+      "message": "🚪 Their crowd stayed in the bar until you were done. Nobody was there to win over."
+    },
+    {
+      "id": "support_co_headline_offer",
+      "category": "road",
+      "weight": 2,
+      "activity": [
+        "support_tour"
+      ],
+      "conditions": {
+        "min_fame": 25
+      },
+      "effects": {
+        "fame": [
+          2,
+          5
+        ],
+        "money": [
+          200,
+          900
+        ],
+        "happiness": [
+          5,
+          12
+        ]
+      },
+      "message": "⭐ The reaction got loud enough that they moved you up the bill — and up the guarantee."
     }
   ]
 }

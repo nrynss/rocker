@@ -156,6 +156,40 @@ pub struct TouringCosts {
 // `game/events_apply.rs`.
 // ============================================================================
 
+/// What the band was doing the week an incident is drawn for (design v0.9
+/// §G). Recording, gigs, tours and support runs each get their own tap; an
+/// incident that names one or more scopes is drawn **only** on those taps,
+/// which is what stops a van breaking down in the studio.
+///
+/// `Recording` is deliberately *data-ready ahead of the code*:
+/// `OngoingActivity::Recording` is S-MASTER's to land (§D), and the studio
+/// pool in `data/incidents.json` starts firing the week it does, with no
+/// change here or in `events.rs`.
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum ActivityScope {
+    Recording,
+    Gig,
+    Tour,
+    SupportTour,
+    /// No shipped incident claims this scope yet — a break is downtime, and
+    /// downtime already has the general pool. The variant exists because
+    /// `events.rs` derives a scope from every `OngoingActivity` variant, and
+    /// an empty pool costs no roll (`events_apply.rs`).
+    Break,
+}
+
+impl ActivityScope {
+    /// The scopes the §G table names, for iteration in validation and tests.
+    pub const ALL: [ActivityScope; 5] = [
+        ActivityScope::Recording,
+        ActivityScope::Gig,
+        ActivityScope::Tour,
+        ActivityScope::SupportTour,
+        ActivityScope::Break,
+    ];
+}
+
 /// One random incident: a weighted, condition-gated bundle of effect ranges
 /// plus its log line. Deserialized straight from `data/incidents.json`.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -163,6 +197,14 @@ pub struct Incident {
     pub id: String,
     pub category: String,
     pub weight: u32,
+    /// Which activity taps this incident belongs to (design §G). Empty — the
+    /// default, and the shape every pre-0.9 entry in the file has — means the
+    /// **general** pool: eligible on the ordinary weekly tap, in any week,
+    /// exactly as before. A non-empty list moves the incident off the general
+    /// tap and onto the named activity taps instead, so the general pool a
+    /// free week draws from is byte-identical to the pre-§G one.
+    #[serde(default)]
+    pub activity: Vec<ActivityScope>,
     #[serde(default)]
     pub conditions: IncidentConditions,
     pub effects: IncidentEffects,
@@ -223,6 +265,17 @@ impl IncidentEffects {
 }
 
 impl Incident {
+    /// Whether this incident belongs to the general (activity-free) pool —
+    /// the one the ordinary weekly tap draws from (design §G).
+    pub fn is_general(&self) -> bool {
+        self.activity.is_empty()
+    }
+
+    /// Whether this incident is claimed by `scope`'s activity tap (§G).
+    pub fn in_activity(&self, scope: ActivityScope) -> bool {
+        self.activity.contains(&scope)
+    }
+
     /// Whether this incident is eligible given the band's current fame and
     /// whether it is signed to a label.
     pub fn matches(&self, fame: u8, signed: bool) -> bool {
@@ -271,16 +324,47 @@ impl IncidentsData {
                     ));
                 }
             }
+            // §G: a scope listed twice would silently double nothing (the
+            // taps test membership, not count) but always means a copy-paste
+            // slip in the data, so say so at load rather than ship it.
+            for scope in ActivityScope::ALL {
+                if inc.activity.iter().filter(|&&s| s == scope).count() > 1 {
+                    return Err(format!(
+                        "incidents.json: incident '{}' lists activity {:?} more than once",
+                        inc.id, scope
+                    ));
+                }
+            }
         }
         Ok(())
     }
 
-    /// The incidents eligible for the current game state, in file order. The
-    /// weighted pick among these rolls on the action stream in `events.rs`.
+    /// The **general**-pool incidents eligible for the current game state, in
+    /// file order — what the ordinary weekly tap draws from. Since §G this
+    /// excludes anything claimed by an activity tap, so a free week's pool is
+    /// exactly the pre-0.9 one. The weighted pick among these rolls on the
+    /// action stream in `events.rs`.
     pub fn eligible_incidents(&self, fame: u8, signed: bool) -> Vec<&Incident> {
         self.incidents
             .iter()
-            .filter(|inc| inc.matches(fame, signed))
+            .filter(|inc| inc.is_general() && inc.matches(fame, signed))
+            .collect()
+    }
+
+    /// The incidents eligible for `scope`'s activity tap (design §G), in file
+    /// order: the same fame/signed gating as the general pool, plus the
+    /// requirement that the incident actually claims this activity. Empty is
+    /// a normal answer — `Break` claims nothing, and an unknown future
+    /// activity claims nothing until the data says otherwise.
+    pub fn eligible_activity_incidents(
+        &self,
+        fame: u8,
+        signed: bool,
+        scope: ActivityScope,
+    ) -> Vec<&Incident> {
+        self.incidents
+            .iter()
+            .filter(|inc| inc.in_activity(scope) && inc.matches(fame, signed))
             .collect()
     }
 }

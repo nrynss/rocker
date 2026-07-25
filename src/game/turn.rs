@@ -302,6 +302,11 @@ impl Game {
     /// Public within `game` so the tests can drive a whole tour with no
     /// weekly tick in between and prove the split changed nothing.
     pub(in crate::game) fn resolve_activity_week(&mut self) {
+        // §G tap point (S-EVENTS): latch what this week is being spent on
+        // before the activity can settle out from under the event taps, which
+        // run later in `advance_week_events`. One line; everything it feeds
+        // lives in `events_apply.rs`.
+        self.note_activity_week();
         // Taken out and handed to the resolver by value: a week's resolution
         // mutates the band, the player and the log, and the activity has to
         // be mutable throughout. Whatever comes back — a week further on, or
