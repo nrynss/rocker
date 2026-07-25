@@ -256,7 +256,7 @@ fn a_bigger_rig_quotes_a_bigger_gross() {
 
     assert!(
         full.gross_high > van.gross_high && full.gross_low > van.gross_low,
-        "full production (capacity ×1.7) must out-gross the van (×0.8): \
+        "full production (capacity ×2.0) must out-gross the van (×0.8): \
          van {}–{}, full {}–{}",
         van.gross_low,
         van.gross_high,
@@ -390,4 +390,162 @@ fn quote_gross_range_matches_the_reception_attendance_spread() {
         (ratio - expected_ratio).abs() < 0.01,
         "gross range should widen by the reception attendance spread: got {ratio}, expected ~{expected_ratio}"
     );
+}
+
+// --- T-LEN / T-RIG: the tour-economics pass (see CHANGELOG "Known
+// follow-ups", v0.8.0). Two coupled defects inherited from v0.7: the gross
+// pot ignored tour length, and the rig ladder's top step was dominated at
+// every reachable game state. ---
+
+/// T-LEN. Playing more nights must earn more money. The pot used to have no
+/// `weeks` term while `shows_total` and the cost both scaled with it, so a
+/// four-week tour split a one-week pot across twenty nights *and* paid four
+/// times the cost — length was a strictly dominated choice at every rig,
+/// not the "bigger investment, not strictly better" trade §A asks for.
+#[test]
+fn a_longer_tour_grosses_more_than_a_shorter_one() {
+    let mut game = test_game();
+    game.band.fame = 95; // clears every length gate
+    let region_index = 0;
+
+    let grosses: Vec<u32> = (1..=4u8)
+        .map(|weeks| {
+            game.quote_tour(region_index, TourRig::Bus, weeks)
+                .expect("quote resolves at fame 95")
+                .gross_high
+        })
+        .collect();
+
+    for pair in grosses.windows(2) {
+        assert!(
+            pair[1] > pair[0],
+            "each extra tour week must add gross, got {grosses:?}"
+        );
+    }
+}
+
+/// T-LEN, the other half of the trade-off: a territory saturates, so the
+/// gross must grow *sublinearly* in weeks. Otherwise length would be free
+/// money and the picker's length choice would collapse to "always four".
+#[test]
+fn tour_gross_per_week_falls_as_the_tour_lengthens() {
+    let mut game = test_game();
+    game.band.fame = 95;
+    let region_index = 0;
+
+    let per_week: Vec<f32> = (1..=4u8)
+        .map(|weeks| {
+            let quote = game
+                .quote_tour(region_index, TourRig::Bus, weeks)
+                .expect("quote resolves at fame 95");
+            quote.gross_high as f32 / weeks as f32
+        })
+        .collect();
+
+    for pair in per_week.windows(2) {
+        assert!(
+            pair[1] < pair[0],
+            "gross per tour week must fall as the tour lengthens (market \
+             saturation), got {per_week:?}"
+        );
+    }
+}
+
+/// T-RIG, the fix's core property. A rig upgrade pays for itself when
+/// `pot_base × Δcapacity > Δcost`, so the ladder is only real if the pot can
+/// actually reach every step's crossover. It could not: at capacity ×1.7 the
+/// truck→full step needed a territory pot around $81k against a maximum of
+/// roughly $45k in the region this exercises, which made full production
+/// *dominated* — never the profit-maximizing choice in any reachable state,
+/// merely the most expensive.
+///
+/// With the territory built (high fame plus banked regional fame — the "big
+/// enough to fill the rooms it books" precondition from §A), each rig up the
+/// ladder must now out-net the one below it.
+#[test]
+fn the_rig_ladder_inverts_once_the_territory_is_built() {
+    let mut game = test_game();
+    game.band.fame = 95;
+
+    let regions = game.get_sorted_regions();
+    // The biggest market on the board: full production is a big-room bet, so
+    // this is where it should pay off first.
+    let region_index = regions
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, (_, _, _, population, _, _))| *population)
+        .map(|(i, _)| i)
+        .expect("at least one region exists");
+    let (country_key, region_key, ..) = &regions[region_index];
+    game.regional_fame
+        .insert(format!("{country_key}:{region_key}"), 90);
+
+    let net_of = |rig: TourRig| -> i32 {
+        let quote = game
+            .quote_tour(region_index, rig, 2)
+            .expect("every rig is open at fame 95");
+        // The pessimistic end: the ladder should hold even on a bad night.
+        quote.projected_net().0
+    };
+
+    for pair in TourRig::ALL.windows(2) {
+        let (lower, higher) = (pair[0], pair[1]);
+        assert!(
+            net_of(higher) > net_of(lower),
+            "with the territory built, {} (net ${}) should out-earn {} (net ${}) \
+             — a rig the player can never profitably choose is not a choice",
+            higher.label(),
+            net_of(higher),
+            lower.label(),
+            net_of(lower)
+        );
+    }
+}
+
+/// T-RIG's guard rail on the other side: the big rig must stay a *bet*. On a
+/// first visit to a territory — no regional fame banked, however famous the
+/// band — full production must still be the losing choice against the van,
+/// or the "only once you're big enough" precondition has been tuned away.
+#[test]
+fn full_production_is_still_a_loss_on_a_cold_territory() {
+    let mut game = test_game();
+    game.band.fame = 95;
+    let region_index = 0;
+    assert_eq!(
+        game.regional_fame.len(),
+        0,
+        "test setup: a fresh band has toured nowhere"
+    );
+
+    let van = game
+        .quote_tour(region_index, TourRig::Van, 2)
+        .expect("van quote");
+    let full = game
+        .quote_tour(region_index, TourRig::Full, 2)
+        .expect("full-production quote");
+
+    assert!(
+        full.projected_net().1 < van.projected_net().0,
+        "cold territory: full production (net up to ${}) must not beat the van \
+         (net from ${})",
+        full.projected_net().1,
+        van.projected_net().0
+    );
+}
+
+/// The quote's arithmetic is the player's: net is gross minus the cost the
+/// booking actually charges, at both ends of the range (§A — "never a
+/// surprise").
+#[test]
+fn projected_net_is_the_quoted_gross_minus_the_quoted_cost() {
+    let mut game = test_game();
+    game.band.fame = 95;
+    let quote = game
+        .quote_tour(0, TourRig::Truck, 3)
+        .expect("quote resolves at fame 95");
+
+    let (low, high) = quote.projected_net();
+    assert_eq!(low, quote.gross_low as i32 - quote.cost);
+    assert_eq!(high, quote.gross_high as i32 - quote.cost);
+    assert!(low < high, "the net range must run low to high");
 }

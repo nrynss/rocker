@@ -484,7 +484,17 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 3_600, 9_000];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
-pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
+///
+/// T-RIG (tour-economics pass): the top two rigs widened (1.3 → 1.4,
+/// 1.7 → 2.0). The rig ladder was lopsided — cost spread van→full is 25×
+/// on this table's cost twin, amplified to 47× by the `markets.json`
+/// travel/equipment modifiers, while the gross spread was only 2.1×. A rig
+/// is worth its upgrade when `pot_base × Δcapacity > Δcost`, so at 1.7 the
+/// truck→full step needed a territory pot of ~$81k against a Sydney maximum
+/// of ~$45k: **full production was dominated at every reachable game state**,
+/// not merely unprofitable. Widening the top of the ladder puts that
+/// crossover back inside the map — see `TOUR_RIG_COST_PER_WEEK`. [tune]
+pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.4, 2.0];
 
 /// The tour box-office coefficient (M7 §F): scales the whole-tour gross pot
 /// (`base_gross = sqrt(pop) × econ × audience × this`). Raised 0.06 → 0.15
@@ -498,6 +508,26 @@ pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
 /// capacity bet) hold while magnitude triples. Missing it would leave touring
 /// bots (road-dog) flat against the ×3 record economy.
 pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.45;
+
+/// How the tour box office grows with tour length, via `weeks.powf(this)`
+/// normalized at one week (design §A — "a long tour is a bigger investment,
+/// not a strictly better one").
+///
+/// T-LEN (tour-economics pass): before this, `total_potential_gross` had **no
+/// weeks term at all** while `shows_total = weeks × SHOWS_PER_TOUR_WEEK` and
+/// the per-show take was `pot / shows_total` — so twenty nights grossed
+/// exactly what five did, each extra week diluting the per-show take against a
+/// cost that scales linearly. Every rig lost money by touring longer, which is
+/// not "a bigger investment": it is a strictly dominated choice (measured at
+/// fame 80 / regional fame 40, full production went +$17,854 at one week to
+/// −$50,948 at four, on an unchanged quoted gross of $39,850).
+///
+/// At 0.65 the pot grows 1wk ×1.0, 2wk ×1.57, 3wk ×2.05, 4wk ×2.46 against a
+/// cost that grows ×1/×2/×3/×4 — a territory saturates, so each further week
+/// sells less than the one before, and the design's trade-off survives with
+/// its sign the right way round. Deliberately below `TOUR_FAME_WEEKS_EXPONENT`
+/// (0.7): length is still bought primarily for fame, not for money. [tune]
+pub(super) const TOUR_GROSS_WEEKS_EXPONENT: f32 = 0.65;
 
 /// Wear per tour week — health lost, replacing the flat
 /// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the

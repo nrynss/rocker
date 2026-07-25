@@ -1896,18 +1896,26 @@ fn tour_gross_by_skill_tier_sweep() {
     }
 }
 
-/// §A/§F — tour profitability by rig and fame. A single tour's money delta
-/// is its box office minus its quoted cost (box office is per-show take,
-/// untouched by M10's record-sales presence model), so this reads the
-/// design target directly: the van should clear a profit for a small act,
-/// while a full-production rig only pays off once the act is big enough to
-/// fill the bigger rooms its capacity multiplier books. Confounders are
-/// minimized — a fresh band (no catalog tail), Squat lifestyle (no upkeep),
-/// cash on hand so the cost never gates the booking.
+/// §A/§F — tour profitability by rig, fame, and **regional fame**. A single
+/// tour's money delta is its box office minus its quoted cost (box office is
+/// per-show take, untouched by M10's record-sales presence model), so this
+/// reads the design target directly: the van should clear a profit for a
+/// small act, while a full-production rig only pays off once the act is big
+/// enough to fill the bigger rooms its capacity multiplier books. Confounders
+/// are minimized — a fresh band (no catalog tail), Squat lifestyle (no
+/// upkeep), cash on hand so the cost never gates the booking.
+///
+/// The regional-fame axis was added by the tour-economics pass (T-RIG) and is
+/// the reason the v0.8 reading was wrong: `regional_fame` is the dominant term
+/// in the gross pot (`audience = fame/3 + regional_fame`, 0-100 against a
+/// fame contribution capped at 33), but the sweep only ever measured a *cold*
+/// territory at 0. "Full production never profits at any fame" was really
+/// "a first visit with the big show doesn't pay" — true, intended, and not
+/// the whole picture.
 #[test]
 #[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
 fn tour_profitability_by_rig_and_fame_sweep() {
-    fn net_at(seed: u64, fame: u8, rig: TourRig, weeks: u8) -> Option<i64> {
+    fn net_at(seed: u64, fame: u8, regional_fame: u8, rig: TourRig, weeks: u8) -> Option<i64> {
         let mut game = seeded_game(seed);
         suppress_story_events(&mut game);
         game.band.fame = fame;
@@ -1925,6 +1933,11 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         let region_index = regions
             .iter()
             .position(|(_, _, _, _, _, fame_req)| fame >= *fame_req)?;
+        if regional_fame > 0 {
+            let (country_key, region_key, ..) = &regions[region_index];
+            game.regional_fame
+                .insert(format!("{country_key}:{region_key}"), regional_fame);
+        }
         if !game.rig_is_available(rig) || !game.tour_length_is_available(weeks) {
             return None;
         }
@@ -1937,15 +1950,16 @@ fn tour_profitability_by_rig_and_fame_sweep() {
     }
 
     println!(
-        "tour net profit (box office − cost) by rig and fame, 2-week tour, avg over 20 seeds:"
+        "tour net profit (box office − cost) by rig and fame, 2-week tour, cold territory \
+         (regional fame 0), avg over 20 seeds:"
     );
     let fames = [25u8, 55, 80];
-    // (fame, rig) -> avg net, for the rigs actually available at that fame.
+    // (fame, rig) -> avg net on a cold territory, for the rigs available there.
     let mut avgs: Vec<(u8, TourRig, f32)> = Vec::new();
     for fame in fames {
         for rig in TourRig::ALL {
             let nets: Vec<i64> = (1..=20u64)
-                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .filter_map(|seed| net_at(seed, fame, 0, rig, 2))
                 .collect();
             if nets.is_empty() {
                 println!(
@@ -1964,26 +1978,12 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
-    // Review follow-up (design §A "full production profitable only at 75+"):
-    // the assertions below deliberately stop at fame 80, but the real superstar
-    // tours at 95-100. Observe (no assert) whether the top rigs ever escape the
-    // red there, so a "permanent trap" (full production never profitable, an
-    // inherited v0.7 question) is visible in the report rather than hidden.
-    //
-    // L-SIM RULING (design-call, 2026-07-25): the full-production rig is a
-    // **permanent money-loser** — measured net −$30,690 (fame 80), −$27,514
-    // (fame 95), −$26,456 (fame 100); it never turns a profit at any fame. The
-    // van/bus stay healthy and the truck & crew clears a small profit from
-    // fame 95, so only the top rig is stuck. This is **out of scope for the
-    // label cycle**: it is inherited v0.7 tour economics (box office vs quoted
-    // rig cost), untouched by v0.8, and retuning tour costs here would reach
-    // outside L-SIM's remit and risk the validated touring balance. Left as a
-    // documented follow-up for a future tour-economics pass; the fame-95/100
-    // rows below keep it measured (observe-only) so it cannot silently drift.
+    // The real superstar tours at 95-100; keep those rows measured so the top
+    // of the fame range can't silently drift.
     for fame in [95u8, 100] {
         for rig in TourRig::ALL {
             let nets: Vec<i64> = (1..=20u64)
-                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .filter_map(|seed| net_at(seed, fame, 0, rig, 2))
                 .collect();
             if nets.is_empty() {
                 continue;
@@ -1998,10 +1998,74 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
+    // T-RIG (tour-economics pass, resolving the v0.8 "full production is a
+    // permanent money-loser" ruling): the same rigs on a territory the act has
+    // actually built. This is the axis the old sweep never varied, and where
+    // the rig ladder has to pay off — §A's "big enough to fill the rooms it
+    // books" is a statement about *this* number, not about fame alone.
+    println!("\nsame tours by regional fame in the territory (fame 80, 2 weeks):");
+    // (regional fame, rig) -> avg net.
+    let mut warm: Vec<(u8, TourRig, f32)> = Vec::new();
+    for regional_fame in [0u8, 25, 50, 75, 100] {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, 80, regional_fame, rig, 2))
+                .collect();
+            if nets.is_empty() {
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  regional {regional_fame:>3}%  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+            warm.push((regional_fame, rig, avg));
+        }
+    }
+
+    // T-LEN: the same tour at every bookable length. The gross pot had no
+    // `weeks` term while shows and cost both scaled with it, so this column
+    // used to fall monotonically for every rig — touring longer was a strict
+    // loss, and the top rig's collapse (+$17,854 at one week to −$50,948 at
+    // four) was mostly this bug wearing the rig's name.
+    println!("\nsame tours by length (fame 80, regional fame 40):");
+    let mut by_weeks: Vec<(u8, TourRig, f32)> = Vec::new();
+    for weeks in 1..=TOUR_LENGTH_MAX_WEEKS {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, 80, 40, rig, weeks))
+                .collect();
+            if nets.is_empty() {
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  {weeks} week(s)  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+            by_weeks.push((weeks, rig, avg));
+        }
+    }
+
     let avg_for = |fame: u8, rig: TourRig| {
         avgs.iter()
             .find(|&&(f, r, _)| f == fame && r == rig)
             .map(|&(_, _, a)| a)
+    };
+    let warm_avg_for = |regional_fame: u8, rig: TourRig| {
+        warm.iter()
+            .find(|&&(rf, r, _)| rf == regional_fame && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig is available at fame 80")
+    };
+    let weeks_avg_for = |weeks: u8, rig: TourRig| {
+        by_weeks
+            .iter()
+            .find(|&&(w, r, _)| w == weeks && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig and length is available at fame 80")
     };
 
     // Target (design §A/§F): the van clears a profit for a small act — and
@@ -2027,21 +2091,91 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         );
     }
 
-    // The premium rigs (truck & crew, full production) are a capacity/reach
-    // investment, not a profit play, across the whole fame range this sweep
-    // covers: the humble van out-nets them everywhere both are available. If a
-    // heavy rig ever out-earns the van here, "bigger rigs only pay off once
-    // you're big" no longer holds.
+    // On a **cold** territory the premium rigs are a capacity/reach
+    // investment, not a profit play: the humble van out-nets them wherever
+    // both are available. This is the "arriving somewhere new with the big
+    // show doesn't pay" half of the design, and it is the only half the
+    // pre-T-RIG sweep measured.
     for fame in fames {
         let van = avg_for(fame, TourRig::Van).expect("the van is available at every fame");
         for rig in [TourRig::Truck, TourRig::Full] {
             if let Some(heavy) = avg_for(fame, rig) {
                 assert!(
                     van > heavy,
-                    "van (avg net ${van:.0}) should out-net {} (avg net ${heavy:.0}) at fame {fame}",
+                    "on a cold territory the van (avg net ${van:.0}) should out-net {} \
+                     (avg net ${heavy:.0}) at fame {fame}",
                     rig.label()
                 );
             }
+        }
+    }
+
+    // T-RIG, the other half — and the fix's real target. Once the act has
+    // *built* the territory, the ladder must invert: each rig up the line
+    // out-earns the one below it. Before the pass this was false at every
+    // regional fame including 100 (van +$36,853, bus +$43,446, truck +$46,405,
+    // full +$32,828): the top rig was **dominated**, never the profit-
+    // maximizing choice anywhere on the map — a strictly worse button. Note
+    // this is a stronger claim than "full production eventually profits",
+    // which it already did from regional fame ~50; a rig nobody should ever
+    // pick is still broken even when its net is positive.
+    for rig_pair in TourRig::ALL.windows(2) {
+        let (lower, higher) = (rig_pair[0], rig_pair[1]);
+        let lower_net = warm_avg_for(100, lower);
+        let higher_net = warm_avg_for(100, higher);
+        assert!(
+            higher_net > lower_net,
+            "on a fully built territory {} (avg net ${higher_net:.0}) should out-net {} \
+             (avg net ${lower_net:.0}) — a rig that is never the best choice is not a choice",
+            higher.label(),
+            lower.label()
+        );
+    }
+
+    // ...without flipping the low end: the van must still be the right call
+    // for an act that hasn't built the territory yet.
+    for rig in [TourRig::Truck, TourRig::Full] {
+        let van = warm_avg_for(0, TourRig::Van);
+        let heavy = warm_avg_for(0, rig);
+        assert!(
+            van > heavy,
+            "at regional fame 0 the van (avg net ${van:.0}) should still beat {} \
+             (avg net ${heavy:.0})",
+            rig.label()
+        );
+    }
+
+    // T-LEN: playing more nights must earn more money, for every rig. The
+    // pot's missing `weeks` term made this monotonically *decreasing*.
+    for rig in TourRig::ALL {
+        for weeks in 2..=TOUR_LENGTH_MAX_WEEKS {
+            let shorter = weeks_avg_for(weeks - 1, rig);
+            let longer = weeks_avg_for(weeks, rig);
+            assert!(
+                longer > shorter,
+                "{}: a {weeks}-week tour (avg net ${longer:.0}) should out-earn a \
+                 {}-week one (avg net ${shorter:.0}) — length must be a trade-off, \
+                 not a strict loss",
+                rig.label(),
+                weeks - 1
+            );
+        }
+    }
+
+    // ...but with diminishing returns, or length stops being a decision and
+    // the picker collapses to "always four weeks". Marginal net per added week
+    // must fall as the tour lengthens.
+    for rig in TourRig::ALL {
+        let marginal: Vec<f32> = (2..=TOUR_LENGTH_MAX_WEEKS)
+            .map(|weeks| weeks_avg_for(weeks, rig) - weeks_avg_for(weeks - 1, rig))
+            .collect();
+        for pair in marginal.windows(2) {
+            assert!(
+                pair[1] < pair[0],
+                "{}: each added tour week should earn less than the last \
+                 (market saturation), got marginals {marginal:?}",
+                rig.label()
+            );
         }
     }
 }

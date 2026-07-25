@@ -4,6 +4,48 @@ Notable changes to Rocker, newest first. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/) in spirit — this is a game, the API is vibes.
 
+## Unreleased
+
+**The tour-economics pass** — clearing the touring follow-up left open at the
+close of the Label Cycle, plus the length bug found underneath it.
+
+### Fixed
+
+- **Full production is a rig you can actually choose.** A rig upgrade pays for
+  itself when `territory pot × Δcapacity > Δcost`, and the ladder's top step
+  didn't: cost ran van→full 25× on the rig table (47× once `markets.json`
+  travel/equipment modifiers compounded) against a capacity spread of only
+  2.1×, so truck→full needed a pot around $81k where the region topped out near
+  $45k. Full production wasn't merely unprofitable — it was **dominated**, never
+  the best choice in any reachable game state. The top two capacity multipliers
+  widen (1.3→1.4, 1.7→2.0), which puts every crossover back on the map: once
+  the act has built a territory, each rig up the line out-earns the one below
+  (at regional fame 100: van +$58k, bus +$70k, truck +$89k, full +$101k), while
+  arriving cold with the big show still loses (−$16k) exactly as designed.
+- **Touring longer earns more.** The whole-tour gross pot had **no `weeks` term
+  at all**, while shows booked *and* cost both scaled with length — so twenty
+  nights grossed precisely what five did, split twenty ways, for four times the
+  money. Every rig lost by touring longer; full production went +$17,854 at one
+  week to −$50,948 at four on an unchanged quoted gross. The pot now scales
+  `weeks^0.65`, normalized at one week: a fourth week still earns less than the
+  first (a territory saturates) but it earns something, which is the trade-off
+  design §A actually asked for rather than a strictly dominated button.
+- **The v0.8 "permanent money-loser" reading was measuring one point.** The
+  balance sweep only ever toured *cold* territories (regional fame 0), and
+  regional fame is the dominant term in the gross pot — a 0–100 range against a
+  fame contribution capped at 33. The sweep now varies it, and pins the rig
+  ladder's inversion, the cold-territory ordering, and length monotonicity so
+  none of the three can silently drift back.
+
+### Changed
+
+- **The tour quote shows the bottom line.** The picker adds a colour-coded
+  projected net (green profit / yellow marginal / red loss) and the regional
+  fame already banked in the territory — the number that explains why the same
+  rig loses money on a first visit and prints money on a return. §A always
+  required a money-losing tour to be a decision rather than a surprise; it was
+  leaving the subtraction to the player.
+
 ## 0.8.0 — 2026-07-25
 
 **The Label Cycle** — record labels become a living economy. Labels stop being
@@ -68,8 +110,9 @@ clean, fmt clean, v0.4 saves still load.
 
 ### Known follow-ups
 
-- Full-production tours never turn a profit, even at fame 100 (−$26k) — a trap
-  inherited from v0.7 tour economics, awaiting a cost/capacity retune.
+- ~~Full-production tours never turn a profit, even at fame 100 (−$26k) — a
+  trap inherited from v0.7 tour economics, awaiting a cost/capacity retune.~~
+  Resolved by the tour-economics pass; see Unreleased above.
 - M&A's distress floor is $0, so it's a safety valve that doesn't fire in
   natural play (the solvent economy only grows labels); attrition is exercised
   by an injected-distress sweep.

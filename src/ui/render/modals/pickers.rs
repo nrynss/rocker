@@ -457,9 +457,33 @@ pub(crate) fn draw_tour_booking_picker_modal(frame: &mut Frame, app: &App) {
                     format_money(quote.gross_low as i32),
                     format_money(quote.gross_high as i32)
                 )),
+                {
+                    // §A: a money-losing tour is a legitimate choice — it
+                    // buys fame — but it must be a decision, not a surprise.
+                    // Colour the net so the trade-off reads at a glance.
+                    let (net_low, net_high) = quote.projected_net();
+                    let colour = if net_low >= 0 {
+                        Color::Green
+                    } else if net_high >= 0 {
+                        Color::Yellow
+                    } else {
+                        Color::Red
+                    };
+                    Line::styled(
+                        format!(
+                            "  Projected net: {} – {}",
+                            format_money(net_low),
+                            format_money(net_high)
+                        ),
+                        Style::new().fg(colour),
+                    )
+                },
                 Line::from(format!(
-                    "  Fame gain: +{}   Regional fame gain: +{}–{}",
-                    quote.fame_gain, quote.regional_fame_gain_min, quote.regional_fame_gain_max
+                    "  Fame gain: +{}   Regional fame here: {}% (+{}–{})",
+                    quote.fame_gain,
+                    quote.regional_fame_current,
+                    quote.regional_fame_gain_min,
+                    quote.regional_fame_gain_max
                 )),
                 if affordable {
                     Line::styled("  Ready to book.", Style::new().fg(Color::Green))

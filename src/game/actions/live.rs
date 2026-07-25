@@ -102,6 +102,25 @@ pub struct TourQuote {
     pub fame_gain: u8,
     pub regional_fame_gain_min: u8,
     pub regional_fame_gain_max: u8,
+    /// Regional fame already banked in this territory. It is the dominant
+    /// term in the gross pot (`audience = fame/3 + regional_fame`), so it is
+    /// the single number that explains why the same rig loses money on a
+    /// first visit and prints money on a return — the picker shows it.
+    pub regional_fame_current: u8,
+}
+
+impl TourQuote {
+    /// Projected net at the pessimistic and optimistic ends of the gross
+    /// range. §A allows booking a money-losing tour — it buys fame — but
+    /// insists it be "a *decision*, never a surprise", and a cost beside a
+    /// gross range is arithmetic the player shouldn't have to do at the
+    /// picker.
+    pub fn projected_net(&self) -> (i32, i32) {
+        (
+            self.gross_low as i32 - self.cost,
+            self.gross_high as i32 - self.cost,
+        )
+    }
 }
 
 /// The deterministic (no-rng) core of a tour booking: everything the quote
@@ -455,11 +474,21 @@ impl Game {
         // apart from the capacity multiplier"). The multiplier belongs on
         // the pot, not just the reported attendance: the per-show take is
         // this pot / shows, so without it a $8,000/wk full-production rig
-        // would gross exactly what a $150/wk van does. A longer tour still
-        // spreads the same pot across more shows — length buys fame, rig
-        // buys gross.
+        // would gross exactly what a $150/wk van does.
+        //
+        // T-LEN: ...and the pot scales with how many nights you actually
+        // play, sublinearly (`TOUR_GROSS_WEEKS_EXPONENT`, normalized so a
+        // one-week run keeps the coefficient's calibrated value). The pot
+        // used to be flat in `weeks` while `shows_total` and the cost both
+        // grew with it, so a longer tour split the same money across more
+        // nights *and* paid more for the privilege — length was a strict
+        // loss at every rig, not the trade-off §A describes. Now a fourth
+        // week still earns less than the first (the territory saturates)
+        // but it earns something.
+        let weeks_gross_scale = (weeks as f32).powf(TOUR_GROSS_WEEKS_EXPONENT);
         let total_potential_gross =
-            (base_gross * era_modifier * market_modifier * rig.capacity_mult()).max(0.0);
+            (base_gross * era_modifier * market_modifier * rig.capacity_mult() * weeks_gross_scale)
+                .max(0.0);
 
         // Same multiplier on the synthesized venue so reported attendance
         // stays consistent with the bigger rooms the rig is playing (§A).
@@ -524,6 +553,7 @@ impl Game {
             regional_fame_gain_max: (pot.regional_fame_gain_base
                 + TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD as u16)
                 .min(u8::MAX as u16) as u8,
+            regional_fame_current: pot.regional_fame_current,
         })
     }
 
