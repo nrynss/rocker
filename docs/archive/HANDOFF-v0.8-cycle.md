@@ -1,3 +1,9 @@
+> **Archived record (v0.8) — historical reference only.** This cycle is
+> complete (shipped as 0.8.0, PR #23 merged to `main`); do not claim tasks
+> or follow the branch/claim protocol below. Check the repo root for
+> whichever `HANDOFF.md` is active for the current cycle. Shipped:
+> `CHANGELOG.md` (0.8.0). Prior cycles: `docs/archive/`.
+
 # Rocker — Label Cycle Handoff (v0.8)
 
 > **✅ CYCLE COMPLETE — all 11 tasks (L-SCALE, L-CERT, L-ENTITY, L-REACH,
@@ -11,7 +17,7 @@
 > "Known follow-ups" + the Notes below: full-production tour never profits
 > (v0.7-inherited), M&A distress floor $0 (dormant safety valve), cert
 > frequency ~71/career (ratified as the gangbuster direction).
-
+>
 > **Feature cycle: the record labels become a living economy.** A label
 > is no longer inert JSON — it is a world entity with a balance sheet that
 > rises on hits and falls on flops, a roster of real acts, reach and tier
@@ -21,12 +27,11 @@
 > and big bands made gangbuster money; this cycle puts that money on the
 > board and lets it move.
 >
-> **Design is proposed, awaiting coordinator sign-off** — read
-> `docs/DESIGN-v0.8-label-cycle.md` before claiming anything. Numbers
-> marked [tune] there are sim-lab candidates validated in L-SIM, not
-> invented per-agent. Two coordinator calls are flagged in the doc (§B
-> money-scale: one honest scale vs dual-scale; §F: label founding on/off)
-> — settle those before L-SCALE starts.
+> **Design signed off** — see `docs/DESIGN-v0.8-label-cycle.md`. Numbers
+> marked [tune] there were sim-lab candidates validated in L-SIM, not
+> invented per-agent. The two coordinator calls flagged in the doc were
+> settled at open — §B money-scale: **one honest scale**; §F: label
+> founding **off** to start.
 >
 > **Foundation already in the branch:** the record-sales fix that gave a
 > label's `market_reach` real international distribution
@@ -124,7 +129,7 @@ Commit prefix: `label(L-XXX): <short description>`.
 | **L-MNA** | Mergers, acquisitions, folding (§F): distress state, acquisition (roster+deal transfer), folding (deal void via breach write-off path), optional founding gate | M | L-REACH, L-ROSTER | M&A + status transitions in `world/labels.rs`, deal-transfer/void call-sites in `band.rs`/`economy.rs`, M&A consts | ✅ done | agent-lmna (worktree) | fdb86c3 |
 | **L-CHAR** | Label character / A&R (§G): `LabelStrategy` enum + creative-freedom effects wired into offer pricing, single-cut aggression/memos, renewal behavior | M | L-BID | `LabelStrategy` in `world/labels.rs`, hooks in `label_moves.rs` + `world/deals.rs`, strategy consts | ✅ done | agent-lchar (worktree) | 83599a9 |
 | **L-CERT** | Year-gate certifications to the era (§I): no scheme <1973, no Platinum <1976, no multi-platinum <1984; thresholds unchanged, only availability gates on year | S | — | certification pass in `economy.rs`, year-gate consts in `constants.rs` | ✅ done | agent-lcert (worktree) | c2be9a0 |
-| **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/file.rs`, **new** `src/ui/render/modals/{discography,labels}.rs` + mod/input wiring in `src/ui/app.rs`+`input/main.rs` | ✅ done | agent-lui1 (worktree) | 0cae070 |
+| **L-UI-1** | **UI slice 1** (user ask, 2026-07-24): **per-record sales in the band's discography** (copies_sold, income, chart peak, cert — the "no way to see each record's sales" gap) + a label-ledger browser (capital/tier/reach/roster of already-built fields). Read-only display; bidding/M&A/news annotations deferred to L-UI-2. | M | L-ROSTER | discography modal `src/ui/render/modals/discography.rs`, **new** `src/ui/render/modals/{discography,labels}.rs` + mod/input wiring in `src/ui/app.rs`+`input/main.rs` | ✅ done | agent-lui1 (worktree) | 0cae070 |
 | **L-UI-2** | UI slice 2 (§H): deal-picker health/trajectory annotations + industry news lines (mergers/foldings/distress/rival breakouts) at their source sites | S | L-BID, L-MNA, L-UI-1 | deal-picker annotations in `pickers.rs`, news lines at their source sites | ✅ done | agent-lui2 (worktree) | 980d5c4 |
 | **L-SIM** | Sim-lab validation (§I): label-solvency + gangbuster-target + bidding + graceful-failure bots and assertions; scale re-validation harness for L-SCALE | M | L-SCALE (continuous thereafter) | `src/game/sim.rs`, `src/game/tests/**` (new files) | ✅ done | agent-lsim (worktree) | 6bbeaac |
 | **L-CLOSE** | Cycle close: board audit, CHANGELOG, bump 0.8.0, archive this board, PR to main | S | all | `HANDOFF.md`, `CHANGELOG.md`, `Cargo.toml`/`Cargo.lock` | ✅ done | coordinator | (this commit) |

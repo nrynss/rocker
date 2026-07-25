@@ -21,7 +21,9 @@ impl Game {
     /// - some album has fewer than 2 singles already cut from it
     /// - the band has been quiet for ≥ 3 weeks (2 under recoup pressure, §E-5)
     /// - no release in the last 6 weeks
-    /// - a 10% weekly roll succeeds (doubled under recoup pressure, §E-5)
+    /// - a 10% weekly roll succeeds (doubled under recoup pressure §E-5,
+    ///   then scaled by the deal label's character — §G: a HitFactory cuts
+    ///   harder, an ArtistFriendly sparingly; 1.0 for a non-seeded label)
     ///
     /// When it fires: picks the eligible album (most recent first), increments
     /// its cut counter, and creates a new SINGLE `Release` into
@@ -239,7 +241,10 @@ impl Game {
     /// per week (priority: deadline pressure, then the cut-single nudge,
     /// then the write-songs nudge). The deadline's stress bite applies
     /// whenever the condition holds, whether or not the memo message
-    /// itself rolled — "the deadline is real pressure, not flavor".
+    /// itself rolled — "the deadline is real pressure, not flavor". The memo
+    /// roll chance is scaled by the deal label's character (§G — a HitFactory
+    /// leans harder, an ArtistFriendly leaves the act alone); the deadline
+    /// stress bite is not.
     fn label_memo_check(&mut self, rng: &mut impl Rng, term_end_week: u32) {
         // Pull everything needed out of the deal up front — the borrow
         // can't survive into the `&mut self` calls (log, stress) below.
