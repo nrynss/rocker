@@ -15,12 +15,28 @@ pub mod constants {
     // L-SCALE (v0.8 §B): ×3 to the one honest era-real money scale — every
     // dollar in the game triples in lockstep so ratios hold while magnitude
     // lifts. (was 100 / 1000 / 50.)
-    pub const SINGLE_RECORDING_COST: i32 = 300;
-    pub const ALBUM_RECORDING_BASE_COST: i32 = 3000;
+    //
+    // S-RECORD (v0.9 §A): the flat `SINGLE_RECORDING_COST` (300) /
+    // `ALBUM_RECORDING_BASE_COST` (3000) pair retired here — a record's studio
+    // bill is now `studio rate/song × songs × era modifier`, so what you are
+    // making and where you make it both enter the price. See
+    // `STUDIO_RATE_PER_SONG` in `game/constants.rs`.
     pub const DOCTOR_VISIT_COST: i32 = 150;
 
     // Game progression constants
+    //
+    // S-RECORD (v0.9 §A): song counts are a bounded player choice, and the two
+    // formats have genuinely different shapes — a single is an A-side plus a
+    // B-side (2-3), an album is 8-14. The *minima* are decided design, not
+    // [tune]: below two songs it is not a single, and eight has always been
+    // what an album means here.
+    pub const MIN_SINGLE_SONGS: u8 = 2;
+    pub const MAX_SINGLE_SONGS: u8 = 3;
     pub const MIN_ALBUM_SONGS: u8 = 8;
+    pub const MAX_ALBUM_SONGS: u8 = 14;
+    /// Where the album picker opens (design §A table). A single opens at its
+    /// minimum — two songs *is* the format — so it needs no twin.
+    pub const ALBUM_DEFAULT_SONGS: u8 = 10;
     pub const ROCKSTAR_FAME_THRESHOLD: u8 = 90;
     pub const ROCKSTAR_ALBUM_THRESHOLD: u8 = 5;
     pub const CRITICAL_HEALTH_THRESHOLD: u8 = 20;

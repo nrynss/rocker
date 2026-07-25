@@ -19,6 +19,7 @@ mod rng;
 mod shows;
 #[cfg(test)]
 mod sim; // Track D balance lab: bot-driven career sims, tests only.
+pub mod studios;
 pub mod timeline;
 mod turn;
 pub mod world;
@@ -31,5 +32,8 @@ pub use constants::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, PRESSING_TIERS, STUDIO_STRESS_BLOCK,
     TIER_INDEPENDENT_MIN_CAPITAL, TIER_MAJOR_MIN_CAPITAL, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
 };
-pub use core::{Game, GameAction, SupportTourOffer};
+pub use core::{
+    BreakInProgress, Game, GameAction, OngoingActivity, RecordingInProgress, SupportTourInProgress,
+    SupportTourOffer, TourInProgress,
+};
 pub use shows::{ShowReport, TourReport};

@@ -23,6 +23,7 @@ use crate::game::music::DistributionChannel;
 use crate::game::music::ReleaseType;
 use crate::game::player::LifestyleTier;
 use crate::game::player::Player;
+use crate::game::studios::{self, RecordingStudio};
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::GameWorld;
 use crate::game::world::{LabelStrategy, LabelTier};
@@ -94,9 +95,31 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         rockstar_achieved: false,
         current_distribution_channel: music::DistributionChannel::default(),
         last_sales_pass_week: None,
+        // S-TIME (§F): nobody starts a career mid-tour.
+        ongoing_activity: None,
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
+}
+
+/// Play a multi-week commitment out to its end (design §F).
+///
+/// Booking a tour used to resolve the whole thing inside one `process_turn`;
+/// since §F it resolves *one week*, and the rest arrive a week per turn with
+/// the full weekly tick — sales, chart decay, rent — running in between. Any
+/// non-overriding action drives the next week, so the measurement sweeps that
+/// want a finished tour say so explicitly rather than reading a report that
+/// isn't written yet.
+///
+/// This is deliberately *not* `tests::finish_activity_in_one_sitting`: that
+/// helper skips the weekly tick to serve as the economic-equivalence
+/// reference, whereas a balance sweep wants the real calendar it now costs.
+fn play_out_the_commitment(game: &mut Game) {
+    while game.ongoing_activity().is_some() && !game.game_over {
+        if game.process_turn(GameAction::LazeAround).is_err() {
+            break;
+        }
+    }
 }
 
 /// Silence both story-event taps so a run exercises only the core loop:
@@ -210,6 +233,27 @@ impl Bot {
 /// real break before burning out, otherwise carry on with the day job.
 fn self_care(game: &Game) -> Option<GameAction> {
     let player = &game.player;
+    // §F: a commitment owns the turn, so the doctor's appointment or the break
+    // below would simply be *discarded* while one is running — the bot would
+    // reach for help every week and be ignored every week, which is how a
+    // four-week booking turned into a death spiral (road-dog died 12/60 before
+    // this). Walking out is the only action a commitment yields to, and it is
+    // exactly what a player staring at 30 health would do. Before §F there was
+    // nothing to walk out of, so no bot ever needed to know this.
+    //
+    // Only walk out of the road, though. A break *is* the treatment — it heals
+    // across its weeks — so abandoning one for being unwell cancels the cure
+    // and re-books it next turn, thrashing without ever healing. (Measured:
+    // doing this indiscriminately killed the homebody 28/60 and the studio-rat
+    // 19/60, two bots that barely tour and simply rest badly.)
+    if let Some(activity) = game.ongoing_activity() {
+        let on_the_road = matches!(
+            activity,
+            OngoingActivity::Tour(_) | OngoingActivity::SupportTour(_)
+        );
+        return (on_the_road && player.health < HEALTH_FLOOR)
+            .then_some(GameAction::AbandonActivity);
+    }
     if player.health < HEALTH_FLOOR {
         return Some(if player.can_afford(constants::DOCTOR_VISIT_COST) {
             GameAction::VisitDoctor
@@ -240,15 +284,100 @@ fn gig_or_rest(game: &Game) -> GameAction {
     }
 }
 
-/// The out-of-pocket bill to record and press `kind` right now: studio time
-/// always, plus the pressing run when unsigned (a label presses for free).
+/// S-RECORD (design §C): the room every bot books. The neutral demo room is
+/// the pre-cycle economy — choosing *up* the studio ladder is a decision S-SIM
+/// teaches the bots on purpose (§I), not one this compatibility pass should
+/// make for them behind its own back.
+const BOT_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
+
+/// How many songs a bot's booking takes (design §A): the format's **minimum**.
+///
+/// Not the player-facing default (10 for an album), which is what this used
+/// after S-RECORD. Before §A an album took exactly `MIN_ALBUM_SONGS`, because
+/// that was the only length there was — so booking the minimum is what keeps a
+/// bot's records comparable to its own pre-cycle baseline, and it is what the
+/// garage acts in this lab would actually book: §B prices a session in weeks as
+/// well as dollars, so two extra tracks are two extra bills *and* most of an
+/// extra week off the calendar. Choosing to make a longer record is a real
+/// decision, and one S-SIM should teach a bot on purpose (§I) rather than have
+/// every bot inherit by accident.
+fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
+    let minimum = match kind {
+        ReleaseType::Single => constants::MIN_SINGLE_SONGS,
+        ReleaseType::Album => constants::MIN_ALBUM_SONGS,
+    };
+    game.band
+        .default_booking_songs(&kind)
+        .unwrap_or_else(|| studios::default_song_count(&kind))
+        .min(minimum)
+}
+
+/// The record action a bot dispatches, so the booking it is billed for
+/// (`release_bill`) and the booking it makes can never disagree.
+///
+/// S-MASTER (§D): this books a *session* — it yields a master, not a record on
+/// the shelves. `release_from_the_vault` is the other half.
+fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
+    let songs = bot_songs(game, kind);
+    match kind {
+        ReleaseType::Single => GameAction::RecordSingle {
+            songs,
+            studio: BOT_STUDIO,
+        },
+        ReleaseType::Album => GameAction::RecordAlbum {
+            songs,
+            studio: BOT_STUDIO,
+        },
+    }
+}
+
+/// The out-of-pocket bill to get `kind` from nothing to on the shelves: studio
+/// time always, plus the pressing run when unsigned (a label presses for
+/// free).
+///
+/// S-MASTER (§D) split when those two are due — studio time at booking,
+/// pressing weeks later at release — but a bot that books a session it can
+/// never afford to press just strands a master in the vault, so the *decision*
+/// still weighs the whole bill. That keeps the pre-§D booking behaviour, which
+/// is what makes the sweeps comparable across the split.
 fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
-    let mut bill = game.recording_cost(&kind);
+    let songs = bot_songs(game, kind);
+    let mut bill = game.recording_cost(BOT_STUDIO, songs);
     if game.band.current_deal().is_none() {
         let (_, copies) = PRESSING_TIERS[pressing.unwrap_or(GARAGE_RUN)];
         bill += game.pressing_cost(&kind, copies);
     }
-    bill
+    // §B + §D: the studio bill is due at booking and the pressing bill weeks
+    // later, and in between the band still has to live — the weekly tick now
+    // runs during a session (§F), charging rent every week of it. Weighing only
+    // the two bills lets a bot book a session it can *just* afford, get eaten
+    // by upkeep while the tape rolls, and land a finished master it can no
+    // longer press. That master earns nothing, and for a bot with no other
+    // income there is no way back: measured, the studio-rat went broke 36/60
+    // and finished on median fame 7, having recorded records it could never
+    // put out. Reserve the session's running costs alongside its bills.
+    let weeks = game
+        .quote_recording(kind, songs, BOT_STUDIO)
+        .map_or(0, |quote| quote.weeks);
+    bill + (weeks as i32) * (game.player.lifestyle.upkeep_per_week() as i32)
+}
+
+/// S-MASTER (§D): a finished record sitting in the vault earns nothing. Put
+/// the oldest master out as soon as the pressing (and, unsigned, the channel
+/// fee) is covered.
+///
+/// Releasing is instant — no week is consumed — so this costs the bot only the
+/// bill, and the very next `decide` gets on with the day job. Without it every
+/// bot would record forever and release never, and the whole lab would report
+/// zero releases.
+fn release_from_the_vault(game: &Game, pressing: Option<usize>) -> Option<GameAction> {
+    game.quote_release(0, pressing)
+        .ok()
+        .filter(|quote| game.player.can_afford(quote.total()))
+        .map(|_| GameAction::ReleaseMaster {
+            master: 0,
+            pressing,
+        })
 }
 
 fn gig_grinder(game: &Game) -> GameAction {
@@ -256,25 +385,34 @@ fn gig_grinder(game: &Game) -> GameAction {
 }
 
 fn studio_rat(game: &Game) -> GameAction {
+    // §D: press whatever came out of the last session before booking the next.
+    if let Some(release) = release_from_the_vault(game, Some(GARAGE_RUN)) {
+        return release;
+    }
     if game.band.can_record_album() {
         if game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordAlbum {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Album);
         }
         // Can't afford the album yet: press a spare song (anything beyond
         // the eight banked for the album) as a single to raise the cash.
-        if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+        // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+        // has to mean spare *after* the album pile, not one song over it.
+        //
+        // (Tried throttling this — only single when the album is still far out
+        // of reach, on the theory that churning singles stops the bot ever
+        // banking the album bill. It made things *worse*, 26 broke of 60 to
+        // 34: for a bot that never plays live the singles are the only income
+        // there is, and withholding them starves it. Left un-throttled.)
+        if game.band.unreleased_songs.len()
+            >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
             && game
                 .player
                 .can_afford(release_bill(game, ReleaseType::Single, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordSingle {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Single);
         }
         // Blocked on money with nothing spare to single off either: keep
         // writing. This is the bot's only bootstrap out of "broke, one
@@ -300,6 +438,12 @@ fn studio_rat(game: &Game) -> GameAction {
 /// when signed the label presses regardless (`plan_pressing` checks the
 /// deal first), so `None` is fine there.
 fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> GameAction {
+    // §D: a finished master goes out first. It is instant and it is what puts
+    // a record on the shelves at all — everything below (gigging the sales
+    // window, banking the income toward the next session) depends on it.
+    if let Some(release) = release_from_the_vault(game, pressing) {
+        return release;
+    }
     // A support slot is exposure money can't buy — and it pays. The
     // homebody skips it (never tours); everyone else grabs it.
     if allow_support
@@ -319,16 +463,19 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, pressing))
     {
-        return GameAction::RecordAlbum { pressing };
+        return bot_record(game, ReleaseType::Album);
     }
     // Songs above the album pile become singles: cash flow, a higher live
     // ceiling, and something on the shelves worth gigging on.
-    if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+    // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+    // has to mean spare *after* the album pile, not one song over it.
+    if game.band.unreleased_songs.len()
+        >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
         && game
             .player
             .can_afford(release_bill(game, ReleaseType::Single, pressing))
     {
-        return GameAction::RecordSingle { pressing };
+        return bot_record(game, ReleaseType::Single);
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
@@ -415,6 +562,17 @@ fn plan_biggest_tour(game: &Game) -> Option<(usize, TourRig, u8)> {
         }
         for weeks in (1..=4u8).rev() {
             if !game.tour_length_is_available(weeks) {
+                continue;
+            }
+            // §F: don't start what you can't finish. A booking is now weeks of
+            // wear the band is locked into — the guard that let this through
+            // (`health >= TOUR_HEALTH_GUARD`) was calibrated when a tour cost
+            // one turn, so it happily sent a band with 32 health out for four
+            // weeks of it. Book the longest length whose own wear still lands
+            // clear of the floor; the shorter lengths below are tried in turn.
+            let (health_per_week, _) = rig.wear_per_week();
+            let wear = health_per_week.saturating_mul(weeks);
+            if game.player.health.saturating_sub(wear) < HEALTH_FLOOR {
                 continue;
             }
             if let Ok(quote) = game.quote_tour(region_index, rig, weeks)
@@ -1856,6 +2014,7 @@ fn tour_gross_by_skill_tier_sweep() {
 
         game.process_turn(GameAction::GoOnTour(region_index, FIXED_RIG, FIXED_WEEKS))
             .expect("tour should be affordable and unblocked");
+        play_out_the_commitment(&mut game);
         let report = game.last_tour_report.expect("tour produces a report");
 
         // Momentum isn't stored on the report — replay it from each show's
@@ -1944,7 +2103,8 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         let money_before = game.player.money;
         game.process_turn(GameAction::GoOnTour(region_index, rig, weeks))
             .ok()?;
-        // Net of the whole turn: box office earned minus the tour cost
+        play_out_the_commitment(&mut game);
+        // Net of the whole booking: box office earned minus the tour cost
         // spent (Squat upkeep is 0, no catalog to pay a tail).
         Some(game.player.money as i64 - money_before as i64)
     }

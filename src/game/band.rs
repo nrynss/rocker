@@ -1,5 +1,5 @@
 use super::genre::MusicGenre;
-use super::music::{Release, Song}; // Import new structs
+use super::music::{Master, Release, Song}; // Import new structs
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +17,14 @@ pub struct Band {
     pub peak_fame: u8,
     pub skill: u8, // 0-100
     pub unreleased_songs: Vec<Song>,
+    /// The vault: finished records the band owns and hasn't put out yet
+    /// (design §D). A session deposits one here; the Release action takes one
+    /// out. A master may sit here indefinitely — that is a strategy, not a
+    /// leak. `#[serde(default)]` so every pre-0.9 save loads with an empty
+    /// vault, which is exactly what it had: before §D, recording *was*
+    /// releasing and nothing could be in the can.
+    #[serde(default)]
+    pub masters: Vec<Master>,
     pub singles_released: Vec<Release>,
     pub albums_released: Vec<Release>,
     pub members: Vec<BandMember>,
@@ -170,6 +178,7 @@ impl Default for Band {
             peak_fame: 0,
             skill: 20,
             unreleased_songs: Vec::new(),
+            masters: Vec::new(),
             singles_released: Vec::new(),
             albums_released: Vec::new(),
             members: vec![
@@ -296,11 +305,41 @@ impl Band {
     }
 
     pub fn can_record_album(&self) -> bool {
-        self.unreleased_songs.len() >= crate::data::constants::MIN_ALBUM_SONGS as usize // Assuming MIN_ALBUM_SONGS is available
+        self.unreleased_songs.len() >= crate::data::constants::MIN_ALBUM_SONGS as usize
     }
 
+    /// S-RECORD (design §A): a single is an A-side plus a B-side, so one song
+    /// is no longer enough. Both `can_record_*` now answer the same question —
+    /// "could the shortest record of this format be made at all?" — and the
+    /// player picks the actual count above that floor.
     pub fn can_record_single(&self) -> bool {
-        !self.unreleased_songs.is_empty()
+        self.unreleased_songs.len() >= crate::data::constants::MIN_SINGLE_SONGS as usize
+    }
+
+    /// The best song count of this format the band could fill right now:
+    /// the format's maximum, trimmed to what is actually in the notebook, and
+    /// `None` when it can't even reach the minimum. What the picker opens its
+    /// spinner against, and what the shortfall message is measured from
+    /// (design §A).
+    pub fn max_recordable_songs(
+        &self,
+        release_type: &crate::game::music::ReleaseType,
+    ) -> Option<u8> {
+        let (min, max) = crate::game::studios::song_count_bounds(release_type);
+        let available = self.unreleased_songs.len().min(u8::MAX as usize) as u8;
+        (available >= min).then(|| available.min(max))
+    }
+
+    /// The count a booking should default to: the format's default, trimmed to
+    /// what the notebook can actually fill (design §A). An album defaults to
+    /// ten but is recordable from eight, so the default has to give way to the
+    /// pile rather than refuse a record the menu just offered.
+    pub fn default_booking_songs(
+        &self,
+        release_type: &crate::game::music::ReleaseType,
+    ) -> Option<u8> {
+        self.max_recordable_songs(release_type)
+            .map(|max| crate::game::studios::default_song_count(release_type).min(max))
     }
 
     pub fn total_releases(&self) -> usize {

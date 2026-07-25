@@ -26,7 +26,60 @@ impl Game {
         Ok(())
     }
 
+    /// Disappear for `BREAK_WEEKS` (design §F). The weeks are now weeks the
+    /// calendar actually plays — rent still falls due, the catalog still
+    /// sells, the scene still moves — so this only starts the break and
+    /// resolves its first week. This method never touches `Game::week`.
     pub(in crate::game) fn action_take_break(&mut self) -> Result<(), String> {
+        if let Some(activity) = &self.ongoing_activity {
+            return Err(format!(
+                "You're already committed — {} ({}).",
+                activity.headline(),
+                activity.progress()
+            ));
+        }
+        let rest = BreakInProgress {
+            weeks_total: BREAK_WEEKS as u8,
+            weeks_done: 0,
+        };
+        self.log(format!(
+            "🏖️ You disappeared for {} weeks — nobody knows where.",
+            BREAK_WEEKS
+        ));
+        self.resolve_break_week(rest);
+        Ok(())
+    }
+
+    /// One week off (design §F). The recovery itself lands on the week the
+    /// band comes back, not the week it leaves: paying it out up front would
+    /// make "start a break, walk out next week" a full recharge in one.
+    pub(in crate::game) fn resolve_break_week(&mut self, mut rest: BreakInProgress) {
+        rest.weeks_done += 1;
+        if rest.weeks_done >= rest.weeks_total {
+            self.settle_break(rest, true);
+            return;
+        }
+
+        self.log(format!(
+            "🏖️ Away from it all, week {} of {}.",
+            rest.weeks_done, rest.weeks_total
+        ));
+        self.ongoing_activity = Some(OngoingActivity::Break(rest));
+    }
+
+    /// Come back from a break (design §F) — or cut it short, in which case
+    /// the weeks off are all you got.
+    pub(in crate::game) fn settle_break(&mut self, rest: BreakInProgress, completed: bool) {
+        self.ongoing_activity = None;
+
+        if !completed {
+            self.log(format!(
+                "🛑 Cut the break short after {} of {} weeks — rested, but not recharged.",
+                rest.weeks_done, rest.weeks_total
+            ));
+            return;
+        }
+
         // v0.7 §B: the lifestyle's rest-healing bonus tops up the health gain.
         let bonus = self.player.lifestyle.rest_healing_bonus();
         self.player.stress = 0;
@@ -46,12 +99,7 @@ impl Game {
             .saturating_add(BREAK_HEALTH_GAIN)
             .saturating_add(bonus)
             .min(constants::MAX_HEALTH);
-        self.week += BREAK_WEEKS - 1;
-        self.log(format!(
-            "🏖️ You disappeared for {} weeks — fully recharged and healthier for it.",
-            BREAK_WEEKS
-        ));
-        Ok(())
+        self.log("🏖️ Back from the break — fully recharged and healthier for it.");
     }
 
     pub(in crate::game) fn action_visit_doctor(&mut self) -> Result<(), String> {

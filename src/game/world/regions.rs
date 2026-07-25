@@ -22,6 +22,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data_loader::GameDataFiles;
 use crate::game::genre::MusicGenre;
+use crate::game::music::ReleaseType;
 use crate::game::timeline::MusicTimeline;
 
 use super::GameWorld;
@@ -162,7 +163,7 @@ impl GameWorld {
         let era_year = timeline.get_current_era().year;
         for region in ChartRegion::TERRITORIES {
             let count = rng.gen_range(FILLER_MIN_PER_TERRITORY..=FILLER_MAX_PER_TERRITORY);
-            for _ in 0..count {
+            for n in 0..count {
                 let band_name = data_files.generate_band_name(rng);
                 let title = data_files.generate_song_title(rng);
                 let genre = MusicGenre::random(rng);
@@ -172,7 +173,18 @@ impl GameWorld {
                 let score = ((fame_proxy * 1.2 + quality * 2.5)
                     * genre_mod
                     * rng.gen_range(0.9..1.3)) as u32;
-                self.submit_chart_entry(region, title, band_name, false, score);
+                // §E: the week's filler alternates format so both of a
+                // territory's boards stay fed at the same rate. Alternating
+                // rather than rolling is deliberate — the filler must draw
+                // exactly the same values from the world stream as it did
+                // before the format axis existed, or every seeded world
+                // downstream of it moves.
+                let format = if n % 2 == 0 {
+                    ReleaseType::Single
+                } else {
+                    ReleaseType::Album
+                };
+                self.submit_chart_entry(region, format, title, band_name, false, score);
             }
         }
     }
@@ -233,20 +245,22 @@ mod tests {
         world_b.fill_territories(&mut rng_b, &timeline, &data);
 
         for region in ChartRegion::TERRITORIES {
-            let a = world_a
-                .regional_charts
-                .get(&region)
-                .cloned()
-                .unwrap_or_default();
-            let b = world_b
-                .regional_charts
-                .get(&region)
-                .cloned()
-                .unwrap_or_default();
-            assert!(!a.is_empty(), "{region:?} should have filler entries");
-            let titles_a: Vec<_> = a.iter().map(|e| (e.title.clone(), e.score)).collect();
-            let titles_b: Vec<_> = b.iter().map(|e| (e.title.clone(), e.score)).collect();
-            assert_eq!(titles_a, titles_b, "same seed, same filler for {region:?}");
+            // §E: filler alternates format, so both boards of a territory
+            // get fed — and both must be identical across the two seeds.
+            for format in [ReleaseType::Single, ReleaseType::Album] {
+                let a = world_a.chart_board(region, format);
+                let b = world_b.chart_board(region, format);
+                assert!(
+                    !a.is_empty(),
+                    "{region:?} {format:?} should have filler entries"
+                );
+                let titles_a: Vec<_> = a.iter().map(|e| (e.title.clone(), e.score)).collect();
+                let titles_b: Vec<_> = b.iter().map(|e| (e.title.clone(), e.score)).collect();
+                assert_eq!(
+                    titles_a, titles_b,
+                    "same seed, same filler for {region:?} {format:?}"
+                );
+            }
         }
     }
 }

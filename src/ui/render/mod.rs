@@ -39,6 +39,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::TourBookingPicker { .. } => {
                     modals::draw_tour_booking_picker_modal(frame, app)
                 }
+                Screen::Vault { .. } => modals::draw_vault_modal(frame, app),
                 Screen::PressingPicker { .. } => modals::draw_pressing_picker_modal(frame, app),
                 Screen::LifestylePicker { .. } => modals::draw_lifestyle_picker_modal(frame, app),
                 Screen::RePressPicker { .. } => modals::draw_repress_picker_modal(frame, app),
@@ -194,51 +195,81 @@ mod tests {
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 
-    /// The charts modal (region tabs, empty board, a populated board
-    /// scrolled deep, and the derived Worldwide tab) should render without
-    /// panicking (design §C, task M3).
+    /// The charts modal (region tabs, the §E format toggle, empty board, a
+    /// populated board scrolled deep, and the derived Worldwide tab) should
+    /// render without panicking (design §C, task M3).
     #[test]
     fn charts_modal_renders_every_region_without_panicking() {
+        use crate::game::music::ReleaseType;
         use crate::game::world::ChartRegion;
 
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("test backend");
         let mut app = app_on_main();
 
-        // Empty Local board.
-        app.screen = Screen::Charts {
-            region: ChartRegion::Local,
-            scroll: 0,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        // Empty Local board, both formats.
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Local,
+                format,
+                scroll: 0,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
 
-        // A crowded UK board, scrolled past the top 10.
+        // A crowded UK singles board, scrolled past the top 10 — and its
+        // albums half, which stays empty and must render its own quiet line.
         for i in 0..40 {
             app.game.world.submit_chart_entry(
                 ChartRegion::Uk,
+                ReleaseType::Single,
                 format!("Song {i}"),
                 format!("Band {i}"),
                 i == 0,
                 500 + i as u32,
             );
         }
-        app.screen = Screen::Charts {
-            region: ChartRegion::Uk,
-            scroll: 25,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Uk,
+                format,
+                scroll: 25,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
 
-        // The derived Worldwide tab.
-        app.screen = Screen::Charts {
-            region: ChartRegion::Worldwide,
-            scroll: 0,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        // The derived Worldwide tab, per format.
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Worldwide,
+                format,
+                scroll: 0,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
     }
 
-    /// The pressing/distribution picker (design §E-3, M6) and the re-press
-    /// pickers (§E-1 indie half) should render without panicking, both
-    /// locked (low fame, National unavailable) and unlocked (high fame).
+    /// A master as a finished session would leave it (design §D), so the
+    /// vault and the release picker have something to draw.
+    fn vault_master(
+        name: &str,
+        release_type: crate::game::music::ReleaseType,
+    ) -> crate::game::music::Master {
+        crate::game::music::Master {
+            name: name.to_string(),
+            release_type,
+            release_quality: 62,
+            songs_involved_quality_avg: 58,
+            songs: Vec::new(),
+            studio: crate::game::studios::RecordingStudio::DemoRoom,
+            week_finished: 1,
+            genre: None,
+        }
+    }
+
+    /// The vault (design §D), the pressing/distribution picker (§E-3, M6) and
+    /// the re-press pickers (§E-1 indie half) should render without panicking,
+    /// both locked (low fame, National unavailable) and unlocked (high fame).
     #[test]
     fn pressing_and_repress_pickers_render_without_panicking() {
         use crate::game::music::{DistributionChannel, ReleaseType};
@@ -247,10 +278,22 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test backend");
         let mut app = app_on_main();
 
+        // The vault, empty first — a band with nothing finished must still get
+        // a screen rather than an index panic.
+        app.screen = Screen::Vault { selected: 0 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        app.game.band.masters = vec![
+            vault_master("Single: Opening Shot", ReleaseType::Single),
+            vault_master("The Long Player", ReleaseType::Album),
+        ];
+        app.screen = Screen::Vault { selected: 1 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
         // Low fame: National is locked, so the channel row must render its
         // 🔒 state rather than panicking.
         app.screen = Screen::PressingPicker {
-            release_type: ReleaseType::Single,
+            master: 0,
             selected: 0,
             channel: DistributionChannel::National,
         };
@@ -259,7 +302,7 @@ mod tests {
         // High fame, every channel unlocked; also exercise the album variant.
         app.game.band.fame = 90;
         app.screen = Screen::PressingPicker {
-            release_type: ReleaseType::Album,
+            master: 1,
             selected: 2,
             channel: DistributionChannel::Regional,
         };
@@ -632,6 +675,7 @@ mod tests {
         });
         app.game.world.submit_chart_entry(
             ChartRegion::Uk,
+            crate::game::music::ReleaseType::Album,
             "Kicks".to_string(),
             band_name.clone(),
             false,
@@ -640,6 +684,7 @@ mod tests {
 
         app.screen = Screen::Charts {
             region: ChartRegion::Uk,
+            format: crate::game::music::ReleaseType::Album,
             scroll: 0,
         };
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();

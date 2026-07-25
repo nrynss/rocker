@@ -293,10 +293,18 @@ impl Game {
         Ok(())
     }
 
-    pub(in crate::game) fn action_accept_support_tour(
-        &mut self,
-        rng: &mut impl Rng,
-    ) -> Result<(), String> {
+    /// Take the support slot (design §F). The guarantee is banked on the
+    /// spot — that's what a guarantee is — and the run itself becomes an
+    /// `OngoingActivity` whose weeks the calendar actually plays. This
+    /// method never touches `Game::week`.
+    pub(in crate::game) fn action_accept_support_tour(&mut self) -> Result<(), String> {
+        if let Some(activity) = &self.ongoing_activity {
+            return Err(format!(
+                "You're already committed — {} ({}).",
+                activity.headline(),
+                activity.progress()
+            ));
+        }
         let Some(offer) = self.pending_support_offer.clone() else {
             return Err("Nobody has offered you a support slot.".to_string());
         };
@@ -309,24 +317,82 @@ impl Game {
         self.pending_support_offer = None;
 
         self.player.earn_money(offer.pay);
-        // A support run is touring: same weekly stress and wear as a headline tour.
-        let weeks = offer.weeks as u8;
-        self.player.stress = (self.player.stress
-            + constants::TOUR_STRESS_COST_PER_WEEK.saturating_mul(weeks))
-        .min(constants::MAX_STRESS);
+
+        let support = SupportTourInProgress {
+            host_band: offer.host_band.clone(),
+            weeks_total: offer.weeks as u8,
+            weeks_done: 0,
+            start_week: self.week,
+            pay: offer.pay,
+            fame_gain: offer.fame_gain,
+        };
+        self.log(format!(
+            "🎟️ Took {}'s support slot — {} weeks opening, ${} guaranteed.",
+            offer.host_band, offer.weeks, offer.pay
+        ));
+
+        // The first week plays now; `turn.rs` drives the rest.
+        self.resolve_support_tour_week(support);
+        Ok(())
+    }
+
+    /// One week on someone else's stage (design §F): a support run is
+    /// touring, so it charges the same weekly stress and wear a headline
+    /// tour does — now the week it is actually endured.
+    pub(in crate::game) fn resolve_support_tour_week(
+        &mut self,
+        mut support: SupportTourInProgress,
+    ) {
+        self.player.stress =
+            (self.player.stress + constants::TOUR_STRESS_COST_PER_WEEK).min(constants::MAX_STRESS);
         self.player.health = self
             .player
             .health
-            .saturating_sub(constants::TOUR_HEALTH_COST_PER_WEEK.saturating_mul(weeks));
+            .saturating_sub(constants::TOUR_HEALTH_COST_PER_WEEK);
+
+        support.weeks_done += 1;
+        if support.weeks_done >= support.weeks_total {
+            self.settle_support_tour(support, true);
+            return;
+        }
+
+        self.log(format!(
+            "🎟️ Opening for {}, week {} of {}.",
+            support.host_band, support.weeks_done, support.weeks_total
+        ));
+        self.ongoing_activity = Some(OngoingActivity::SupportTour(support));
+    }
+
+    /// Close out a support run (design §F). Finishing it is what buys the
+    /// exposure: walking out mid-run keeps the guarantee already banked but
+    /// none of the fame the slot was worth.
+    pub(in crate::game) fn settle_support_tour(
+        &mut self,
+        support: SupportTourInProgress,
+        completed: bool,
+    ) {
+        self.ongoing_activity = None;
+
+        if !completed {
+            self.log(format!(
+                "🛑 Left {}'s tour after {} of {} weeks — the exposure went with it.",
+                support.host_band, support.weeks_done, support.weeks_total
+            ));
+            return;
+        }
+
         // Report the fame actually applied (comeback doubling, caps), not
         // the offer's raw number.
-        let fame_applied = self.band.gain_fame(offer.fame_gain);
-        self.week += offer.weeks;
+        let fame_applied = self.band.gain_fame(support.fame_gain);
         self.log(format!(
             "🎟️ Opened for {} for {} weeks — ${} and a taste of the big stage (fame +{}).",
-            offer.host_band, offer.weeks, offer.pay, fame_applied
+            support.host_band, support.weeks_total, support.pay, fame_applied
         ));
 
+        // The encore roll settles on the activity stream, keyed off the week
+        // the run started, so it can't be shifted by what the world drew
+        // while the band was away (`rng.rs`).
+        let mut rng = self.activity_rng(support.start_week, 0);
         if rng.gen_bool(0.25) {
             let encore_fame = self.band.gain_fame(2);
             self.log(format!(
@@ -334,7 +400,6 @@ impl Game {
                 encore_fame
             ));
         }
-        Ok(())
     }
 
     pub(in crate::game) fn action_decline_support_tour(&mut self) -> Result<(), String> {

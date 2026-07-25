@@ -73,15 +73,23 @@ pub(crate) fn draw_venue_picker_modal(frame: &mut Frame, app: &App) {
 /// rig-on-↑↓/length-on-←→ split (`draw_tour_booking_picker_modal`). The
 /// channel row is only shown while unsigned; the label decides both pressing
 /// and reach for a signed act, and never reaches this screen.
+///
+/// S-MASTER (§D): this now presses a *finished master* out of the vault. The
+/// studio bill is gone from it entirely — that was paid at booking, weeks ago
+/// — so what a tier's row totals is the true release-day bill and nothing else.
 pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     let Screen::PressingPicker {
-        release_type,
+        master,
         selected,
         channel,
     } = app.screen
     else {
         return;
     };
+    let Some(master) = app.game.vault().get(master) else {
+        return;
+    };
+    let release_type = master.release_type;
     let signed = app.game.band.current_deal().is_some();
     let fee = if signed { 0 } else { channel.fee() };
 
@@ -93,19 +101,47 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     frame.render_widget(Clear, area);
     let block = Block::bordered()
         .title(format!(" 📀 Press the {} ", kind))
-        .title_bottom(" ↑↓ pressing run · ←→ distribution · Enter record · Esc cancel ");
+        .title_bottom(" ↑↓ pressing run · ←→ distribution · Enter release · Esc back ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let [tiers_area, channel_area] =
-        Layout::vertical([Constraint::Min(6), Constraint::Length(6)]).areas(inner);
+    let [session_area, tiers_area, channel_area] = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(6),
+        Constraint::Length(6),
+    ])
+    .areas(inner);
 
-    let recording = app.game.recording_cost(&release_type);
+    // What is being pressed — the record as it came out of the room (§D).
+    // Everything here is frozen on the master; nothing on this screen can
+    // change it, which is the whole point of a master.
+    frame.render_widget(
+        Paragraph::new(vec![
+            Line::from(format!(
+                "'{}' — {} songs cut at the {}, songs avg {}, quality {}",
+                master.name,
+                master.songs.len(),
+                master.studio.label(),
+                master.songs_involved_quality_avg,
+                master.release_quality
+            )),
+            Line::styled(
+                format!(
+                    "Finished week {} — the studio time is long paid for.",
+                    master.week_finished
+                ),
+                Style::new().fg(Color::DarkGray),
+            ),
+        ])
+        .block(Block::default().title("Master")),
+        session_area,
+    );
+
     let items: Vec<ListItem> = PRESSING_TIERS
         .iter()
         .map(|(name, copies)| {
             let pressing = app.game.pressing_cost(&release_type, *copies);
-            let total = recording + pressing + fee;
+            let total = pressing + fee;
             let affordable = app.game.player.can_afford(total);
             let style = if affordable {
                 Style::new().fg(Color::White)

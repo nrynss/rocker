@@ -18,7 +18,21 @@ fn same_seed_and_same_choices_replay_the_same_career() {
             GameAction::LazeAround,
             GameAction::WriteSongs,
             GameAction::LazeAround,
-            GameAction::RecordSingle { pressing: Some(1) },
+            // S-RECORD reshaped the variant (§A/§C): the booking is now
+            // explicit. Same club run, same neutral room, minimum single —
+            // the script's *intent* is unchanged, only its spelling.
+            GameAction::RecordSingle {
+                songs: MIN_SINGLE_SONGS,
+                studio: TEST_STUDIO,
+            },
+            // S-MASTER reshaped it again (§D): recording books a session and
+            // leaves a master, and putting it out — at the same club run —
+            // is now its own, instant action. The script's *intent* is
+            // unchanged, only its spelling.
+            GameAction::ReleaseMaster {
+                master: 0,
+                pressing: Some(1),
+            },
             GameAction::Gig(0),
             GameAction::LazeAround,
             GameAction::Gig(0),

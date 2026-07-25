@@ -2,22 +2,81 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::data::format_money;
 use crate::game::music::{DistributionChannel, ReleaseType};
-use crate::game::{GameAction, PRESSING_TIERS, TourQuote, TourRig};
+use crate::game::studios::{self, RecordingStudio};
+use crate::game::{Game, GameAction, PRESSING_TIERS, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
 
+/// S-RECORD: the record action now carries a song count and a studio (§A/§C).
+/// The picker that lets the player *choose* them — format → songs → studio,
+/// quote-first — is S-UI's (§H); until then every dispatch books the default:
+/// the format's default song count in the neutral demo room, which reproduces
+/// the pre-cycle booking a player never had to think about.
+///
+/// S-MASTER (§D): this books a session and nothing more. Pressing and
+/// distribution have left it entirely — they are the vault's, below.
+fn default_record_action(game: &Game, release_type: ReleaseType) -> GameAction {
+    let songs = game
+        .band
+        .default_booking_songs(&release_type)
+        .unwrap_or_else(|| studios::default_song_count(&release_type));
+    let studio = RecordingStudio::default();
+    match release_type {
+        ReleaseType::Single => GameAction::RecordSingle { songs, studio },
+        ReleaseType::Album => GameAction::RecordAlbum { songs, studio },
+    }
+}
+
 impl App {
+    /// Book a session straight away (design §D): there is nothing left to
+    /// choose at record time now that pressing and distribution live on the
+    /// release.
+    pub(crate) fn book_recording(&mut self, release_type: ReleaseType) {
+        let action = default_record_action(&self.game, release_type);
+        self.dispatch(action);
+    }
+
+    /// The vault (design §D/§H): the masters awaiting release, and where the
+    /// Release action starts.
+    pub(crate) fn handle_vault_key(&mut self, key: KeyEvent) {
+        let Screen::Vault { selected } = self.screen else {
+            return;
+        };
+        let count = self.game.vault().len();
+        if count == 0 {
+            self.screen = Screen::Main;
+            return;
+        }
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.screen = Screen::Vault {
+                    selected: super::cycle_index(selected, count, false),
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.screen = Screen::Vault {
+                    selected: super::cycle_index(selected, count, true),
+                };
+            }
+            KeyCode::Enter => self.open_release_picker(selected.min(count - 1)),
+            _ => {}
+        }
+    }
+
     /// A signed band's label decides the run; an indie band picks one — and,
     /// while unsigned, a distribution channel alongside it (design §E-3, M6).
-    pub(crate) fn open_pressing_picker(&mut self, release_type: ReleaseType) {
+    /// Since §D this is the *release* decision, taken on a master that is
+    /// already finished and paid for.
+    pub(crate) fn open_release_picker(&mut self, master: usize) {
         if self.game.band.current_deal().is_some() {
-            let action = match release_type {
-                ReleaseType::Single => GameAction::RecordSingle { pressing: None },
-                ReleaseType::Album => GameAction::RecordAlbum { pressing: None },
-            };
-            self.dispatch(action);
+            self.screen = Screen::Main;
+            self.dispatch(GameAction::ReleaseMaster {
+                master,
+                pressing: None,
+            });
         } else {
             self.screen = Screen::PressingPicker {
-                release_type,
+                master,
                 selected: 0,
                 channel: self.game.current_distribution_channel,
             };
@@ -26,7 +85,7 @@ impl App {
 
     pub(crate) fn handle_pressing_picker_key(&mut self, key: KeyEvent) {
         let Screen::PressingPicker {
-            release_type,
+            master,
             selected,
             channel,
         } = self.screen
@@ -35,17 +94,17 @@ impl App {
         };
         let count = PRESSING_TIERS.len();
         match key.code {
-            KeyCode::Esc => self.screen = Screen::Main,
+            KeyCode::Esc => self.screen = Screen::Vault { selected: master },
             KeyCode::Up | KeyCode::Char('k') => {
                 self.screen = Screen::PressingPicker {
-                    release_type,
+                    master,
                     selected: super::cycle_index(selected, count, false),
                     channel,
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 self.screen = Screen::PressingPicker {
-                    release_type,
+                    master,
                     selected: super::cycle_index(selected, count, true),
                     channel,
                 };
@@ -57,7 +116,7 @@ impl App {
                 let idx =
                     super::cycle_index(channel.ordinal(), DistributionChannel::ALL.len(), false);
                 self.screen = Screen::PressingPicker {
-                    release_type,
+                    master,
                     selected,
                     channel: DistributionChannel::ALL[idx],
                 };
@@ -66,7 +125,7 @@ impl App {
                 let idx =
                     super::cycle_index(channel.ordinal(), DistributionChannel::ALL.len(), true);
                 self.screen = Screen::PressingPicker {
-                    release_type,
+                    master,
                     selected,
                     channel: DistributionChannel::ALL[idx],
                 };
@@ -83,21 +142,16 @@ impl App {
                     );
                     return;
                 }
-                // Persist the choice (M6): read by `action_record_single`/
-                // `action_record_album` to charge this release's fee and
-                // stamp it onto the new `Release`, and remembered as the
-                // default next time this picker opens.
+                // Persist the choice (M6): read by `action_release_master` to
+                // charge this release's fee and stamp it onto the new
+                // `Release`, and remembered as the default next time this
+                // picker opens.
                 self.game.current_distribution_channel = channel;
                 self.screen = Screen::Main;
-                let action = match release_type {
-                    ReleaseType::Single => GameAction::RecordSingle {
-                        pressing: Some(selected),
-                    },
-                    ReleaseType::Album => GameAction::RecordAlbum {
-                        pressing: Some(selected),
-                    },
-                };
-                self.dispatch(action);
+                self.dispatch(GameAction::ReleaseMaster {
+                    master,
+                    pressing: Some(selected),
+                });
             }
             _ => {}
         }

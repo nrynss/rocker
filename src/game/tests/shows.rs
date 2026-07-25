@@ -39,20 +39,17 @@ fn tour_guard_blocks_high_stress_and_low_health() {
     let mut game = test_game();
     game.band.fame = 90; // clears every region's fame requirement
     game.player.money = 1_000_000;
-    let mut rng = StdRng::seed_from_u64(101);
 
     game.player.stress = TOUR_STRESS_GUARD;
     assert!(
-        game.action_go_on_tour(0, TourRig::Van, 1, &mut rng)
-            .is_err(),
+        game.action_go_on_tour(0, TourRig::Van, 1).is_err(),
         "a tour at the stress guard should be blocked"
     );
 
     game.player.stress = 0;
     game.player.health = TOUR_HEALTH_GUARD - 1;
     assert!(
-        game.action_go_on_tour(0, TourRig::Van, 1, &mut rng)
-            .is_err(),
+        game.action_go_on_tour(0, TourRig::Van, 1).is_err(),
         "a tour below the health guard should be blocked"
     );
 }
@@ -62,10 +59,11 @@ fn a_seeded_tour_produces_five_shows_per_tour_week() {
     let mut game = test_game();
     game.band.fame = 90; // clears every rig gate and the 4-week length gate
     game.player.money = 1_000_000;
-    let mut rng = StdRng::seed_from_u64(102);
 
-    game.action_go_on_tour(0, TourRig::Full, 4, &mut rng)
+    game.action_go_on_tour(0, TourRig::Full, 4)
         .expect("a well-off, famous band should be able to tour");
+    // §F: booking plays week one; the rest are the calendar's business.
+    finish_activity_in_one_sitting(&mut game);
 
     let report = game.last_tour_report.expect("a tour populates the report");
     assert_eq!(
@@ -311,7 +309,6 @@ fn booking_a_tour_charges_exactly_the_quoted_cost() {
     let mut game = test_game();
     game.band.fame = 90;
     game.player.money = 1_000_000;
-    let mut rng = StdRng::seed_from_u64(200);
 
     let region_index = 0;
     let quote = game
@@ -319,8 +316,9 @@ fn booking_a_tour_charges_exactly_the_quoted_cost() {
         .expect("quote should resolve at fame 90");
 
     let money_before = game.player.money;
-    game.action_go_on_tour(region_index, TourRig::Truck, 3, &mut rng)
+    game.action_go_on_tour(region_index, TourRig::Truck, 3)
         .expect("a well-off, famous band should be able to book this tour");
+    finish_activity_in_one_sitting(&mut game);
 
     let report = game.last_tour_report.expect("tour produces a report");
     let gross_sum: i32 = report.rows.iter().map(|r| r.take as i32).sum();
@@ -340,7 +338,6 @@ fn a_money_losing_tour_can_still_be_booked() {
     let mut game = test_game();
     game.band.fame = 90;
     game.player.money = 1_000_000;
-    let mut rng = StdRng::seed_from_u64(201);
 
     // Smallest-population region + the priciest rig/length combo: cost
     // should swamp the projected gross.
@@ -363,7 +360,7 @@ fn a_money_losing_tour_can_still_be_booked() {
     );
 
     assert!(
-        game.action_go_on_tour(region_index, TourRig::Full, 4, &mut rng)
+        game.action_go_on_tour(region_index, TourRig::Full, 4)
             .is_ok(),
         "booking a money-losing tour must still be allowed (design §A)"
     );

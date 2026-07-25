@@ -2,6 +2,7 @@
 
 use crate::data_loader::GameDataFiles;
 use crate::game::genre::MusicGenre;
+use crate::game::music::ReleaseType;
 use crate::game::timeline::MusicTimeline;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -95,6 +96,18 @@ impl GameWorld {
         for (idx, title, score, label, fame) in releases {
             let band_name = self.bands[idx].name.clone();
 
+            // §E: which board — a signed act's label puts out LPs, an
+            // unsigned act presses a 45. That keeps both format boards fed
+            // in roughly the proportion the scene actually works in, and it
+            // costs no roll: adding one here would shift every seeded world
+            // downstream of it, and the determinism trio and the balance
+            // sweeps both key off that stream staying put.
+            let format = if label.is_some() {
+                ReleaseType::Album
+            } else {
+                ReleaseType::Single
+            };
+
             let mut regions_to_chart = vec![ChartRegion::Local];
             match label
                 .as_deref()
@@ -107,8 +120,14 @@ impl GameWorld {
             let mut positions: Vec<(ChartRegion, usize)> = Vec::new();
             let mut local_position = None;
             for region in regions_to_chart {
-                let position =
-                    self.submit_chart_entry(region, title.clone(), band_name.clone(), false, score);
+                let position = self.submit_chart_entry(
+                    region,
+                    format,
+                    title.clone(),
+                    band_name.clone(),
+                    false,
+                    score,
+                );
                 if let Some(pos) = position {
                     if region == ChartRegion::Local {
                         local_position = Some(pos);
