@@ -23,6 +23,11 @@ fn a_full_season_of_turns_never_panics() {
     }
 }
 
+/// S-TIME (§F): adapted — the action no longer jumps the calendar, it books
+/// `BREAK_WEEKS` of it, and the recovery lands when the band comes back. The
+/// numbers are unchanged; only the number of turns it takes to reach them
+/// is. (`time::a_break_plays_its_weeks_one_at_a_time` pins the calendar
+/// side, where the weekly tick is allowed to move these bars too.)
 #[test]
 fn a_break_is_a_real_break() {
     let mut game = test_game();
@@ -33,11 +38,11 @@ fn a_break_is_a_real_break() {
     let creativity_before = game.player.creativity;
 
     game.action_take_break().expect("a break always works");
+    finish_activity_in_one_sitting(&mut game);
 
     assert_eq!(
-        game.week,
-        week_before + BREAK_WEEKS - 1,
-        "the turn itself adds the final week"
+        game.week, week_before,
+        "no action may move the calendar any more (§F)"
     );
     assert_eq!(game.player.health, 80);
     assert_eq!(game.player.stress, 0, "a break resets stress");

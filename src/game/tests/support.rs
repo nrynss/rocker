@@ -5,8 +5,13 @@ use rand::rngs::StdRng;
 
 use super::*;
 
+/// S-TIME (§F): adapted from `accepting_a_support_tour_pays_and_advances_time`
+/// — the action no longer advances the calendar itself (nothing does but
+/// `process_turn`), it books the weeks. The pay, the wear and the exposure
+/// are unchanged; `time::a_support_tour_plays_its_weeks_one_at_a_time` is
+/// where the calendar half now lives.
 #[test]
-fn accepting_a_support_tour_pays_and_advances_time() {
+fn accepting_a_support_tour_pays_and_books_the_weeks() {
     let mut game = test_game();
     game.band.fame = 10;
     game.player.money = 500;
@@ -20,13 +25,16 @@ fn accepting_a_support_tour_pays_and_advances_time() {
     });
     let week_before = game.week;
 
-    let mut rng = StdRng::seed_from_u64(0);
-    game.action_accept_support_tour(&mut rng)
+    game.action_accept_support_tour()
         .expect("offer should be acceptable");
+    finish_activity_in_one_sitting(&mut game);
 
     assert!(game.pending_support_offer.is_none());
     assert_eq!(game.player.money, 1500);
-    assert_eq!(game.week, week_before + 3);
+    assert_eq!(
+        game.week, week_before,
+        "no action may move the calendar any more (§F)"
+    );
     assert!(game.band.fame >= 16, "fame should include the offered gain");
     // A support run is touring: per-week stress and health wear (§A).
     assert_eq!(game.player.stress, 36, "3 weeks on the road at +12/week");

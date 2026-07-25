@@ -13,7 +13,7 @@ use crate::game::events::EventManager;
 use crate::game::genre;
 use crate::game::music::{DistributionChannel, MarketingCampaignType, Release};
 use crate::game::player::{LifestyleTier, Player};
-use crate::game::shows::TourReport;
+use crate::game::shows::{ShowReport, TourReport};
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{GameWorld, PotentialDealOffer};
 
@@ -51,6 +51,11 @@ pub enum GameAction {
         release_id: u32,
         pressing: Option<usize>,
     },
+    /// Walk out of whatever the band is in the middle of (design §F —
+    /// Abandoning): you keep what already resolved, you forfeit the rest of
+    /// the commitment and the money still on the table. Instant — no week
+    /// consumed, since the week you walk out of is yours to spend.
+    AbandonActivity,
     Quit,
 }
 
@@ -63,6 +68,192 @@ pub struct SupportTourOffer {
     pub pay: u32,
     pub fame_gain: u8,
     pub expires_week: u32,
+}
+
+/// A multi-week commitment the band is in the middle of (design §F — "the
+/// calendar never skips").
+///
+/// Before v0.9 three actions reached into `Game::week` and added weeks
+/// behind `process_turn`'s back, so a four-week tour was four weeks of rent
+/// and zero weeks of everything else. Now `week` moves in exactly one place
+/// and a commitment is *state*: starting one charges its up-front cost and
+/// resolves its first week, every turn after that resolves one more (the
+/// submitted action is ignored), and the last one settles and clears.
+///
+/// **S-MASTER seam.** `Recording { .. }` — a booked studio project (§B/§D)
+/// — is the fourth arm of this enum. Everything it needs is already here:
+/// add the variant, a `resolve_*_week` arm in `actions/studio.rs`, and the
+/// three `match` arms in this file's accessors; `turn.rs` needs no change.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum OngoingActivity {
+    Tour(TourInProgress),
+    SupportTour(SupportTourInProgress),
+    Break(BreakInProgress),
+}
+
+/// A headline tour in progress (design §A + §F). Everything the tour's
+/// economics depend on is resolved once, at booking, by `tour_pot` — the
+/// cost, the pot, the per-show share, the fame and regional-fame gains —
+/// and frozen here. The split spreads those numbers over the weeks; it
+/// never recomputes them, which is what keeps §F economically neutral.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TourInProgress {
+    /// Index into `get_sorted_regions()`, kept so the turn can hand the UI
+    /// back the booking that started this.
+    pub region_index: usize,
+    pub rig: TourRig,
+    pub region_name: String,
+    pub country_key: String,
+    pub weeks_total: u8,
+    /// Weeks already resolved. `weeks_done == weeks_total` never persists:
+    /// the week that reaches the total also settles and clears the tour.
+    pub weeks_done: u8,
+    /// The week the bus left. Keys the activity RNG stream (`rng.rs`), so
+    /// where the tour's nights fall on the calendar can't change what they
+    /// roll.
+    pub booking_week: u32,
+
+    // --- the resolved pot: `tour_pot`'s output, frozen at booking ---
+    pub cost: i32,
+    pub shows_total: u32,
+    pub synth_capacity: u32,
+    /// `total_potential_gross / shows_total` — the centre of every night's
+    /// take. Frozen so the money a tour pays out cannot drift with the
+    /// world while the tour is running.
+    pub per_show_share: f32,
+    pub base_fill_ratio: f32,
+    pub fame_gain: u8,
+    pub regional_fame_key: String,
+    pub regional_fame_current: u8,
+    pub regional_fame_gain_base: u16,
+
+    // --- the road: what the tour carries from night to night ---
+    pub era_genre_modifier: f32,
+    /// The band's condition when the bus left. A tour's receptions are
+    /// judged on the shape the band was in at the gate: the rent, a label
+    /// memo and a chart slide back home don't change how Tuesday's set went
+    /// down. Freezing it is also what makes the split *provably* neutral —
+    /// these are the exact numbers the pre-split whole-tour loop read, which
+    /// it could take for granted because no week ever passed underneath it.
+    pub condition_stress: u8,
+    pub condition_health: u8,
+    /// Creativity as the road sees it: seeded from the player at booking and
+    /// moved only by what happens on stage (§B — great and transcendent
+    /// nights), exactly as the pre-split loop's live read did.
+    pub road_creativity: u8,
+    /// Word of mouth, carried across the week boundary (§B — Momentum).
+    /// This is the reason the tour's state has to live here at all.
+    pub momentum: f32,
+    /// Nights resolved so far, in order — the tour report under construction.
+    pub rows: Vec<ShowReport>,
+}
+
+/// A support slot in progress (design §F). The guarantee is banked at
+/// acceptance, as it always was; the wear and the exposure spread over the
+/// weeks actually spent on someone else's stage.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SupportTourInProgress {
+    pub host_band: String,
+    pub weeks_total: u8,
+    pub weeks_done: u8,
+    /// Keys the activity RNG stream for the settlement roll (`rng.rs`).
+    pub start_week: u32,
+    pub pay: u32,
+    pub fame_gain: u8,
+}
+
+/// Time off (design §F). The recovery lands when the band comes back, not
+/// when it leaves — otherwise a break could be started, banked, and walked
+/// out of the following week for a full recharge in one.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BreakInProgress {
+    pub weeks_total: u8,
+    pub weeks_done: u8,
+}
+
+/// The activity screen's read-only surface (§H). `allow(dead_code)`
+/// because S-UI wires it up in wave 3 and this task must not touch the UI
+/// files: every method here exists to answer one question the screen asks.
+#[allow(dead_code)]
+impl OngoingActivity {
+    /// Total weeks the commitment runs for.
+    pub fn weeks_total(&self) -> u8 {
+        match self {
+            OngoingActivity::Tour(tour) => tour.weeks_total,
+            OngoingActivity::SupportTour(support) => support.weeks_total,
+            OngoingActivity::Break(rest) => rest.weeks_total,
+        }
+    }
+
+    /// Weeks already resolved (0 before the first one settles).
+    pub fn weeks_done(&self) -> u8 {
+        match self {
+            OngoingActivity::Tour(tour) => tour.weeks_done,
+            OngoingActivity::SupportTour(support) => support.weeks_done,
+            OngoingActivity::Break(rest) => rest.weeks_done,
+        }
+    }
+
+    /// The week currently being played, 1-based — the *n* of "week n of m".
+    pub fn week_number(&self) -> u8 {
+        self.weeks_done().saturating_add(1).min(self.weeks_total())
+    }
+
+    /// Whether the week about to resolve is the one that settles it.
+    pub fn is_final_week(&self) -> bool {
+        self.weeks_done().saturating_add(1) >= self.weeks_total()
+    }
+
+    /// Short kind name for a header ("Tour", "Break").
+    pub fn label(&self) -> &'static str {
+        match self {
+            OngoingActivity::Tour(_) => "Tour",
+            OngoingActivity::SupportTour(_) => "Support tour",
+            OngoingActivity::Break(_) => "Break",
+        }
+    }
+
+    /// One line naming the specific commitment, for the activity screen
+    /// (§H): "Van tour of California", "Opening for The Bright Lights".
+    pub fn headline(&self) -> String {
+        match self {
+            OngoingActivity::Tour(tour) => {
+                format!("{} of {}", tour.rig.label(), tour.region_name)
+            }
+            OngoingActivity::SupportTour(support) => {
+                format!("Opening for {}", support.host_band)
+            }
+            OngoingActivity::Break(_) => "Off the grid".to_string(),
+        }
+    }
+
+    /// "week 2 of 4" — the progress line the activity screen needs (§H).
+    pub fn progress(&self) -> String {
+        format!("week {} of {}", self.week_number(), self.weeks_total())
+    }
+
+    /// The nights resolved so far, for a tour in progress; empty otherwise.
+    /// Lets the activity screen show the report as it is being written.
+    pub fn rows_so_far(&self) -> &[ShowReport] {
+        match self {
+            OngoingActivity::Tour(tour) => &tour.rows,
+            OngoingActivity::SupportTour(_) | OngoingActivity::Break(_) => &[],
+        }
+    }
+
+    /// The action that started this, replayed for the turn machinery: fame
+    /// visibility (§C) and the lifestyle streaks read the *action*, and a
+    /// week spent on the road is a week on the road whether the player
+    /// pressed the key that week or four weeks ago.
+    pub(super) fn as_action(&self) -> GameAction {
+        match self {
+            OngoingActivity::Tour(tour) => {
+                GameAction::GoOnTour(tour.region_index, tour.rig, tour.weeks_total)
+            }
+            OngoingActivity::SupportTour(_) => GameAction::AcceptSupportTour,
+            OngoingActivity::Break(_) => GameAction::TakeBreak,
+        }
+    }
 }
 
 /// The one deliberate use of ambient entropy: choosing a world seed when
@@ -141,6 +332,15 @@ pub struct Game {
     /// save's first pass after load runs normally.
     #[serde(default)]
     pub(super) last_sales_pass_week: Option<u32>,
+    /// The multi-week commitment the band is in the middle of, if any
+    /// (design §F). While this is `Some`, `process_turn` ignores the
+    /// submitted action and resolves one more week of it.
+    /// `#[serde(default)]` so every pre-0.9 save loads with an empty
+    /// calendar — and a save taken mid-tour resumes into the same week it
+    /// was taken in, since the activity carries its own progress and keys
+    /// its own RNG.
+    #[serde(default)]
+    pub ongoing_activity: Option<OngoingActivity>,
 }
 
 impl Game {
@@ -184,7 +384,24 @@ impl Game {
             rockstar_achieved: false,
             current_distribution_channel: DistributionChannel::default(),
             last_sales_pass_week: None,
+            ongoing_activity: None,
         })
+    }
+
+    /// The commitment in progress, for the activity screen (§H). `None`
+    /// means the band is free and the ordinary action menu applies.
+    /// `allow(dead_code)`: S-UI is the caller, and wires up in wave 3.
+    #[allow(dead_code)]
+    pub fn ongoing_activity(&self) -> Option<&OngoingActivity> {
+        self.ongoing_activity.as_ref()
+    }
+
+    /// Whether the band is committed this week — the one question the UI has
+    /// to ask before drawing a menu (§F/§H). A busy band gets "continue" and
+    /// "abandon", not a list of choices.
+    #[allow(dead_code)]
+    pub fn is_busy(&self) -> bool {
+        self.ongoing_activity.is_some()
     }
 
     pub(super) fn log(&mut self, message: impl Into<String>) {

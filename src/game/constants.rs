@@ -1194,3 +1194,14 @@ pub(super) const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3;
 // Setup rolls (bandmate names) use this reserved pre-game week so they
 // never replay week 1's action stream.
 pub(super) const SETUP_STREAM_WEEK: u64 = 0;
+// ACTIVITY_STREAM_SALT keeps a multi-week commitment's own rolls (design
+// v0.9 §F) off both other streams. Since the weekly world tick now runs
+// *between* a tour's groups of shows, a commitment that shared the action
+// stream would have its twentieth night decided by how busy the world was
+// on week three (e's fractional bits: arbitrary, fixed forever).
+pub(super) const ACTIVITY_STREAM_SALT: u64 = 0xB7E1_5162_8AED_2A6A;
+// Stride between two booking weeks' activity keys. Activity rolls are keyed
+// by (booking week, step index) rather than by stream position — see
+// `rng::activity_step_rng` — so the weeks must be spread far enough apart
+// that week n's step 6 can never land on week n+1's step 1. Odd and large.
+pub(super) const ACTIVITY_WEEK_STRIDE: u64 = 0x9E37_79B9_7F4A_7C15;

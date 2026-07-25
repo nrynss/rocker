@@ -29,9 +29,21 @@ mod shows;
 mod smoke;
 mod studio;
 mod support;
+mod time;
 
 fn test_game() -> Game {
     Game::new().expect("data files present")
+}
+
+/// Resolve a commitment to the end with no weekly tick in between (§F).
+/// This is the pre-0.9 "the whole thing happens inside the action" path,
+/// kept available for the tests that exercise `actions/live.rs` directly
+/// rather than through `process_turn` — and it is exactly the reference the
+/// economic-equivalence test in `time.rs` measures the spread run against.
+fn finish_activity_in_one_sitting(game: &mut Game) {
+    while game.ongoing_activity.is_some() {
+        game.resolve_activity_week();
+    }
 }
 
 fn test_release(id: u32, release_type: ReleaseType) -> Release {

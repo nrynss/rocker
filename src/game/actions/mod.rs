@@ -10,6 +10,9 @@ use rand::Rng;
 
 use super::*;
 
+/// How a tour left the calendar (§F) — `turn.rs` names it when an emergency
+/// forces the walk-out.
+pub(in crate::game) use live::TourEnding;
 pub use live::{TourQuote, TourRig};
 
 impl Game {
@@ -26,13 +29,13 @@ impl Game {
             GameAction::RecordAlbum { pressing } => self.action_record_album(pressing, rng),
             GameAction::Gig(venue_index) => self.action_play_gig(venue_index, rng),
             GameAction::GoOnTour(region_index, rig, weeks) => {
-                self.action_go_on_tour(region_index, rig, weeks, rng)
+                self.action_go_on_tour(region_index, rig, weeks)
             }
             GameAction::TakeBreak => self.action_take_break(),
             GameAction::VisitDoctor => self.action_visit_doctor(),
             GameAction::AcceptDeal(index) => self.action_accept_deal(index),
             GameAction::RejectDeal(index) => self.action_reject_deal(index, rng),
-            GameAction::AcceptSupportTour => self.action_accept_support_tour(rng),
+            GameAction::AcceptSupportTour => self.action_accept_support_tour(),
             GameAction::DeclineSupportTour => self.action_decline_support_tour(),
             GameAction::StartMarketingCampaign(release_id, campaign_type) => {
                 self.action_start_marketing_campaign(release_id, campaign_type)
@@ -42,6 +45,7 @@ impl Game {
                 release_id,
                 pressing,
             } => self.action_re_press(release_id, pressing),
+            GameAction::AbandonActivity => self.action_abandon_activity(),
             GameAction::Quit => {
                 self.game_over = true;
                 Ok(())

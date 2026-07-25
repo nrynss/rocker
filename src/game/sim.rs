@@ -94,6 +94,8 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         rockstar_achieved: false,
         current_distribution_channel: music::DistributionChannel::default(),
         last_sales_pass_week: None,
+        // S-TIME (§F): nobody starts a career mid-tour.
+        ongoing_activity: None,
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
