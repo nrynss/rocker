@@ -101,5 +101,28 @@ needs in its handoff notes and the coordinator integrates.
     draw from a stream that doesn't interleave with the weekly world tick.
     `finish_activity_in_one_sitting` (in `tests/mod.rs`) is the reference
     path the economic-equivalence test measures the spread run against.
-  - Known gap: the balance sweeps were the step all three agents were cut
-    off before. Run and reconciled by the coordinator after the merge.
+  - The balance sweeps were the step all three agents were cut off before.
+    Run and reconciled after the merge — see the next note.
+- 2026-07-25 **Sim lab reconciled with §F.** Three breakages, each a real
+  consequence of the calendar no longer skipping, not a flaw in the sweeps:
+  1. Measurement sweeps booked a tour with one `process_turn` and read
+     `last_tour_report` — which since §F is one week in and not yet written.
+     They now play the commitment out (`play_out_the_commitment`).
+  2. road-dog died **12/60**: a commitment owns the turn, so `self_care`
+     submitted a doctor/break every week of a tour and had it discarded
+     every week. `AbandonActivity` is the one action a commitment yields
+     to. `plan_biggest_tour` also refuses a length whose wear would land
+     the band under the health floor.
+  3. Fixing (2) indiscriminately then killed homebody **28/60** and
+     studio-rat **19/60** — a break *is* the treatment, so abandoning one
+     cancels the cure and thrashes. Only the road gets walked out of.
+  - After: **deaths 0/60 for every bot**. Bankruptcies rise for the two
+    rest-heavy bots (studio-rat 8 → 15, homebody 4 → 10) — that is §F
+    working as intended: rent now falls due every week a break or tour
+    passes, where a multi-week jump charged it once.
+  - **For S-SIM (Wave 4):** the cross-bot money picture has moved and is
+    *not* yet re-validated — label-loyalist $18.63M, road-dog $16.06M,
+    gig-grinder $4.67M, balanced-indie $3.66M, indie-lifer $3.34M,
+    homebody $305k, studio-rat $488. The loyalist is still top and the
+    hard assertions pass, but §D and §G aren't in yet; re-tune at the end
+    of the cycle, not now.
