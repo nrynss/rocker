@@ -254,11 +254,20 @@ pub(super) fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
     ];
     // The reigning #1 record on the Local board — in your colours when
     // it's yours, and absent entirely while the charts are still empty.
-    if let Some(hit) = game
-        .world
-        .regional_charts
-        .get(&crate::game::world::ChartRegion::Local)
-        .and_then(|entries| entries.first())
+    // §E split Local in two; the panel has room for one line, so it shows
+    // the bigger of the two #1s (a chart-topping album usually outsells a
+    // chart-topping single, and when it doesn't, the single is the story).
+    if let Some(hit) = [
+        crate::game::music::ReleaseType::Single,
+        crate::game::music::ReleaseType::Album,
+    ]
+    .into_iter()
+    .filter_map(|format| {
+        game.world
+            .chart_board(crate::game::world::ChartRegion::Local, format)
+            .first()
+    })
+    .max_by_key(|entry| entry.score)
     {
         let text = format!("No. 1      '{}' — {}", hit.title, hit.band_name);
         lines.push(if hit.is_player {

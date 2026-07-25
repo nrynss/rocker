@@ -66,6 +66,9 @@ impl App {
             MenuKind::Charts => {
                 self.screen = Screen::Charts {
                     region: crate::game::world::ChartRegion::Local,
+                    // Albums open first: it's the board a career is measured
+                    // on, and it's the one a pre-0.9 save's history lives on.
+                    format: crate::game::music::ReleaseType::Album,
                     scroll: 0,
                 }
             }
@@ -160,7 +163,12 @@ impl App {
     }
 
     pub(crate) fn handle_charts_key(&mut self, key: KeyEvent) {
-        let Screen::Charts { region, scroll } = self.screen else {
+        let Screen::Charts {
+            region,
+            format,
+            scroll,
+        } = self.screen
+        else {
             return;
         };
         match key.code {
@@ -169,26 +177,49 @@ impl App {
             KeyCode::Left | KeyCode::Char('h') => {
                 self.screen = Screen::Charts {
                     region: region.prev_tab(),
+                    format,
                     scroll: 0,
                 };
             }
             KeyCode::Right | KeyCode::Char('l') => {
                 self.screen = Screen::Charts {
                     region: region.next_tab(),
+                    format,
+                    scroll: 0,
+                };
+            }
+            // Tab flips the format axis (§E). Two boards, so one key both
+            // ways — the same "one key, the other view" shape the deals
+            // modal's detail toggle uses.
+            KeyCode::Tab | KeyCode::BackTab => {
+                self.screen = Screen::Charts {
+                    region,
+                    format: match format {
+                        crate::game::music::ReleaseType::Single => {
+                            crate::game::music::ReleaseType::Album
+                        }
+                        crate::game::music::ReleaseType::Album => {
+                            crate::game::music::ReleaseType::Single
+                        }
+                    },
+                    // A different board is a different list; start at its top
+                    // rather than stranding the view past its end.
                     scroll: 0,
                 };
             }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.screen = Screen::Charts {
                     region,
+                    format,
                     scroll: scroll.saturating_sub(1),
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                let count = self.charts_region_entries(region).len();
+                let count = self.charts_region_entries(region, format).len();
                 let max_scroll = count.saturating_sub(1);
                 self.screen = Screen::Charts {
                     region,
+                    format,
                     scroll: (scroll + 1).min(max_scroll),
                 };
             }
