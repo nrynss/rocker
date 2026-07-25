@@ -481,10 +481,28 @@ pub(super) const TOUR_RIG_FAME_GATE: [u8; 4] = [0, 25, 55, 75];
 /// L-SCALE (§B): ×3 to the era-real scale (was [120, 400, 1_200, 3_000]), in
 /// lockstep with the ×3 on `TOUR_GROSS_COEFFICIENT` — box office and rig cost
 /// both triple, so every rig's profit/loss sign and ordering are preserved.
-pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 3_600, 9_000];
+///
+/// T-RIG (tour-economics pass): the top two trimmed (3_600 → 2_800,
+/// 9_000 → 6_500). This is the other half of re-seating the ladder's
+/// crossovers, and it is what lets `TOUR_GROSS_COEFFICIENT` come *down* (see
+/// there) without pushing full production back out of reach: the crossover is
+/// `Δcost / Δcapacity`, so trimming the numerator buys the same headroom a
+/// bigger pot would. Nothing below the truck moves — the small act's economy
+/// is untouched.
+pub(super) const TOUR_RIG_COST_PER_WEEK: [u32; 4] = [360, 1_200, 2_800, 6_500];
 
 /// Venue-capacity multiplier: a bigger rig books bigger rooms (design §A).
-pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
+///
+/// T-RIG (tour-economics pass): the top two rigs widened (1.3 → 1.4,
+/// 1.7 → 2.0). The rig ladder was lopsided — cost spread van→full is 25×
+/// on this table's cost twin, amplified to 47× by the `markets.json`
+/// travel/equipment modifiers, while the gross spread was only 2.1×. A rig
+/// is worth its upgrade when `pot_base × Δcapacity > Δcost`, so at 1.7 the
+/// truck→full step needed a territory pot of ~$81k against a Sydney maximum
+/// of ~$45k: **full production was dominated at every reachable game state**,
+/// not merely unprofitable. Widening the top of the ladder puts that
+/// crossover back inside the map — see `TOUR_RIG_COST_PER_WEEK`. [tune]
+pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.4, 2.0];
 
 /// The tour box-office coefficient (M7 §F): scales the whole-tour gross pot
 /// (`base_gross = sqrt(pop) × econ × audience × this`). Raised 0.06 → 0.15
@@ -497,7 +515,39 @@ pub(super) const TOUR_RIG_CAPACITY_MULT: [f32; 4] = [0.8, 1.0, 1.3, 1.7];
 /// so touring's profitability ratios (§F: van profitable, heavy rigs a
 /// capacity bet) hold while magnitude triples. Missing it would leave touring
 /// bots (road-dog) flat against the ×3 record economy.
-pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.45;
+///
+/// T-LEN (tour-economics pass): 0.45 → 0.30. Giving tour length a real gross
+/// term (`TOUR_GROSS_WEEKS_EXPONENT`) multiplied the box office of the longest
+/// bookings by ~2.5×, and the sim lab caught what that did to a career: the
+/// road-dog bot's 15-year median went $4.26M → $18.99M and **passed the
+/// signed superstar's $16.75M**, inverting the cycle's thesis that a label's
+/// worldwide reach is the top of the economy. The bug had been suppressing an
+/// entire playstyle; un-suppressing it must not crown it. This pulls the whole
+/// pot back uniformly — every rig, length, and territory in the same
+/// proportion — so it changes magnitude, not any of the orderings the pass
+/// exists to fix. Paired with the trim to the top two `TOUR_RIG_COST_PER_WEEK`
+/// entries so the rig-ladder crossovers stay inside reachable state. [tune]
+pub(super) const TOUR_GROSS_COEFFICIENT: f32 = 0.30;
+
+/// How the tour box office grows with tour length, via `weeks.powf(this)`
+/// normalized at one week (design §A — "a long tour is a bigger investment,
+/// not a strictly better one").
+///
+/// T-LEN (tour-economics pass): before this, `total_potential_gross` had **no
+/// weeks term at all** while `shows_total = weeks × SHOWS_PER_TOUR_WEEK` and
+/// the per-show take was `pot / shows_total` — so twenty nights grossed
+/// exactly what five did, each extra week diluting the per-show take against a
+/// cost that scales linearly. Every rig lost money by touring longer, which is
+/// not "a bigger investment": it is a strictly dominated choice (measured at
+/// fame 80 / regional fame 40, full production went +$17,854 at one week to
+/// −$50,948 at four, on an unchanged quoted gross of $39,850).
+///
+/// At 0.65 the pot grows 1wk ×1.0, 2wk ×1.57, 3wk ×2.05, 4wk ×2.46 against a
+/// cost that grows ×1/×2/×3/×4 — a territory saturates, so each further week
+/// sells less than the one before, and the design's trade-off survives with
+/// its sign the right way round. Deliberately below `TOUR_FAME_WEEKS_EXPONENT`
+/// (0.7): length is still bought primarily for fame, not for money. [tune]
+pub(super) const TOUR_GROSS_WEEKS_EXPONENT: f32 = 0.65;
 
 /// Wear per tour week — health lost, replacing the flat
 /// `TOUR_HEALTH_COST_PER_WEEK` for the headline tour (support tours keep the
@@ -526,6 +576,91 @@ pub(super) const TOUR_FAME_WEEKS_EXPONENT: f32 = 0.7;
 /// `10 + rng(0..=5)` becomes this base plus the same rng spread. [tune]
 pub(super) const TOUR_REGIONAL_FAME_GAIN_BASE: f32 = 7.0;
 pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
+
+// ============================================================================
+// S-RECORD: the five recording studios + what a format earns
+// (docs/DESIGN-v0.9-studio-cycle.md §A and §C). Same discipline as the tour
+// rigs above: fame gates which rooms are selectable and nothing else. Same
+// studio + same songs = same quote, at any fame.
+// ============================================================================
+
+/// The five studios (`RecordingStudio`, `game/studios.rs`), in ascending
+/// scale — index-aligned with every `STUDIO_*` table below.
+///
+/// The bottom two are ungated on purpose: a band with no name at all must
+/// still be able to make a record, and the home 4-track is the format's floor,
+/// not a punishment. [tune]
+pub(super) const STUDIO_FAME_GATE: [u8; 5] = [0, 0, 20, 45, 70];
+
+/// Added to release quality inside `calculate_release_quality`, before its
+/// clamp (design §C). An additive shift, deliberately not a multiplier: it
+/// moves the whole distribution, so a great band in a demo room still beats a
+/// poor band at the world-class room, and the top room can't turn weak songs
+/// into a hit on its own.
+///
+/// Index 1 (the local demo room) is 0 by design, not by tuning — it is the
+/// neutral baseline that reproduces the pre-cycle game for a default-picking
+/// player. Everything else is measured against it. [tune]
+pub(super) const STUDIO_QUALITY_BONUS: [i8; 5] = [-8, 0, 6, 12, 20];
+
+/// Studio time per song, before the era's `recording_cost_modifier` (design
+/// §C table). This is what replaces the retired flat
+/// `SINGLE_RECORDING_COST` / `ALBUM_RECORDING_BASE_COST` pair: a 14-track
+/// album now costs what fourteen tracks cost, and a 2-song single is
+/// genuinely cheap.
+///
+/// The baseline (index 1) is set so the default booking lands near the old
+/// bill rather than on it: a 2-song single is $440 against the old flat $300,
+/// a 10-track album $2,200 against the old flat $3,000. Per-song pricing
+/// cannot reproduce two flat numbers at both ends at once — the album was
+/// priced as though it were ten songs at $300 each — so §C's "reproduces
+/// today's numbers" is honoured at the album end, where the money actually
+/// is, and a single gets slightly dearer to record and (via
+/// `SINGLE_SALES_FACTOR`) much cheaper to earn from. [tune]
+pub(super) const STUDIO_RATE_PER_SONG: [u32; 5] = [60, 220, 650, 1_600, 4_000];
+
+/// Calendar weeks each song takes in each room (design §C table). A better
+/// room costs time as well as money, which is what stops the top of the ladder
+/// from being a pure money check: at these rates a 2-song single in the demo
+/// room is one week, a 10-track album at a major-city studio six, and a
+/// 14-track album at the world-class room twelve.
+///
+/// Quoted from S-RECORD, *spent* from S-TIME (design §F) — until that lands
+/// these weeks are a correct number the picker shows, not a commitment the
+/// calendar enforces. [tune]
+pub(super) const STUDIO_WEEKS_PER_SONG: [f32; 5] = [0.20, 0.30, 0.45, 0.60, 0.80];
+
+/// Ceiling on a booking's length (design §B). Fourteen songs at the top room
+/// is already 11.2 weeks, so this only ever bites on a combination that
+/// doesn't exist yet — it is here so a later cycle's slower room or longer
+/// format can't quietly book a band out of a year. [tune]
+pub(super) const RECORDING_MAX_WEEKS: u8 = 12;
+
+/// What a single earns against an album (design §A). Applied once, in
+/// `calculate_release_sales_score`, so it scales the initial sales score and —
+/// because the catalogue tail is computed from that stored score — the tail
+/// with it.
+///
+/// A single is the cheap, fast, low-ceiling release: the way you buy chart
+/// presence and fame between albums, not the way you get rich. Before this it
+/// sold exactly what an album of the same quality sold, which made the album
+/// strictly the worse deal per dollar of studio time.
+///
+/// Raised 0.35 → 0.55 after the sim lab caught the first value making a
+/// garage-run single **unrecoupable**. §A moved two things at once: a single
+/// went from one song to a two-song minimum *and* its income was cut, so its
+/// revenue per song fell by roughly 5.7× while its bill doubled. The result
+/// wasn't a low-ceiling release, it was a release that couldn't pay for its
+/// own pressing — the studio-rat shipped 53 of them across 346 weeks with its
+/// bank flat at ~$100, banked 343 unreleased songs it could never afford to
+/// make an album out of, and went broke in 36 of 60 careers.
+///
+/// That is the same defect class as the full-production tour rig the
+/// tour-economics pass fixed: a choice the player can never come out ahead on
+/// is not a trade-off. At 0.55 a two-song single still earns 45% less than an
+/// album for 20% of its tracklist — decisively the cheap, fast, low-ceiling
+/// option §A asks for — while clearing its own bill. [tune]
+pub(super) const SINGLE_SALES_FACTOR: f32 = 0.55;
 
 // ============================================================================
 // M5: Label recoupment + label auto-repress
@@ -1144,3 +1279,14 @@ pub(super) const ACTION_STREAM_SALT: u64 = 0x243F_6A88_85A3_08D3;
 // Setup rolls (bandmate names) use this reserved pre-game week so they
 // never replay week 1's action stream.
 pub(super) const SETUP_STREAM_WEEK: u64 = 0;
+// ACTIVITY_STREAM_SALT keeps a multi-week commitment's own rolls (design
+// v0.9 §F) off both other streams. Since the weekly world tick now runs
+// *between* a tour's groups of shows, a commitment that shared the action
+// stream would have its twentieth night decided by how busy the world was
+// on week three (e's fractional bits: arbitrary, fixed forever).
+pub(super) const ACTIVITY_STREAM_SALT: u64 = 0xB7E1_5162_8AED_2A6A;
+// Stride between two booking weeks' activity keys. Activity rolls are keyed
+// by (booking week, step index) rather than by stream position — see
+// `rng::activity_step_rng` — so the weeks must be spread far enough apart
+// that week n's step 6 can never land on week n+1's step 1. Odd and large.
+pub(super) const ACTIVITY_WEEK_STRIDE: u64 = 0x9E37_79B9_7F4A_7C15;

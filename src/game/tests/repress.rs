@@ -204,21 +204,24 @@ fn signed_acts_never_pay_a_distribution_fee() {
 /// not a retroactive global setting).
 #[test]
 fn distribution_fee_is_charged_at_release_and_stamped_on_the_release() {
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
-
     let mut game = test_game();
     game.band.record_deal = None;
     game.band.fame = 50; // clears every gate
+    // S-RECORD (§A): a single is two songs now.
     game.band.unreleased_songs.push(music::Song {
         id: 0,
         name: "Track".to_string(),
         songwriting_quality: 50,
     });
+    game.band.unreleased_songs.push(music::Song {
+        id: 1,
+        name: "Flip".to_string(),
+        songwriting_quality: 50,
+    });
     game.current_distribution_channel = DistributionChannel::Regional;
     game.player.money = 100_000;
 
-    let recording_cost = game.recording_cost(&ReleaseType::Single);
+    let recording_cost = game.recording_cost(TEST_STUDIO, MIN_SINGLE_SONGS);
     let (_, pressing_cost) = game
         .plan_pressing(&ReleaseType::Single, Some(0))
         .expect("tier 0 exists");
@@ -226,14 +229,19 @@ fn distribution_fee_is_charged_at_release_and_stamped_on_the_release() {
     assert!(fee > 0, "Regional carries a real fee");
     let money_before = game.player.money;
 
-    let mut rng = StdRng::seed_from_u64(0);
-    game.action_record_single(Some(0), &mut rng)
-        .expect("affordable recording");
+    record_and_release(
+        &mut game,
+        ReleaseType::Single,
+        MIN_SINGLE_SONGS,
+        TEST_STUDIO,
+        Some(0),
+    )
+    .expect("affordable recording");
 
     assert_eq!(
         game.player.money,
         money_before - (recording_cost + pressing_cost + fee),
-        "the distribution fee is charged alongside studio and pressing costs"
+        "S-MASTER (§D): the studio time is charged at booking and the pressing          and distribution at release, but over the whole pipeline the band          still pays exactly the three of them"
     );
     let release = game
         .just_released_music
@@ -250,22 +258,30 @@ fn distribution_fee_is_charged_at_release_and_stamped_on_the_release() {
 /// channel-blind (design §E-3).
 #[test]
 fn signed_releases_never_stamp_a_distribution_channel() {
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
-
     let mut game = test_game();
     game.band.fame = 50;
     game.band.record_deal = Some(test_deal(70, 0.12));
+    // S-RECORD (§A): a single is two songs now.
     game.band.unreleased_songs.push(music::Song {
         id: 0,
         name: "Track".to_string(),
         songwriting_quality: 50,
     });
+    game.band.unreleased_songs.push(music::Song {
+        id: 1,
+        name: "Flip".to_string(),
+        songwriting_quality: 50,
+    });
     game.player.money = 100_000;
 
-    let mut rng = StdRng::seed_from_u64(0);
-    game.action_record_single(None, &mut rng)
-        .expect("the label covers a signed release");
+    record_and_release(
+        &mut game,
+        ReleaseType::Single,
+        MIN_SINGLE_SONGS,
+        TEST_STUDIO,
+        None,
+    )
+    .expect("the label covers a signed release");
 
     let release = game
         .just_released_music

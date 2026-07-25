@@ -16,8 +16,8 @@ use super::super::*;
 /// gates which rigs are selectable (`fame_gate`) and how many seats a tour
 /// fills. Same region + rig + length quotes identically at any fame.
 ///
-/// Not persisted (tour actions aren't saved mid-resolution), but `GameAction`
-/// derives `Serialize`/`Deserialize` as a whole, so this must too.
+/// Persisted since v0.9 §F: a tour is now `OngoingActivity::Tour` state that
+/// survives a save taken mid-run, and `GameAction` carries it too.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TourRig {
     Van,
@@ -102,6 +102,25 @@ pub struct TourQuote {
     pub fame_gain: u8,
     pub regional_fame_gain_min: u8,
     pub regional_fame_gain_max: u8,
+    /// Regional fame already banked in this territory. It is the dominant
+    /// term in the gross pot (`audience = fame/3 + regional_fame`), so it is
+    /// the single number that explains why the same rig loses money on a
+    /// first visit and prints money on a return — the picker shows it.
+    pub regional_fame_current: u8,
+}
+
+impl TourQuote {
+    /// Projected net at the pessimistic and optimistic ends of the gross
+    /// range. §A allows booking a money-losing tour — it buys fame — but
+    /// insists it be "a *decision*, never a surprise", and a cost beside a
+    /// gross range is arithmetic the player shouldn't have to do at the
+    /// picker.
+    pub fn projected_net(&self) -> (i32, i32) {
+        (
+            self.gross_low as i32 - self.cost,
+            self.gross_high as i32 - self.cost,
+        )
+    }
 }
 
 /// The deterministic (no-rng) core of a tour booking: everything the quote
@@ -349,6 +368,12 @@ impl Game {
                 venue_name, verdict.label(), attendance, capacity, earnings
             ));
         }
+
+        // §G tap point (S-EVENTS): the night happened, so this week's
+        // incident tap is the stage's. Draws no rng, so the show above rolls
+        // exactly what it rolled before. One line; the rest lives in
+        // `events_apply.rs`.
+        self.note_gig_week();
         Ok(())
     }
 
@@ -455,11 +480,21 @@ impl Game {
         // apart from the capacity multiplier"). The multiplier belongs on
         // the pot, not just the reported attendance: the per-show take is
         // this pot / shows, so without it a $8,000/wk full-production rig
-        // would gross exactly what a $150/wk van does. A longer tour still
-        // spreads the same pot across more shows — length buys fame, rig
-        // buys gross.
+        // would gross exactly what a $150/wk van does.
+        //
+        // T-LEN: ...and the pot scales with how many nights you actually
+        // play, sublinearly (`TOUR_GROSS_WEEKS_EXPONENT`, normalized so a
+        // one-week run keeps the coefficient's calibrated value). The pot
+        // used to be flat in `weeks` while `shows_total` and the cost both
+        // grew with it, so a longer tour split the same money across more
+        // nights *and* paid more for the privilege — length was a strict
+        // loss at every rig, not the trade-off §A describes. Now a fourth
+        // week still earns less than the first (the territory saturates)
+        // but it earns something.
+        let weeks_gross_scale = (weeks as f32).powf(TOUR_GROSS_WEEKS_EXPONENT);
         let total_potential_gross =
-            (base_gross * era_modifier * market_modifier * rig.capacity_mult()).max(0.0);
+            (base_gross * era_modifier * market_modifier * rig.capacity_mult() * weeks_gross_scale)
+                .max(0.0);
 
         // Same multiplier on the synthesized venue so reported attendance
         // stays consistent with the bigger rooms the rig is playing (§A).
@@ -524,16 +559,29 @@ impl Game {
             regional_fame_gain_max: (pot.regional_fame_gain_base
                 + TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD as u16)
                 .min(u8::MAX as u16) as u8,
+            regional_fame_current: pot.regional_fame_current,
         })
     }
 
+    /// Book a tour (design §A + §F). Everything the tour's economics depend
+    /// on is resolved here, once, by `tour_pot`, and frozen into the
+    /// `OngoingActivity` — the cost is charged up front, and the first of
+    /// the tour's weeks resolves immediately. The remaining weeks are
+    /// resolved one per turn by `turn.rs`; this method never touches
+    /// `Game::week`.
     pub(in crate::game) fn action_go_on_tour(
         &mut self,
         region_index: usize,
         rig: TourRig,
         weeks: u8,
-        rng: &mut impl Rng,
     ) -> Result<(), String> {
+        if let Some(activity) = &self.ongoing_activity {
+            return Err(format!(
+                "You're already committed — {} ({}).",
+                activity.headline(),
+                activity.progress()
+            ));
+        }
         if self.player.stress >= TOUR_STRESS_GUARD {
             return Err("You're too stressed out to go on tour!".to_string());
         }
@@ -550,30 +598,81 @@ impl Game {
             ));
         }
 
-        let region_name = pot.region_name.clone();
+        // §B: the bill is due at booking, in full — you cannot start a run
+        // you can't finish. (Walking out later forfeits it; see §F.)
+        self.player.spend_money(pot.cost);
+
         let era_genre_modifier = self
             .data_files
             .era_genre_modifier(self.timeline.get_current_year(), self.band.genre.aliases());
 
-        let base_fill_ratio =
-            ((self.band.fame as f32 + 10.0) / (pot.fame_req as f32 + 10.0)).min(1.0);
+        let tour = TourInProgress {
+            region_index,
+            rig,
+            region_name: pot.region_name.clone(),
+            country_key: pot.country_key.clone(),
+            weeks_total: weeks,
+            weeks_done: 0,
+            booking_week: self.week,
+            cost: pot.cost,
+            shows_total: pot.shows_total,
+            synth_capacity: pot.synth_capacity,
+            per_show_share: pot.total_potential_gross / pot.shows_total as f32,
+            base_fill_ratio: ((self.band.fame as f32 + 10.0) / (pot.fame_req as f32 + 10.0))
+                .min(1.0),
+            fame_gain: pot.fame_gain,
+            regional_fame_key: pot.regional_fame_key.clone(),
+            regional_fame_current: pot.regional_fame_current,
+            regional_fame_gain_base: pot.regional_fame_gain_base,
+            era_genre_modifier,
+            condition_stress: self.player.stress,
+            condition_health: self.player.health,
+            road_creativity: self.player.creativity,
+            momentum: MOMENTUM_START,
+            rows: Vec::with_capacity(pot.shows_total as usize),
+        };
 
-        let per_show_share = pot.total_potential_gross / pot.shows_total as f32;
+        self.log(format!(
+            "🚌 {} of {} ({}) booked — {} weeks, {} shows, ${} up front.",
+            rig.label(),
+            pot.region_name,
+            pot.country_key.replace("_", " "),
+            weeks,
+            pot.shows_total,
+            pot.cost
+        ));
 
-        let mut momentum = MOMENTUM_START;
-        let mut rows: Vec<ShowReport> = Vec::with_capacity(pot.shows_total as usize);
-        let mut gross_sum: u32 = 0;
+        // The first week plays now; `turn.rs` drives the rest.
+        self.resolve_tour_week(tour);
+        Ok(())
+    }
 
-        for show_idx in 0..pot.shows_total {
-            let venue_name = self.synth_tour_venue_name(&region_name, rng);
+    /// Play one week of a tour in progress (design §F): `SHOWS_PER_TOUR_WEEK`
+    /// nights, the week's takings, one week of the rig's wear. Momentum and
+    /// the report rows live on the activity, so word of mouth carries across
+    /// the week boundary exactly as it used to carry across the loop.
+    ///
+    /// The nights roll on the **activity stream** (`rng.rs`), one sub-stream
+    /// per night index, not on the turn's action stream. That is what keeps
+    /// the split neutral: night 17 rolls the same numbers whether the tour
+    /// resolved five a week for four weeks or twenty in one sitting, and the
+    /// weekly world tick that now runs in between can't shift it.
+    pub(in crate::game) fn resolve_tour_week(&mut self, mut tour: TourInProgress) {
+        let first_show = u32::from(tour.weeks_done) * SHOWS_PER_TOUR_WEEK;
+        let last_show = (first_show + SHOWS_PER_TOUR_WEEK).min(tour.shows_total);
+        let mut week_gross: u32 = 0;
+
+        for show_idx in first_show..last_show {
+            let mut rng = self.activity_rng(tour.booking_week, show_idx);
+            let venue_name = self.synth_tour_venue_name(&tour.region_name, &mut rng);
 
             let reception = shows::compute_reception(
                 &self.band,
-                self.player.stress,
-                self.player.health,
-                era_genre_modifier,
-                self.player.creativity,
-                rng,
+                tour.condition_stress,
+                tour.condition_health,
+                tour.era_genre_modifier,
+                tour.road_creativity,
+                &mut rng,
             );
             let verdict = ShowVerdict::from_reception(reception);
             let attendance_factor = shows::reception_attendance_factor(reception);
@@ -581,26 +680,87 @@ impl Game {
             // same night's own reception affects only its own attendance
             // fill, not its own take. Money is centered on the per-show
             // share regardless of venue size (design §B).
-            let money_multiplier = attendance_factor * momentum;
+            let money_multiplier = attendance_factor * tour.momentum;
 
-            let fill_ratio = (base_fill_ratio * money_multiplier).clamp(0.0, 1.0);
-            let attendance = (pot.synth_capacity as f32 * fill_ratio).round() as u32;
-            let take = (per_show_share * money_multiplier).max(0.0).round() as u32;
+            let fill_ratio = (tour.base_fill_ratio * money_multiplier).clamp(0.0, 1.0);
+            let attendance = (tour.synth_capacity as f32 * fill_ratio).round() as u32;
+            let take = (tour.per_show_share * money_multiplier).max(0.0).round() as u32;
 
             self.apply_show_verdict_rewards(verdict);
-            momentum = shows::apply_momentum_delta(momentum, verdict);
+            // The road's own copy of creativity moves by the same rule, so
+            // the reception rolls read what the pre-split loop's live read
+            // gave them — the weekly tick's creativity drain lands on the
+            // player, not on the band's nights (§F).
+            tour.road_creativity = tour
+                .road_creativity
+                .saturating_add(show_creativity_gain(verdict))
+                .min(constants::MAX_CREATIVITY);
+            tour.momentum = shows::apply_momentum_delta(tour.momentum, verdict);
 
-            gross_sum = gross_sum.saturating_add(take);
+            week_gross = week_gross.saturating_add(take);
 
-            rows.push(ShowReport {
-                week: self.week + show_idx / SHOWS_PER_TOUR_WEEK,
+            tour.rows.push(ShowReport {
+                week: self.week,
                 venue_name,
                 verdict: verdict.label().to_string(),
                 reception,
                 attendance,
-                capacity: pot.synth_capacity,
+                capacity: tour.synth_capacity,
                 take,
             });
+        }
+
+        self.player.earn_money(week_gross);
+
+        // Touring wears harder than a night at home (§A): the rig's own
+        // wear table, now charged the week it is actually endured rather
+        // than the whole run's worth at booking.
+        let (rig_health_cost, rig_stress_cost) = tour.rig.wear_per_week();
+        self.player.stress = (self.player.stress + rig_stress_cost).min(constants::MAX_STRESS);
+        self.player.health = self.player.health.saturating_sub(rig_health_cost);
+
+        tour.weeks_done += 1;
+        if tour.weeks_done >= tour.weeks_total {
+            self.settle_tour(tour, TourEnding::Completed);
+            return;
+        }
+
+        self.log(format!(
+            "🚌 {} of {}, week {} of {} — {} shows, ${} at the door.",
+            tour.rig.label(),
+            tour.region_name,
+            tour.weeks_done,
+            tour.weeks_total,
+            last_show - first_show,
+            week_gross
+        ));
+        self.ongoing_activity = Some(OngoingActivity::Tour(tour));
+    }
+
+    /// Close out a tour and clear it from the calendar (design §F). A
+    /// completed run settles its fame and regional fame — the whole-run
+    /// rewards `tour_pot` quoted; one walked out of keeps only what already
+    /// resolved.
+    pub(in crate::game) fn settle_tour(&mut self, tour: TourInProgress, ending: TourEnding) {
+        self.ongoing_activity = None;
+
+        let gross: u32 = tour.rows.iter().map(|row| row.take).sum();
+        let shows_played = tour.rows.len();
+
+        if ending == TourEnding::Abandoned {
+            let report = TourReport::from_rows(tour.rows, 0);
+            self.last_tour_report = Some(report);
+            self.log(format!(
+                "🛑 Walked off the {} of {} after {} of {} weeks — {} shows played and ${} taken; the rest of the run, and the ${} it cost to book, are gone.",
+                tour.rig.label(),
+                tour.region_name,
+                tour.weeks_done,
+                tour.weeks_total,
+                shows_played,
+                gross,
+                tour.cost
+            ));
+            return;
         }
 
         // Cap the fame gain against the live ceiling and apply it before
@@ -608,9 +768,9 @@ impl Game {
         // both show the fame actually applied to the band — comeback
         // doubling and caps included, not the pre-cap request.
         let live_cap = self.live_fame_cap();
-        let fame_gain = pot.fame_gain.min(live_cap.saturating_sub(self.band.fame));
+        let fame_gain = tour.fame_gain.min(live_cap.saturating_sub(self.band.fame));
         let fame_applied = self.band.gain_fame_capped(fame_gain, live_cap);
-        let report = TourReport::from_rows(rows, fame_applied);
+        let report = TourReport::from_rows(tour.rows, fame_applied);
         if report.went_very_well() {
             self.player.happiness = (self.player.happiness + TOUR_WENT_WELL_HAPPINESS_GAIN)
                 .min(constants::MAX_HAPPINESS);
@@ -618,42 +778,31 @@ impl Game {
                 .min(constants::MAX_CREATIVITY);
         }
 
-        // Touring wears harder than a night at home (§A): the rig's own
-        // wear table, replacing the flat cost-per-week the headline tour
-        // used to charge every rig alike.
-        let (rig_health_cost, rig_stress_cost) = rig.wear_per_week();
-        let tour_stress_cost = rig_stress_cost.saturating_mul(weeks);
-        let tour_health_cost = rig_health_cost.saturating_mul(weeks);
-        self.player.stress = (self.player.stress + tour_stress_cost).min(constants::MAX_STRESS);
-        self.player.health = self.player.health.saturating_sub(tour_health_cost);
-
-        self.player.spend_money(pot.cost);
-        self.player.earn_money(gross_sum);
-
-        let regional_fame_gain = pot.regional_fame_gain_base
+        // The settlement roll gets the step index one past the last night,
+        // so it can never collide with a show's stream (`rng.rs`).
+        let mut rng = self.activity_rng(tour.booking_week, tour.shows_total);
+        let regional_fame_gain = tour.regional_fame_gain_base
             + rng.gen_range(0..=TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD as u16);
         let new_regional_fame =
-            (pot.regional_fame_current as u16 + regional_fame_gain).min(100) as u8;
+            (tour.regional_fame_current as u16 + regional_fame_gain).min(100) as u8;
         // The 100-cap can eat part of the rolled gain — report the delta
         // that actually landed, not the roll.
-        let regional_fame_applied = new_regional_fame - pot.regional_fame_current;
+        let regional_fame_applied = new_regional_fame - tour.regional_fame_current;
         self.regional_fame
-            .insert(pot.regional_fame_key.clone(), new_regional_fame);
-
-        self.week += weeks as u32;
+            .insert(tour.regional_fame_key.clone(), new_regional_fame);
 
         let avg_verdict = ShowVerdict::from_reception(report.avg_reception);
         self.log(format!(
             "🚌 {} tour of {} ({}), {} weeks: {} shows, avg reception {} ({}) — grossed ${} against ${} in costs, fame +{}, regional fame {}% (+{}). Press R for the tour report.",
-            rig.label(),
-            region_name,
-            pot.country_key.replace("_", " "),
-            weeks,
-            pot.shows_total,
+            tour.rig.label(),
+            tour.region_name,
+            tour.country_key.replace("_", " "),
+            tour.weeks_total,
+            tour.shows_total,
             report.avg_reception,
             avg_verdict.label(),
-            gross_sum,
-            pot.cost,
+            gross,
+            tour.cost,
             fame_applied,
             new_regional_fame,
             regional_fame_applied
@@ -663,7 +812,26 @@ impl Game {
         }
 
         self.last_tour_report = Some(report);
+    }
+}
 
-        Ok(())
+/// How a tour left the calendar (design §F).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::game) enum TourEnding {
+    /// Every booked week played — the run settles its fame and regional fame.
+    Completed,
+    /// Walked out of, or forced off the road by an emergency: the nights
+    /// already played stand, the rest of the pot does not.
+    Abandoned,
+}
+
+/// The creativity a night on stage feeds, by verdict — the same table
+/// `apply_show_verdict_rewards` applies to the player, factored out so a
+/// tour's own road copy can move in lockstep (§F).
+fn show_creativity_gain(verdict: ShowVerdict) -> u8 {
+    match verdict {
+        ShowVerdict::Great => GREAT_SHOW_CREATIVITY_GAIN,
+        ShowVerdict::Transcendent => TRANSCENDENT_SHOW_CREATIVITY_GAIN,
+        ShowVerdict::Solid | ShowVerdict::Rough => 0,
     }
 }

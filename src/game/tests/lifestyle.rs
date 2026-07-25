@@ -339,6 +339,10 @@ fn rest_healing_bonus_boosts_take_break() {
 
     game.action_take_break()
         .expect("take break is always available");
+    // S-TIME (§F): a break is now four weeks the calendar plays, and the
+    // recovery lands on the week the band comes back. Same numbers, one
+    // more line to reach them.
+    finish_activity_in_one_sitting(&mut game);
 
     assert_eq!(game.player.health, (50 + BREAK_HEALTH_GAIN + 3).min(100));
 }

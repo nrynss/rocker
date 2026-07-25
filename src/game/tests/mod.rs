@@ -6,12 +6,15 @@
 //! Test function names are unchanged from when they lived in `mod.rs`.
 
 use crate::game::music::{Release, ReleaseType};
+use crate::game::studios::RecordingStudio;
 use crate::game::world::PotentialDealOffer;
 
 use super::constants::{self, *};
 use super::*;
 
+mod activity_events;
 mod certifications;
+mod charts;
 mod deal_lifecycle;
 mod deals;
 mod determinism;
@@ -29,9 +32,58 @@ mod shows;
 mod smoke;
 mod studio;
 mod support;
+mod time;
 
 fn test_game() -> Game {
     Game::new().expect("data files present")
+}
+
+/// S-RECORD (design §C): the neutral baseline room — bonus 0, and the rate the
+/// rest of the economy was balanced against. Every test that isn't *about* the
+/// studio ladder books here, so its numbers mean what they meant before the
+/// studios existed.
+const TEST_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
+
+/// Resolve a commitment to the end with no weekly tick in between (§F).
+/// This is the pre-0.9 "the whole thing happens inside the action" path,
+/// kept available for the tests that exercise `actions/live.rs` directly
+/// rather than through `process_turn` — and it is exactly the reference the
+/// economic-equivalence test in `time.rs` measures the spread run against.
+fn finish_activity_in_one_sitting(game: &mut Game) {
+    while game.ongoing_activity.is_some() {
+        game.resolve_activity_week();
+    }
+}
+
+/// Book a session, play it out, and put the resulting master straight in the
+/// shops — the whole of the pre-§D "record" action in one call.
+///
+/// S-MASTER (§D) split recording from pressing, so a test that is *about* what
+/// a release does (charts, recoupment, re-pressing, catalogue tails) would
+/// otherwise have to spell the whole pipeline out every time. Tests that are
+/// about the split itself — the session's weeks, the master in the vault,
+/// releasing later — drive the three stages by hand, as they should.
+///
+/// Deliberately not `process_turn`: like the callers it replaces, this leaves
+/// the calendar alone, so a test that pins a week can keep pinning it.
+fn record_and_release(
+    game: &mut Game,
+    release_type: ReleaseType,
+    songs: u8,
+    studio: RecordingStudio,
+    pressing: Option<usize>,
+) -> Result<(), String> {
+    match release_type {
+        ReleaseType::Single => game.action_record_single(songs, studio)?,
+        ReleaseType::Album => game.action_record_album(songs, studio)?,
+    }
+    finish_activity_in_one_sitting(game);
+    let master = game
+        .vault()
+        .len()
+        .checked_sub(1)
+        .ok_or_else(|| "the session left no master in the vault".to_string())?;
+    game.action_release_master(master, pressing)
 }
 
 fn test_release(id: u32, release_type: ReleaseType) -> Release {

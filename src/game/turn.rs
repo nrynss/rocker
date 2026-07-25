@@ -4,6 +4,7 @@
 
 use rand::Rng;
 
+use super::actions::TourEnding;
 use super::constants::{self, *};
 use super::rng;
 use super::*;
@@ -205,8 +206,10 @@ impl Game {
     }
 
     fn advance_week_events(&mut self, rng: &mut impl Rng) -> Result<(), String> {
-        // Sync the timeline with the current week. Tours can jump several weeks
-        // at once, so catch up year by year instead of testing a single boundary.
+        // Sync the timeline with the current week. Since v0.9 §F the calendar
+        // only ever moves one week at a time, but a loaded save can still
+        // arrive several years past the timeline, so catch up year by year
+        // rather than testing a single boundary.
         let expected_year =
             constants::STARTING_YEAR + (self.week.saturating_sub(1)) / constants::WEEKS_PER_YEAR;
         while self.timeline.get_current_year() < expected_year {
@@ -294,10 +297,94 @@ impl Game {
         }
     }
 
+    /// Resolve one more week of the commitment in progress (design §F).
+    /// Each activity's own module owns its week: this is only the dispatch.
+    /// Public within `game` so the tests can drive a whole tour with no
+    /// weekly tick in between and prove the split changed nothing.
+    pub(in crate::game) fn resolve_activity_week(&mut self) {
+        // §G tap point (S-EVENTS): latch what this week is being spent on
+        // before the activity can settle out from under the event taps, which
+        // run later in `advance_week_events`. One line; everything it feeds
+        // lives in `events_apply.rs`.
+        self.note_activity_week();
+        // Taken out and handed to the resolver by value: a week's resolution
+        // mutates the band, the player and the log, and the activity has to
+        // be mutable throughout. Whatever comes back — a week further on, or
+        // nothing at all because it settled — is what the resolver puts back.
+        match self.ongoing_activity.take() {
+            // §D: a session's weeks decide nothing — the record was settled at
+            // booking — so this arm only counts them down and settles the
+            // master at the end.
+            Some(OngoingActivity::Recording(session)) => self.resolve_recording_week(session),
+            Some(OngoingActivity::Tour(tour)) => self.resolve_tour_week(tour),
+            Some(OngoingActivity::SupportTour(support)) => self.resolve_support_tour_week(support),
+            Some(OngoingActivity::Break(rest)) => self.resolve_break_week(rest),
+            None => {}
+        }
+    }
+
+    /// §F — Abandoning: walk out of whatever is running. You keep what
+    /// already resolved and forfeit the rest of the commitment, and the
+    /// money still on the table with it.
+    pub(in crate::game) fn action_abandon_activity(&mut self) -> Result<(), String> {
+        if self.ongoing_activity.is_none() {
+            return Err("You're not in the middle of anything to walk out of.".to_string());
+        }
+        self.abandon_ongoing_activity();
+        Ok(())
+    }
+
+    /// Settle whatever is running as walked-out-of. Shared by the player's
+    /// own `AbandonActivity` and by the emergency path in `check_game_over`,
+    /// so an ending can never leave a commitment dangling for a save to
+    /// resume into.
+    fn abandon_ongoing_activity(&mut self) {
+        match self.ongoing_activity.take() {
+            Some(OngoingActivity::Recording(session)) => self.settle_recording(session, false),
+            Some(OngoingActivity::Tour(tour)) => self.settle_tour(tour, TourEnding::Abandoned),
+            Some(OngoingActivity::SupportTour(support)) => self.settle_support_tour(support, false),
+            Some(OngoingActivity::Break(rest)) => self.settle_break(rest, false),
+            None => {}
+        }
+    }
+
+    /// The two actions a committed band may still take (design §F): walking
+    /// out, and walking away from the game entirely. Everything else the
+    /// player submits while an activity runs is ignored — the UI offers
+    /// "continue", not a menu, and a stale keypress must not be able to
+    /// start a second commitment on top of the first.
+    fn overrides_ongoing_activity(action: &GameAction) -> bool {
+        matches!(action, GameAction::AbandonActivity | GameAction::Quit)
+    }
+
     pub fn process_turn(&mut self, action: GameAction) -> Result<bool, String> {
         if self.game_over {
             return Ok(false);
         }
+
+        // One stream for the whole turn, keyed by the week the player acted
+        // in. Since §F the calendar always moves exactly one week, so
+        // consecutive turns always get consecutive streams.
+        let mut rng = self.action_rng();
+
+        // §F: a commitment in progress owns the turn. The submitted action is
+        // ignored and one more week of the activity resolves instead — but
+        // the *turn machinery* still needs to know what the band spent the
+        // week doing, so the action that started the commitment stands in
+        // for it (fame visibility §C and the lifestyle streaks both read it).
+        let action =
+            if self.ongoing_activity.is_some() && !Self::overrides_ongoing_activity(&action) {
+                let carried = self
+                    .ongoing_activity
+                    .as_ref()
+                    .expect("just checked")
+                    .as_action();
+                self.resolve_activity_week();
+                carried
+            } else {
+                self.execute_action(action.clone(), &mut rng)?;
+                action
+            };
 
         let is_turn_consuming_action = !matches!(
             action,
@@ -307,20 +394,20 @@ impl Game {
                 | GameAction::StartMarketingCampaign(_, _)
                 | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
                 | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
+                // §D: the weeks a record costs were the session's. Putting the
+                // finished tapes on a truck is paperwork, and paperwork is
+                // instant here — the same call `RePress` above already makes.
+                | GameAction::ReleaseMaster { .. }
+                | GameAction::AbandonActivity // §F: the week you walk out of is yours to spend
                 | GameAction::Quit
         );
 
-        // One stream for the whole turn, keyed by the week the player acted
-        // in. Multi-week actions (tours, breaks) re-key next turn anyway.
-        let mut rng = self.action_rng();
-
-        let week_before = self.week;
-        self.execute_action(action.clone(), &mut rng)?; // Execute action first
-
         if is_turn_consuming_action {
-            self.week += 1; // Advance week only for turn-consuming actions
+            // §F: the one place in the codebase that moves the calendar, and
+            // it only ever moves it by one.
+            self.week += 1;
             self.advance_week_events(&mut rng)?; // Process standard weekly events
-            self.update_public_visibility(&action, self.week - week_before);
+            self.update_public_visibility(&action, 1);
             self.update_lifestyle(&action);
         }
 
@@ -338,6 +425,14 @@ impl Game {
         }
         if self.player.money < 0 && self.band.fame < 10 {
             self.game_over = true;
+        }
+
+        // §F — Abandoning: health and money emergencies force the walk-out
+        // the player never got to choose. Without this the career ends with
+        // a tour still on the books, and a save reloaded past the ending
+        // would resume into a week of a run that nobody is on.
+        if self.game_over && self.ongoing_activity.is_some() {
+            self.abandon_ongoing_activity();
         }
 
         // Rockstar milestone: one-time event when thresholds are reached

@@ -10,7 +10,7 @@ mod venues;
 // Public API re-exports (scene size / chart width are part of the world surface;
 // some are only read from tests today, but stay on the module root).
 #[allow(unused_imports)]
-pub use charts::{CHART_DEPTH, ChartEntry};
+pub use charts::{CHART_DEPTH, ChartBoard, ChartEntry, format_board_label};
 pub use deals::PotentialDealOffer;
 // The label entity's public shape (design §A, L-ENTITY). Downstream tasks
 // extend `labels.rs` directly; these re-exports are for `economy.rs` (the
@@ -46,11 +46,17 @@ pub struct GameWorld {
     #[serde(default)]
     pub charts: Vec<ChartEntry>,
     /// The regional Top 100s: Local (the home scene's board, a UK subset)
-    /// plus the four sales territories. `BTreeMap` so iteration (decay,
-    /// territory filler) is always in the same deterministic order.
-    /// Worldwide is derived on demand and is never a key here.
+    /// plus the four sales territories — each split by release format since
+    /// v0.9 (§E), so the key is a `ChartBoard` (territory × singles/albums)
+    /// rather than a bare region. `BTreeMap` so iteration (decay, territory
+    /// filler, the label ledger's sweep) is always in the same deterministic
+    /// order. Worldwide is derived on demand and is never a key here.
+    ///
+    /// The field name and the map shape are both unchanged on disk, which is
+    /// what lets a 0.8-era save migrate rather than fail: its bare `"Uk"`
+    /// keys deserialize onto the albums boards (see `ChartBoard`).
     #[serde(default)]
-    pub regional_charts: BTreeMap<ChartRegion, Vec<ChartEntry>>,
+    pub regional_charts: BTreeMap<ChartBoard, Vec<ChartEntry>>,
     /// The living industry (design §A, L-ENTITY): every major/independent/
     /// boutique from `record_labels.json` becomes a `Label` world entity with
     /// a balance sheet. Keyed by stable id in a `BTreeMap` for deterministic
@@ -322,25 +328,22 @@ mod tests {
         }
 
         // A living scene (plus territory filler) keeps every regional
-        // board full, not just the home scene's Local board.
+        // board full — and since v0.9 (§E) that means *both* formats of
+        // every board, not just the home scene's Local one.
         for region in ChartRegion::TERRITORIES {
+            for format in [ReleaseType::Single, ReleaseType::Album] {
+                assert!(
+                    !world.chart_board(region, format).is_empty(),
+                    "{region:?} {format:?} should have chart entries after 300 weeks of filler"
+                );
+            }
+        }
+        for format in [ReleaseType::Single, ReleaseType::Album] {
             assert!(
-                !world
-                    .regional_charts
-                    .get(&region)
-                    .unwrap_or(&Vec::new())
-                    .is_empty(),
-                "{region:?} should have chart entries after 300 weeks of filler"
+                !world.chart_board(ChartRegion::Local, format).is_empty(),
+                "a living scene keeps the Local {format:?} board full"
             );
         }
-        assert!(
-            !world
-                .regional_charts
-                .get(&ChartRegion::Local)
-                .unwrap_or(&Vec::new())
-                .is_empty(),
-            "a living scene keeps the Local board full"
-        );
         assert!(news_seen > 0, "300 weeks should produce scene news");
     }
 
@@ -352,21 +355,38 @@ mod tests {
         for i in 0..CHART_DEPTH {
             world.submit_chart_entry(
                 ChartRegion::Uk,
+                ReleaseType::Album,
                 format!("Filler {i}"),
                 "Someone".into(),
                 false,
                 1000 + i as u32,
             );
         }
-        let pos =
-            world.submit_chart_entry(ChartRegion::Uk, "Big Hit".into(), "You".into(), true, 50000);
+        let pos = world.submit_chart_entry(
+            ChartRegion::Uk,
+            ReleaseType::Album,
+            "Big Hit".into(),
+            "You".into(),
+            true,
+            50000,
+        );
         assert_eq!(pos, Some(1), "a huge score should enter at #1");
-        let flop = world.submit_chart_entry(ChartRegion::Uk, "Flop".into(), "You".into(), true, 1);
+        let flop = world.submit_chart_entry(
+            ChartRegion::Uk,
+            ReleaseType::Album,
+            "Flop".into(),
+            "You".into(),
+            true,
+            1,
+        );
         assert_eq!(
             flop, None,
             "a tiny score should miss a full, high-scoring chart"
         );
-        assert_eq!(world.regional_charts[&ChartRegion::Uk].len(), CHART_DEPTH);
+        assert_eq!(
+            world.chart_board(ChartRegion::Uk, ReleaseType::Album).len(),
+            CHART_DEPTH
+        );
     }
 
     #[test]
@@ -557,6 +577,7 @@ mod tests {
         let cold = world.band_buzz(&star);
         world.submit_chart_entry(
             ChartRegion::Local,
+            ReleaseType::Album,
             "The Hit".into(),
             "The Test Pattern".into(),
             true,

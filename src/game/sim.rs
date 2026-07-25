@@ -23,6 +23,7 @@ use crate::game::music::DistributionChannel;
 use crate::game::music::ReleaseType;
 use crate::game::player::LifestyleTier;
 use crate::game::player::Player;
+use crate::game::studios::{self, RecordingStudio};
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::GameWorld;
 use crate::game::world::{LabelStrategy, LabelTier};
@@ -94,9 +95,31 @@ pub(super) fn seeded_game(seed: u64) -> Game {
         rockstar_achieved: false,
         current_distribution_channel: music::DistributionChannel::default(),
         last_sales_pass_week: None,
+        // S-TIME (§F): nobody starts a career mid-tour.
+        ongoing_activity: None,
     };
     game.initialize_player("Sim Driver", "The Test Pattern", genre::MusicGenre::Rock);
     game
+}
+
+/// Play a multi-week commitment out to its end (design §F).
+///
+/// Booking a tour used to resolve the whole thing inside one `process_turn`;
+/// since §F it resolves *one week*, and the rest arrive a week per turn with
+/// the full weekly tick — sales, chart decay, rent — running in between. Any
+/// non-overriding action drives the next week, so the measurement sweeps that
+/// want a finished tour say so explicitly rather than reading a report that
+/// isn't written yet.
+///
+/// This is deliberately *not* `tests::finish_activity_in_one_sitting`: that
+/// helper skips the weekly tick to serve as the economic-equivalence
+/// reference, whereas a balance sweep wants the real calendar it now costs.
+fn play_out_the_commitment(game: &mut Game) {
+    while game.ongoing_activity().is_some() && !game.game_over {
+        if game.process_turn(GameAction::LazeAround).is_err() {
+            break;
+        }
+    }
 }
 
 /// Silence both story-event taps so a run exercises only the core loop:
@@ -210,6 +233,27 @@ impl Bot {
 /// real break before burning out, otherwise carry on with the day job.
 fn self_care(game: &Game) -> Option<GameAction> {
     let player = &game.player;
+    // §F: a commitment owns the turn, so the doctor's appointment or the break
+    // below would simply be *discarded* while one is running — the bot would
+    // reach for help every week and be ignored every week, which is how a
+    // four-week booking turned into a death spiral (road-dog died 12/60 before
+    // this). Walking out is the only action a commitment yields to, and it is
+    // exactly what a player staring at 30 health would do. Before §F there was
+    // nothing to walk out of, so no bot ever needed to know this.
+    //
+    // Only walk out of the road, though. A break *is* the treatment — it heals
+    // across its weeks — so abandoning one for being unwell cancels the cure
+    // and re-books it next turn, thrashing without ever healing. (Measured:
+    // doing this indiscriminately killed the homebody 28/60 and the studio-rat
+    // 19/60, two bots that barely tour and simply rest badly.)
+    if let Some(activity) = game.ongoing_activity() {
+        let on_the_road = matches!(
+            activity,
+            OngoingActivity::Tour(_) | OngoingActivity::SupportTour(_)
+        );
+        return (on_the_road && player.health < HEALTH_FLOOR)
+            .then_some(GameAction::AbandonActivity);
+    }
     if player.health < HEALTH_FLOOR {
         return Some(if player.can_afford(constants::DOCTOR_VISIT_COST) {
             GameAction::VisitDoctor
@@ -240,15 +284,100 @@ fn gig_or_rest(game: &Game) -> GameAction {
     }
 }
 
-/// The out-of-pocket bill to record and press `kind` right now: studio time
-/// always, plus the pressing run when unsigned (a label presses for free).
+/// S-RECORD (design §C): the room every bot books. The neutral demo room is
+/// the pre-cycle economy — choosing *up* the studio ladder is a decision S-SIM
+/// teaches the bots on purpose (§I), not one this compatibility pass should
+/// make for them behind its own back.
+const BOT_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
+
+/// How many songs a bot's booking takes (design §A): the format's **minimum**.
+///
+/// Not the player-facing default (10 for an album), which is what this used
+/// after S-RECORD. Before §A an album took exactly `MIN_ALBUM_SONGS`, because
+/// that was the only length there was — so booking the minimum is what keeps a
+/// bot's records comparable to its own pre-cycle baseline, and it is what the
+/// garage acts in this lab would actually book: §B prices a session in weeks as
+/// well as dollars, so two extra tracks are two extra bills *and* most of an
+/// extra week off the calendar. Choosing to make a longer record is a real
+/// decision, and one S-SIM should teach a bot on purpose (§I) rather than have
+/// every bot inherit by accident.
+fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
+    let minimum = match kind {
+        ReleaseType::Single => constants::MIN_SINGLE_SONGS,
+        ReleaseType::Album => constants::MIN_ALBUM_SONGS,
+    };
+    game.band
+        .default_booking_songs(&kind)
+        .unwrap_or_else(|| studios::default_song_count(&kind))
+        .min(minimum)
+}
+
+/// The record action a bot dispatches, so the booking it is billed for
+/// (`release_bill`) and the booking it makes can never disagree.
+///
+/// S-MASTER (§D): this books a *session* — it yields a master, not a record on
+/// the shelves. `release_from_the_vault` is the other half.
+fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
+    let songs = bot_songs(game, kind);
+    match kind {
+        ReleaseType::Single => GameAction::RecordSingle {
+            songs,
+            studio: BOT_STUDIO,
+        },
+        ReleaseType::Album => GameAction::RecordAlbum {
+            songs,
+            studio: BOT_STUDIO,
+        },
+    }
+}
+
+/// The out-of-pocket bill to get `kind` from nothing to on the shelves: studio
+/// time always, plus the pressing run when unsigned (a label presses for
+/// free).
+///
+/// S-MASTER (§D) split when those two are due — studio time at booking,
+/// pressing weeks later at release — but a bot that books a session it can
+/// never afford to press just strands a master in the vault, so the *decision*
+/// still weighs the whole bill. That keeps the pre-§D booking behaviour, which
+/// is what makes the sweeps comparable across the split.
 fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
-    let mut bill = game.recording_cost(&kind);
+    let songs = bot_songs(game, kind);
+    let mut bill = game.recording_cost(BOT_STUDIO, songs);
     if game.band.current_deal().is_none() {
         let (_, copies) = PRESSING_TIERS[pressing.unwrap_or(GARAGE_RUN)];
         bill += game.pressing_cost(&kind, copies);
     }
-    bill
+    // §B + §D: the studio bill is due at booking and the pressing bill weeks
+    // later, and in between the band still has to live — the weekly tick now
+    // runs during a session (§F), charging rent every week of it. Weighing only
+    // the two bills lets a bot book a session it can *just* afford, get eaten
+    // by upkeep while the tape rolls, and land a finished master it can no
+    // longer press. That master earns nothing, and for a bot with no other
+    // income there is no way back: measured, the studio-rat went broke 36/60
+    // and finished on median fame 7, having recorded records it could never
+    // put out. Reserve the session's running costs alongside its bills.
+    let weeks = game
+        .quote_recording(kind, songs, BOT_STUDIO)
+        .map_or(0, |quote| quote.weeks);
+    bill + (weeks as i32) * (game.player.lifestyle.upkeep_per_week() as i32)
+}
+
+/// S-MASTER (§D): a finished record sitting in the vault earns nothing. Put
+/// the oldest master out as soon as the pressing (and, unsigned, the channel
+/// fee) is covered.
+///
+/// Releasing is instant — no week is consumed — so this costs the bot only the
+/// bill, and the very next `decide` gets on with the day job. Without it every
+/// bot would record forever and release never, and the whole lab would report
+/// zero releases.
+fn release_from_the_vault(game: &Game, pressing: Option<usize>) -> Option<GameAction> {
+    game.quote_release(0, pressing)
+        .ok()
+        .filter(|quote| game.player.can_afford(quote.total()))
+        .map(|_| GameAction::ReleaseMaster {
+            master: 0,
+            pressing,
+        })
 }
 
 fn gig_grinder(game: &Game) -> GameAction {
@@ -256,25 +385,34 @@ fn gig_grinder(game: &Game) -> GameAction {
 }
 
 fn studio_rat(game: &Game) -> GameAction {
+    // §D: press whatever came out of the last session before booking the next.
+    if let Some(release) = release_from_the_vault(game, Some(GARAGE_RUN)) {
+        return release;
+    }
     if game.band.can_record_album() {
         if game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordAlbum {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Album);
         }
         // Can't afford the album yet: press a spare song (anything beyond
         // the eight banked for the album) as a single to raise the cash.
-        if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+        // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+        // has to mean spare *after* the album pile, not one song over it.
+        //
+        // (Tried throttling this — only single when the album is still far out
+        // of reach, on the theory that churning singles stops the bot ever
+        // banking the album bill. It made things *worse*, 26 broke of 60 to
+        // 34: for a bot that never plays live the singles are the only income
+        // there is, and withholding them starves it. Left un-throttled.)
+        if game.band.unreleased_songs.len()
+            >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
             && game
                 .player
                 .can_afford(release_bill(game, ReleaseType::Single, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordSingle {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Single);
         }
         // Blocked on money with nothing spare to single off either: keep
         // writing. This is the bot's only bootstrap out of "broke, one
@@ -300,6 +438,12 @@ fn studio_rat(game: &Game) -> GameAction {
 /// when signed the label presses regardless (`plan_pressing` checks the
 /// deal first), so `None` is fine there.
 fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> GameAction {
+    // §D: a finished master goes out first. It is instant and it is what puts
+    // a record on the shelves at all — everything below (gigging the sales
+    // window, banking the income toward the next session) depends on it.
+    if let Some(release) = release_from_the_vault(game, pressing) {
+        return release;
+    }
     // A support slot is exposure money can't buy — and it pays. The
     // homebody skips it (never tours); everyone else grabs it.
     if allow_support
@@ -319,16 +463,19 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, pressing))
     {
-        return GameAction::RecordAlbum { pressing };
+        return bot_record(game, ReleaseType::Album);
     }
     // Songs above the album pile become singles: cash flow, a higher live
     // ceiling, and something on the shelves worth gigging on.
-    if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+    // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+    // has to mean spare *after* the album pile, not one song over it.
+    if game.band.unreleased_songs.len()
+        >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
         && game
             .player
             .can_afford(release_bill(game, ReleaseType::Single, pressing))
     {
-        return GameAction::RecordSingle { pressing };
+        return bot_record(game, ReleaseType::Single);
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
@@ -415,6 +562,17 @@ fn plan_biggest_tour(game: &Game) -> Option<(usize, TourRig, u8)> {
         }
         for weeks in (1..=4u8).rev() {
             if !game.tour_length_is_available(weeks) {
+                continue;
+            }
+            // §F: don't start what you can't finish. A booking is now weeks of
+            // wear the band is locked into — the guard that let this through
+            // (`health >= TOUR_HEALTH_GUARD`) was calibrated when a tour cost
+            // one turn, so it happily sent a band with 32 health out for four
+            // weeks of it. Book the longest length whose own wear still lands
+            // clear of the floor; the shorter lengths below are tried in turn.
+            let (health_per_week, _) = rig.wear_per_week();
+            let wear = health_per_week.saturating_mul(weeks);
+            if game.player.health.saturating_sub(wear) < HEALTH_FLOOR {
                 continue;
             }
             if let Ok(quote) = game.quote_tour(region_index, rig, weeks)
@@ -1856,6 +2014,7 @@ fn tour_gross_by_skill_tier_sweep() {
 
         game.process_turn(GameAction::GoOnTour(region_index, FIXED_RIG, FIXED_WEEKS))
             .expect("tour should be affordable and unblocked");
+        play_out_the_commitment(&mut game);
         let report = game.last_tour_report.expect("tour produces a report");
 
         // Momentum isn't stored on the report — replay it from each show's
@@ -1896,18 +2055,26 @@ fn tour_gross_by_skill_tier_sweep() {
     }
 }
 
-/// §A/§F — tour profitability by rig and fame. A single tour's money delta
-/// is its box office minus its quoted cost (box office is per-show take,
-/// untouched by M10's record-sales presence model), so this reads the
-/// design target directly: the van should clear a profit for a small act,
-/// while a full-production rig only pays off once the act is big enough to
-/// fill the bigger rooms its capacity multiplier books. Confounders are
-/// minimized — a fresh band (no catalog tail), Squat lifestyle (no upkeep),
-/// cash on hand so the cost never gates the booking.
+/// §A/§F — tour profitability by rig, fame, and **regional fame**. A single
+/// tour's money delta is its box office minus its quoted cost (box office is
+/// per-show take, untouched by M10's record-sales presence model), so this
+/// reads the design target directly: the van should clear a profit for a
+/// small act, while a full-production rig only pays off once the act is big
+/// enough to fill the bigger rooms its capacity multiplier books. Confounders
+/// are minimized — a fresh band (no catalog tail), Squat lifestyle (no
+/// upkeep), cash on hand so the cost never gates the booking.
+///
+/// The regional-fame axis was added by the tour-economics pass (T-RIG) and is
+/// the reason the v0.8 reading was wrong: `regional_fame` is the dominant term
+/// in the gross pot (`audience = fame/3 + regional_fame`, 0-100 against a
+/// fame contribution capped at 33), but the sweep only ever measured a *cold*
+/// territory at 0. "Full production never profits at any fame" was really
+/// "a first visit with the big show doesn't pay" — true, intended, and not
+/// the whole picture.
 #[test]
 #[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
 fn tour_profitability_by_rig_and_fame_sweep() {
-    fn net_at(seed: u64, fame: u8, rig: TourRig, weeks: u8) -> Option<i64> {
+    fn net_at(seed: u64, fame: u8, regional_fame: u8, rig: TourRig, weeks: u8) -> Option<i64> {
         let mut game = seeded_game(seed);
         suppress_story_events(&mut game);
         game.band.fame = fame;
@@ -1925,27 +2092,34 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         let region_index = regions
             .iter()
             .position(|(_, _, _, _, _, fame_req)| fame >= *fame_req)?;
+        if regional_fame > 0 {
+            let (country_key, region_key, ..) = &regions[region_index];
+            game.regional_fame
+                .insert(format!("{country_key}:{region_key}"), regional_fame);
+        }
         if !game.rig_is_available(rig) || !game.tour_length_is_available(weeks) {
             return None;
         }
         let money_before = game.player.money;
         game.process_turn(GameAction::GoOnTour(region_index, rig, weeks))
             .ok()?;
-        // Net of the whole turn: box office earned minus the tour cost
+        play_out_the_commitment(&mut game);
+        // Net of the whole booking: box office earned minus the tour cost
         // spent (Squat upkeep is 0, no catalog to pay a tail).
         Some(game.player.money as i64 - money_before as i64)
     }
 
     println!(
-        "tour net profit (box office − cost) by rig and fame, 2-week tour, avg over 20 seeds:"
+        "tour net profit (box office − cost) by rig and fame, 2-week tour, cold territory \
+         (regional fame 0), avg over 20 seeds:"
     );
     let fames = [25u8, 55, 80];
-    // (fame, rig) -> avg net, for the rigs actually available at that fame.
+    // (fame, rig) -> avg net on a cold territory, for the rigs available there.
     let mut avgs: Vec<(u8, TourRig, f32)> = Vec::new();
     for fame in fames {
         for rig in TourRig::ALL {
             let nets: Vec<i64> = (1..=20u64)
-                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .filter_map(|seed| net_at(seed, fame, 0, rig, 2))
                 .collect();
             if nets.is_empty() {
                 println!(
@@ -1964,26 +2138,12 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
-    // Review follow-up (design §A "full production profitable only at 75+"):
-    // the assertions below deliberately stop at fame 80, but the real superstar
-    // tours at 95-100. Observe (no assert) whether the top rigs ever escape the
-    // red there, so a "permanent trap" (full production never profitable, an
-    // inherited v0.7 question) is visible in the report rather than hidden.
-    //
-    // L-SIM RULING (design-call, 2026-07-25): the full-production rig is a
-    // **permanent money-loser** — measured net −$30,690 (fame 80), −$27,514
-    // (fame 95), −$26,456 (fame 100); it never turns a profit at any fame. The
-    // van/bus stay healthy and the truck & crew clears a small profit from
-    // fame 95, so only the top rig is stuck. This is **out of scope for the
-    // label cycle**: it is inherited v0.7 tour economics (box office vs quoted
-    // rig cost), untouched by v0.8, and retuning tour costs here would reach
-    // outside L-SIM's remit and risk the validated touring balance. Left as a
-    // documented follow-up for a future tour-economics pass; the fame-95/100
-    // rows below keep it measured (observe-only) so it cannot silently drift.
+    // The real superstar tours at 95-100; keep those rows measured so the top
+    // of the fame range can't silently drift.
     for fame in [95u8, 100] {
         for rig in TourRig::ALL {
             let nets: Vec<i64> = (1..=20u64)
-                .filter_map(|seed| net_at(seed, fame, rig, 2))
+                .filter_map(|seed| net_at(seed, fame, 0, rig, 2))
                 .collect();
             if nets.is_empty() {
                 continue;
@@ -1998,10 +2158,91 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         }
     }
 
+    // T-RIG (tour-economics pass, resolving the v0.8 "full production is a
+    // permanent money-loser" ruling): the same rigs on a territory the act has
+    // actually built. This is the axis the old sweep never varied, and where
+    // the rig ladder has to pay off — §A's "big enough to fill the rooms it
+    // books" is a statement about *this* number, not about fame alone.
+    println!("\nsame tours by regional fame in the territory (fame 80, 2 weeks):");
+    // (regional fame, rig) -> avg net.
+    let mut warm: Vec<(u8, TourRig, f32)> = Vec::new();
+    for regional_fame in [0u8, 25, 50, 75, 100] {
+        for rig in TourRig::ALL {
+            let nets: Vec<i64> = (1..=20u64)
+                .filter_map(|seed| net_at(seed, 80, regional_fame, rig, 2))
+                .collect();
+            if nets.is_empty() {
+                continue;
+            }
+            let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+            println!(
+                "  regional {regional_fame:>3}%  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                rig.label(),
+                nets.len()
+            );
+            warm.push((regional_fame, rig, avg));
+        }
+    }
+
+    // T-LEN: the same tour at every bookable length, on a territory the act
+    // has built (so every rig is somewhere it belongs — see the softer
+    // moderate-territory probe below). The gross pot had no `weeks` term while
+    // shows and cost both scaled with it, so this column used to fall
+    // monotonically for *every* rig at *every* state — touring longer was a
+    // strict loss, and the top rig's collapse (+$17,854 at one week to
+    // −$50,948 at four) was mostly this bug wearing the rig's name.
+    const BUILT_TERRITORY: u8 = 80;
+    const MODERATE_TERRITORY: u8 = 40;
+    let by_weeks_at = |regional_fame: u8| -> Vec<(u8, TourRig, f32)> {
+        let mut rows = Vec::new();
+        for weeks in 1..=TOUR_LENGTH_MAX_WEEKS {
+            for rig in TourRig::ALL {
+                let nets: Vec<i64> = (1..=20u64)
+                    .filter_map(|seed| net_at(seed, 80, regional_fame, rig, weeks))
+                    .collect();
+                if nets.is_empty() {
+                    continue;
+                }
+                let avg = nets.iter().sum::<i64>() as f32 / nets.len() as f32;
+                println!(
+                    "  {weeks} week(s)  {:<16}: avg net ${avg:>+9.0}  ({} seeds)",
+                    rig.label(),
+                    nets.len()
+                );
+                rows.push((weeks, rig, avg));
+            }
+        }
+        rows
+    };
+    println!("\nsame tours by length (fame 80, regional fame {BUILT_TERRITORY} — built):");
+    let by_weeks = by_weeks_at(BUILT_TERRITORY);
+    println!("\nsame tours by length (fame 80, regional fame {MODERATE_TERRITORY} — moderate):");
+    let by_weeks_moderate = by_weeks_at(MODERATE_TERRITORY);
+
     let avg_for = |fame: u8, rig: TourRig| {
         avgs.iter()
             .find(|&&(f, r, _)| f == fame && r == rig)
             .map(|&(_, _, a)| a)
+    };
+    let warm_avg_for = |regional_fame: u8, rig: TourRig| {
+        warm.iter()
+            .find(|&&(rf, r, _)| rf == regional_fame && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig is available at fame 80")
+    };
+    let weeks_avg_for = |weeks: u8, rig: TourRig| {
+        by_weeks
+            .iter()
+            .find(|&&(w, r, _)| w == weeks && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig and length is available at fame 80")
+    };
+    let moderate_weeks_avg_for = |weeks: u8, rig: TourRig| {
+        by_weeks_moderate
+            .iter()
+            .find(|&&(w, r, _)| w == weeks && r == rig)
+            .map(|&(_, _, a)| a)
+            .expect("every rig and length is available at fame 80")
     };
 
     // Target (design §A/§F): the van clears a profit for a small act — and
@@ -2027,21 +2268,133 @@ fn tour_profitability_by_rig_and_fame_sweep() {
         );
     }
 
-    // The premium rigs (truck & crew, full production) are a capacity/reach
-    // investment, not a profit play, across the whole fame range this sweep
-    // covers: the humble van out-nets them everywhere both are available. If a
-    // heavy rig ever out-earns the van here, "bigger rigs only pay off once
-    // you're big" no longer holds.
+    // On a **cold** territory the premium rigs are a capacity/reach
+    // investment, not a profit play: the humble van out-nets them wherever
+    // both are available. This is the "arriving somewhere new with the big
+    // show doesn't pay" half of the design, and it is the only half the
+    // pre-T-RIG sweep measured.
     for fame in fames {
         let van = avg_for(fame, TourRig::Van).expect("the van is available at every fame");
         for rig in [TourRig::Truck, TourRig::Full] {
             if let Some(heavy) = avg_for(fame, rig) {
                 assert!(
                     van > heavy,
-                    "van (avg net ${van:.0}) should out-net {} (avg net ${heavy:.0}) at fame {fame}",
+                    "on a cold territory the van (avg net ${van:.0}) should out-net {} \
+                     (avg net ${heavy:.0}) at fame {fame}",
                     rig.label()
                 );
             }
+        }
+    }
+
+    // T-RIG, the other half — and the fix's real target. Once the act has
+    // *built* the territory, the ladder must invert: each rig up the line
+    // out-earns the one below it. Before the pass this was false at every
+    // regional fame including 100 (van +$36,853, bus +$43,446, truck +$46,405,
+    // full +$32,828): the top rig was **dominated**, never the profit-
+    // maximizing choice anywhere on the map — a strictly worse button. Note
+    // this is a stronger claim than "full production eventually profits",
+    // which it already did from regional fame ~50; a rig nobody should ever
+    // pick is still broken even when its net is positive.
+    for rig_pair in TourRig::ALL.windows(2) {
+        let (lower, higher) = (rig_pair[0], rig_pair[1]);
+        let lower_net = warm_avg_for(100, lower);
+        let higher_net = warm_avg_for(100, higher);
+        assert!(
+            higher_net > lower_net,
+            "on a fully built territory {} (avg net ${higher_net:.0}) should out-net {} \
+             (avg net ${lower_net:.0}) — a rig that is never the best choice is not a choice",
+            higher.label(),
+            lower.label()
+        );
+    }
+
+    // ...without flipping the low end: the van must still be the right call
+    // for an act that hasn't built the territory yet.
+    for rig in [TourRig::Truck, TourRig::Full] {
+        let van = warm_avg_for(0, TourRig::Van);
+        let heavy = warm_avg_for(0, rig);
+        assert!(
+            van > heavy,
+            "at regional fame 0 the van (avg net ${van:.0}) should still beat {} \
+             (avg net ${heavy:.0})",
+            rig.label()
+        );
+    }
+
+    // T-LEN: on a territory the act has built, playing more nights must earn
+    // more money — for every rig. The pot's missing `weeks` term made this
+    // monotonically *decreasing* everywhere, which is what made length a
+    // strictly dominated choice rather than a trade-off.
+    for rig in TourRig::ALL {
+        for weeks in 2..=TOUR_LENGTH_MAX_WEEKS {
+            let shorter = weeks_avg_for(weeks - 1, rig);
+            let longer = weeks_avg_for(weeks, rig);
+            assert!(
+                longer > shorter,
+                "{}: on a built territory a {weeks}-week tour (avg net ${longer:.0}) should \
+                 out-earn a {}-week one (avg net ${shorter:.0}) — length must be a \
+                 trade-off, not a strict loss",
+                rig.label(),
+                weeks - 1
+            );
+        }
+    }
+
+    // On a territory that is only *moderately* built, the same must hold for
+    // every rig the act should actually be booking there — but deliberately
+    // not for one it shouldn't. A rig's weekly cost is flat while the pot
+    // saturates, so dragging a rig too big for the market around it for a
+    // month is supposed to bleed: at regional fame 40 the truck & crew is the
+    // right call and full production is not, so full production is the one rig
+    // allowed to fall off with length. Pin both halves — the "right rig scales
+    // with length" rule *and* the fact that the exception is an over-booked
+    // rig, not an arbitrary one.
+    let best_moderate_rig = TourRig::ALL
+        .iter()
+        .copied()
+        .max_by(|&a, &b| {
+            moderate_weeks_avg_for(TOUR_LENGTH_MAX_WEEKS, a)
+                .partial_cmp(&moderate_weeks_avg_for(TOUR_LENGTH_MAX_WEEKS, b))
+                .expect("net averages are finite")
+        })
+        .expect("TourRig::ALL is non-empty");
+    assert_ne!(
+        best_moderate_rig,
+        TourRig::Full,
+        "full production should not be the best rig on a moderately built territory"
+    );
+    for rig in TourRig::ALL {
+        if rig == TourRig::Full {
+            continue;
+        }
+        for weeks in 2..=TOUR_LENGTH_MAX_WEEKS {
+            let shorter = moderate_weeks_avg_for(weeks - 1, rig);
+            let longer = moderate_weeks_avg_for(weeks, rig);
+            assert!(
+                longer > shorter,
+                "{}: at regional fame {MODERATE_TERRITORY} a {weeks}-week tour (avg net \
+                 ${longer:.0}) should still out-earn a {}-week one (avg net ${shorter:.0})",
+                rig.label(),
+                weeks - 1
+            );
+        }
+    }
+
+    // ...but with diminishing returns, or length stops being a decision and
+    // the picker collapses to "always four weeks". Marginal net per added week
+    // must fall as the tour lengthens.
+    for rig in TourRig::ALL {
+        let marginal: Vec<f32> = (2..=TOUR_LENGTH_MAX_WEEKS)
+            .map(|weeks| weeks_avg_for(weeks, rig) - weeks_avg_for(weeks - 1, rig))
+            .collect();
+        for pair in marginal.windows(2) {
+            assert!(
+                pair[1] < pair[0],
+                "{}: each added tour week should earn less than the last \
+                 (market saturation), got marginals {marginal:?}",
+                rig.label()
+            );
         }
     }
 }

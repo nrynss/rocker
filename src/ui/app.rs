@@ -3,6 +3,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::{DistributionChannel, ReleaseType};
+use crate::game::studios::{self, RecordingStudio};
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
     STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD, TourRig,
@@ -52,6 +53,9 @@ pub enum Screen {
     SupportOffer,
     Charts {
         region: crate::game::world::ChartRegion,
+        /// Which format's board is showing (§E). Singles and albums are
+        /// separate Top 100s, so the modal needs both axes to name a board.
+        format: crate::game::music::ReleaseType,
         scroll: usize,
     },
     /// The band's discography browser: every record with its sales, income,
@@ -91,12 +95,20 @@ pub enum Screen {
         rig: TourRig,
         weeks: u8,
     },
+    /// The vault (design §D/§H): finished masters awaiting release. The
+    /// Release action starts here.
+    Vault {
+        selected: usize,
+    },
+    /// Pressing run + distribution channel for the master at `master` in
+    /// `Band::masters` — since §D this is the *release* picker, not part of
+    /// recording.
     PressingPicker {
-        release_type: ReleaseType,
+        master: usize,
         selected: usize,
         /// Distribution channel choice alongside the pressing run (design
         /// §E-3, M6) — meaningful only while unsigned; signed releases never
-        /// reach this screen (`open_pressing_picker` dispatches straight
+        /// reach this screen (`open_release_picker` dispatches straight
         /// through).
         channel: DistributionChannel,
     },
@@ -138,6 +150,8 @@ pub enum MenuKind {
     GoOnTour,
     RecordSingle,
     RecordAlbum,
+    /// Open the vault (design §D/§H): the masters awaiting release.
+    Vault,
     Lifestyle,
     /// Open the re-press picker (design §E-1 indie half, M6).
     RePress,
@@ -203,16 +217,57 @@ impl App {
     pub fn menu_entries(&self) -> Vec<MenuEntry> {
         let game = &self.game;
         let signed = game.band.current_deal().is_some();
-        let single_cost = game.recording_cost(&ReleaseType::Single);
-        let album_cost = game.recording_cost(&ReleaseType::Album);
-        // The cheapest pressing run, for affordability checks. M6: also the
-        // currently-selected distribution channel's fee (§E-3) — Ok(0) while
-        // signed, and `plan_distribution` folds the fame-gate check in too,
-        // but here we just want the floor cost, not the error.
+        // S-RECORD: the format→songs→studio picker with its live quote is
+        // S-UI's job (§H). Until it lands the menu quotes the *default*
+        // booking — the neutral demo room at the format's default song count —
+        // which is exactly what dispatching from here charges.
+        //
+        // S-MASTER (§D) moved the pressing picker off the record path, and the
+        // session quote it used to carry with it, so the row itself is now the
+        // only place §C's "the quote comes first" can live: it reads
+        // `quote_recording`, the same deterministic core the booking charges
+        // from, and reports the weeks the calendar will actually spend.
+        let booking_quote = |release_type: ReleaseType| {
+            game.band
+                .default_booking_songs(&release_type)
+                .and_then(|songs| {
+                    game.quote_recording(release_type, songs, RecordingStudio::default())
+                        .ok()
+                })
+        };
+        let single_quote = booking_quote(ReleaseType::Single);
+        let album_quote = booking_quote(ReleaseType::Album);
+        // With too few songs banked there is no booking to quote, so fall back
+        // to what the format's default count would cost. The row is disabled
+        // either way; the number is what the player is writing toward.
+        let quoted_cost = |quote: &Option<crate::game::studios::RecordingQuote>,
+                           release_type: ReleaseType| {
+            quote.as_ref().map_or_else(
+                || {
+                    game.recording_cost(
+                        RecordingStudio::default(),
+                        studios::default_song_count(&release_type),
+                    )
+                },
+                |quote| quote.cost,
+            )
+        };
+        let single_cost = quoted_cost(&single_quote, ReleaseType::Single);
+        let album_cost = quoted_cost(&album_quote, ReleaseType::Album);
+        // S-MASTER (§D): booking a session charges studio time and nothing
+        // else, so the record rows are gated on that alone. Pressing runs,
+        // distribution fees and the channel's fame gate all moved to the
+        // vault's release row below, which is where they are actually due.
+        let single_min = single_cost;
+        let album_min = album_cost;
+        // The cheapest way to get *something* out of the vault, for the
+        // release row's affordability check. M6: the currently-selected
+        // channel's fee too (§E-3) — Ok(0) while signed, and
+        // `plan_distribution` folds the fame-gate check in.
         //
         // A channel the player picked while famous can become unavailable
         // after fame decay. `plan_distribution` reports that as `Err`; if we
-        // let `unwrap_or(0)` swallow it the menu would show recording as
+        // let `unwrap_or(0)` swallow it the menu would show releasing as
         // affordable, then the action would fail with a fame error instead of
         // the expected money error. So track availability and gate `enabled`
         // on it too (always available while signed — the label distributes).
@@ -220,17 +275,21 @@ impl App {
             || game
                 .current_distribution_channel
                 .is_available(game.band.fame);
-        let (single_min, album_min) = if signed {
-            (single_cost, album_cost)
-        } else {
-            let fee = game
-                .plan_distribution(game.current_distribution_channel)
-                .unwrap_or(0);
-            (
-                single_cost + game.pressing_cost(&ReleaseType::Single, PRESSING_TIERS[0].1) + fee,
-                album_cost + game.pressing_cost(&ReleaseType::Album, PRESSING_TIERS[0].1) + fee,
-            )
-        };
+        let masters = game.vault().len();
+        let release_min = game
+            .vault()
+            .first()
+            .map(|master| {
+                let fee = game
+                    .plan_distribution(game.current_distribution_channel)
+                    .unwrap_or(0);
+                if signed {
+                    fee
+                } else {
+                    game.pressing_cost(&master.release_type, PRESSING_TIERS[0].1) + fee
+                }
+            })
+            .unwrap_or(0);
         let songs = game.band.unreleased_songs.len();
         let offers = game.pending_deal_offers.len();
         let releases = game.just_released_music.len() + game.band.total_releases();
@@ -274,21 +333,23 @@ impl App {
                 label: "Record Single",
                 detail: if game.player.stress >= 90 {
                     "too stressed".into()
-                } else if songs == 0 {
-                    "no songs written".into()
-                } else if signed {
-                    format!("${} — label presses", single_cost)
-                } else if !channel_available {
-                    format!(
-                        "{} locked — need more fame",
-                        game.current_distribution_channel.label()
-                    )
+                } else if songs < constants::MIN_SINGLE_SONGS as usize {
+                    // A single is an A-side plus a B-side now (§A) — one song
+                    // banked is no longer a record.
+                    format!("{}/{} songs", songs, constants::MIN_SINGLE_SONGS)
                 } else {
-                    format!("${} + pressing", single_cost)
+                    // §D: this books studio time. Nothing is pressed, nothing
+                    // is distributed, and the record isn't out until you say so.
+                    match &single_quote {
+                        Some(quote) => format!(
+                            "${} · {} wk · quality ~{}-{}",
+                            quote.cost, quote.weeks, quote.quality_low, quote.quality_high
+                        ),
+                        None => format!("${} studio time", single_cost),
+                    }
                 },
                 enabled: game.player.stress < 90
                     && game.band.can_record_single()
-                    && channel_available
                     && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
             },
@@ -299,21 +360,45 @@ impl App {
                     "too stressed".into()
                 } else if songs < constants::MIN_ALBUM_SONGS as usize {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
-                } else if signed {
-                    format!("${} — label presses", album_cost)
+                } else {
+                    match &album_quote {
+                        Some(quote) => format!(
+                            "${} · {} wk · quality ~{}-{}",
+                            quote.cost, quote.weeks, quote.quality_low, quote.quality_high
+                        ),
+                        None => format!("${} studio time", album_cost),
+                    }
+                },
+                enabled: game.player.stress < 90
+                    && game.band.can_record_album()
+                    && game.player.can_afford(album_min),
+                kind: MenuKind::RecordAlbum,
+            },
+            MenuEntry {
+                hotkey: 'e',
+                label: "The Vault…",
+                detail: if masters == 0 {
+                    "nothing finished".into()
                 } else if !channel_available {
                     format!(
                         "{} locked — need more fame",
                         game.current_distribution_channel.label()
                     )
+                } else if !game.player.can_afford(release_min) {
+                    format!(
+                        "{} master{} — can't cover the pressing",
+                        masters,
+                        if masters == 1 { "" } else { "s" }
+                    )
                 } else {
-                    format!("${} + pressing", album_cost)
+                    format!(
+                        "{} master{} ready to press",
+                        masters,
+                        if masters == 1 { "" } else { "s" }
+                    )
                 },
-                enabled: game.player.stress < 90
-                    && game.band.can_record_album()
-                    && channel_available
-                    && game.player.can_afford(album_min),
-                kind: MenuKind::RecordAlbum,
+                enabled: masters > 0 && channel_available && game.player.can_afford(release_min),
+                kind: MenuKind::Vault,
             },
             MenuEntry {
                 hotkey: '6',
@@ -401,11 +486,21 @@ impl App {
             MenuEntry {
                 hotkey: 'c',
                 label: "Charts…",
-                detail: match game
-                    .world
-                    .regional_charts
-                    .get(&crate::game::world::ChartRegion::Local)
-                    .and_then(|entries| entries.iter().position(|e| e.is_player))
+                // §E: Local is two boards now, so the teaser reports the
+                // player's best placement across them — whichever record is
+                // doing better is the one worth shouting about.
+                detail: match [
+                    crate::game::music::ReleaseType::Single,
+                    crate::game::music::ReleaseType::Album,
+                ]
+                .into_iter()
+                .filter_map(|format| {
+                    game.world
+                        .chart_board(crate::game::world::ChartRegion::Local, format)
+                        .iter()
+                        .position(|e| e.is_player)
+                })
+                .min()
                 {
                     Some(spot) => format!("you're at #{} Local!", spot + 1),
                     None => "regional Top 100s".into(),
@@ -549,23 +644,20 @@ impl App {
         targets
     }
 
-    /// The current standings for one charts tab — Worldwide is derived
-    /// fresh (design §C), the rest are read straight off their stored
-    /// board. Shared by the input handler (to clamp scrolling) and the
-    /// modal renderer, so both agree on what "this tab" means.
+    /// The current standings for one charts tab — a region *and* a format
+    /// since v0.9 (§E). Worldwide is derived fresh (design §C) from that
+    /// format's four territory boards, the rest are read straight off their
+    /// stored board. Shared by the input handler (to clamp scrolling) and
+    /// the modal renderer, so both agree on what "this tab" means.
     pub fn charts_region_entries(
         &self,
         region: crate::game::world::ChartRegion,
+        format: crate::game::music::ReleaseType,
     ) -> Vec<crate::game::world::ChartEntry> {
         if region == crate::game::world::ChartRegion::Worldwide {
-            self.game.world.worldwide_chart()
+            self.game.world.worldwide_chart(format)
         } else {
-            self.game
-                .world
-                .regional_charts
-                .get(&region)
-                .cloned()
-                .unwrap_or_default()
+            self.game.world.chart_board(region, format).to_vec()
         }
     }
 
@@ -666,6 +758,7 @@ impl App {
             Screen::File { .. } => self.handle_file_key(key),
             Screen::GameOver => self.should_exit = true,
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
+            Screen::Vault { .. } => self.handle_vault_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
             Screen::TourBookingPicker { .. } => self.handle_tour_booking_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),

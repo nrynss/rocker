@@ -10,11 +10,15 @@ use crate::data_loader::{Incident, IncidentConditions, IncidentEffects, Incident
 use super::*;
 
 /// A minimal test incident (weight 1) with the given conditions and effects.
+/// Unscoped, i.e. general pool — v0.9 §G's `activity` list is exercised in
+/// `activity_events.rs`, and every incident this file builds is one the
+/// ordinary weekly tap draws.
 fn incident(id: &str, conditions: IncidentConditions, effects: IncidentEffects) -> Incident {
     Incident {
         id: id.to_string(),
         category: "test".to_string(),
         weight: 1,
+        activity: Vec::new(),
         conditions,
         effects,
         message: format!("🧪 test:{id}"),

@@ -2,8 +2,6 @@
 //! recording safety, and era-genre fit.
 
 use crate::game::music::{MarketingCampaignType, ReleaseType};
-use rand::SeedableRng;
-use rand::rngs::StdRng;
 
 use super::*;
 
@@ -128,10 +126,12 @@ fn signed_bands_do_not_run_their_own_marketing() {
 fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
-    // A crowded Local board: scene records the player has to outsell.
+    // A crowded Local singles board: scene records the player's own single
+    // has to outsell. (§E — an album on the other board is no competition.)
     for i in 0..10 {
         game.world.submit_chart_entry(
             world::ChartRegion::Local,
+            ReleaseType::Single,
             format!("Scene Filler {i}"),
             "Scene Band".into(),
             false,
@@ -150,9 +150,9 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 
     assert!(
         game.world
-            .regional_charts
-            .get(&world::ChartRegion::Local)
-            .is_some_and(|entries| entries.iter().any(|e| e.is_player && e.title == "Big Hit")),
+            .chart_board(world::ChartRegion::Local, ReleaseType::Single)
+            .iter()
+            .any(|e| e.is_player && e.title == "Big Hit"),
         "a high-scoring release should land on the Local chart"
     );
     assert!(
@@ -175,9 +175,9 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     assert!(
         !game
             .world
-            .regional_charts
-            .get(&world::ChartRegion::Local)
-            .is_some_and(|entries| entries.iter().any(|e| e.title == "Total Flop")),
+            .chart_board(world::ChartRegion::Local, ReleaseType::Single)
+            .iter()
+            .any(|e| e.title == "Total Flop"),
         "a flop should not crack the Local chart"
     );
 }
@@ -185,19 +185,28 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 #[test]
 fn failed_recording_does_not_eat_songs() {
     let mut game = test_game();
+    // S-RECORD (§A): two songs, so the attempt fails on the money it was
+    // written to fail on rather than on the new song-count floor.
     game.band.unreleased_songs.push(music::Song {
         id: 0,
         name: "Keeper".to_string(),
         songwriting_quality: 50,
     });
+    game.band.unreleased_songs.push(music::Song {
+        id: 1,
+        name: "Other Keeper".to_string(),
+        songwriting_quality: 50,
+    });
     game.player.money = 0;
 
-    let mut rng = StdRng::seed_from_u64(0);
-    assert!(game.action_record_single(Some(0), &mut rng).is_err());
+    assert!(
+        game.action_record_single(MIN_SINGLE_SONGS, TEST_STUDIO)
+            .is_err()
+    );
     assert_eq!(
         game.band.unreleased_songs.len(),
-        1,
-        "songs must survive a recording attempt the player cannot afford"
+        2,
+        "songs must survive a booking the player cannot afford"
     );
 }
 
