@@ -57,9 +57,9 @@ Commit prefix: `studio(S-XXX): <short description>`.
 
 | ID | Task | Size | Prereqs | Owns (exclusive) | Status |
 |----|------|------|---------|------------------|--------|
-| **S-RECORD** | §A + §C — singles/albums diverge (2–3 vs 8–14 songs, player-chosen, best-N selection, per-song cost, single sales factor) **and** the five recording studios (quality bonus, per-song rate, weeks/song, fame gates, quote) | L | — | `game/studios.rs` (**new**), `actions/studio.rs`, `economy.rs` recording/pressing cost fns, `band.rs` `can_record_*`, recording consts in `constants.rs`, `data/mod.rs` song-count consts | ⬜ open |
-| **S-TIME** | §F — the calendar never skips. `Game::week` incremented in exactly one place; tours / support tours / breaks become `OngoingActivity` state resolved one week per turn. Tour economics must be *spread*, not changed | L | — | `core.rs`, `turn.rs`, `actions/live.rs`, `actions/business.rs`, `actions/rest.rs` | ⬜ open |
-| **S-CHARTS** | §E — separate singles and albums charts per territory, with save migration (existing entries → albums board) and the charts modal toggle | M | — | `world/charts.rs`, `regional_charts` on `world/mod.rs`, `ui/render/modals/charts.rs` | ⬜ open |
+| **S-RECORD** | §A + §C — singles/albums diverge (2–3 vs 8–14 songs, player-chosen, best-N selection, per-song cost, single sales factor) **and** the five recording studios (quality bonus, per-song rate, weeks/song, fame gates, quote) | L | — | `game/studios.rs` (**new**), `actions/studio.rs`, `economy.rs` recording/pressing cost fns, `band.rs` `can_record_*`, recording consts in `constants.rs`, `data/mod.rs` song-count consts | ✅ done |
+| **S-TIME** | §F — the calendar never skips. `Game::week` incremented in exactly one place; tours / support tours / breaks become `OngoingActivity` state resolved one week per turn. Tour economics must be *spread*, not changed | L | — | `core.rs`, `turn.rs`, `actions/live.rs`, `actions/business.rs`, `actions/rest.rs` | ✅ done |
+| **S-CHARTS** | §E — separate singles and albums charts per territory, with save migration (existing entries → albums board) and the charts modal toggle | M | — | `world/charts.rs`, `regional_charts` on `world/mod.rs`, `ui/render/modals/charts.rs` | ✅ done |
 | **S-MASTER** | §D — recording is not pressing. Masters vault, Release action, pressing/distribution move off the record action | M | S-RECORD, S-TIME | `music.rs` `Master`, `band.rs` `masters`, release action in `actions/studio.rs`, vault UI | ⬜ open |
 | **S-EVENTS** | §G — random events during recording / gigs / tours / support tours, data-driven and activity-gated | M | S-TIME | `events.rs`, `events_apply.rs`, `data/incidents.json` | ⬜ open |
 | **S-UI** | §H — record picker (format → songs → studio, quote-first), activity screen, discography split | M | S-RECORD, S-TIME, S-MASTER | `ui/render/modals/pickers.rs`, `ui/input/*`, `ui/app.rs`, discography modal | ⬜ open |
@@ -86,3 +86,20 @@ needs in its handoff notes and the coordinator integrates.
 - 2026-07-25 **Cycle opened.** Design doc written from the user's brief
   (`docs/DESIGN-v0.9-studio-cycle.md`), board drawn, stacked on
   `tour/economics-pass`.
+- 2026-07-25 **Wave 1 integrated** (S-RECORD, S-TIME, S-CHARTS). All three
+  agents were cut off by a session limit with their work uncommitted; the
+  worktrees were snapshotted verbatim, verified independently green, then
+  merged. Only two conflicts, both trivial (an import in `core.rs`, adjacent
+  helpers in `tests/mod.rs`). **282 tests** (from a 248 baseline), clippy
+  `-D warnings` clean, fmt clean, determinism trio passing.
+  - S-RECORD reshaped `GameAction::{RecordSingle, RecordAlbum}` to
+    `{ songs, studio, pressing }`. `pressing` stays for now — the §D split
+    that removes it is S-MASTER's, deliberately not done here.
+  - S-RECORD also landed a first pass on the pressing picker so the new
+    quote is visible; the full format→songs→studio picker is still S-UI's.
+  - S-TIME's `action_go_on_tour` no longer takes an `rng` — activity weeks
+    draw from a stream that doesn't interleave with the weekly world tick.
+    `finish_activity_in_one_sitting` (in `tests/mod.rs`) is the reference
+    path the economic-equivalence test measures the spread run against.
+  - Known gap: the balance sweeps were the step all three agents were cut
+    off before. Run and reconciled by the coordinator after the merge.
