@@ -52,6 +52,9 @@ pub enum Screen {
     SupportOffer,
     Charts {
         region: crate::game::world::ChartRegion,
+        /// Which format's board is showing (§E). Singles and albums are
+        /// separate Top 100s, so the modal needs both axes to name a board.
+        format: crate::game::music::ReleaseType,
         scroll: usize,
     },
     /// The band's discography browser: every record with its sales, income,
@@ -401,11 +404,21 @@ impl App {
             MenuEntry {
                 hotkey: 'c',
                 label: "Charts…",
-                detail: match game
-                    .world
-                    .regional_charts
-                    .get(&crate::game::world::ChartRegion::Local)
-                    .and_then(|entries| entries.iter().position(|e| e.is_player))
+                // §E: Local is two boards now, so the teaser reports the
+                // player's best placement across them — whichever record is
+                // doing better is the one worth shouting about.
+                detail: match [
+                    crate::game::music::ReleaseType::Single,
+                    crate::game::music::ReleaseType::Album,
+                ]
+                .into_iter()
+                .filter_map(|format| {
+                    game.world
+                        .chart_board(crate::game::world::ChartRegion::Local, format)
+                        .iter()
+                        .position(|e| e.is_player)
+                })
+                .min()
                 {
                     Some(spot) => format!("you're at #{} Local!", spot + 1),
                     None => "regional Top 100s".into(),
@@ -549,23 +562,20 @@ impl App {
         targets
     }
 
-    /// The current standings for one charts tab — Worldwide is derived
-    /// fresh (design §C), the rest are read straight off their stored
-    /// board. Shared by the input handler (to clamp scrolling) and the
-    /// modal renderer, so both agree on what "this tab" means.
+    /// The current standings for one charts tab — a region *and* a format
+    /// since v0.9 (§E). Worldwide is derived fresh (design §C) from that
+    /// format's four territory boards, the rest are read straight off their
+    /// stored board. Shared by the input handler (to clamp scrolling) and
+    /// the modal renderer, so both agree on what "this tab" means.
     pub fn charts_region_entries(
         &self,
         region: crate::game::world::ChartRegion,
+        format: crate::game::music::ReleaseType,
     ) -> Vec<crate::game::world::ChartEntry> {
         if region == crate::game::world::ChartRegion::Worldwide {
-            self.game.world.worldwide_chart()
+            self.game.world.worldwide_chart(format)
         } else {
-            self.game
-                .world
-                .regional_charts
-                .get(&region)
-                .cloned()
-                .unwrap_or_default()
+            self.game.world.chart_board(region, format).to_vec()
         }
     }
 

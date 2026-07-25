@@ -194,46 +194,58 @@ mod tests {
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 
-    /// The charts modal (region tabs, empty board, a populated board
-    /// scrolled deep, and the derived Worldwide tab) should render without
-    /// panicking (design §C, task M3).
+    /// The charts modal (region tabs, the §E format toggle, empty board, a
+    /// populated board scrolled deep, and the derived Worldwide tab) should
+    /// render without panicking (design §C, task M3).
     #[test]
     fn charts_modal_renders_every_region_without_panicking() {
+        use crate::game::music::ReleaseType;
         use crate::game::world::ChartRegion;
 
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).expect("test backend");
         let mut app = app_on_main();
 
-        // Empty Local board.
-        app.screen = Screen::Charts {
-            region: ChartRegion::Local,
-            scroll: 0,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        // Empty Local board, both formats.
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Local,
+                format,
+                scroll: 0,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
 
-        // A crowded UK board, scrolled past the top 10.
+        // A crowded UK singles board, scrolled past the top 10 — and its
+        // albums half, which stays empty and must render its own quiet line.
         for i in 0..40 {
             app.game.world.submit_chart_entry(
                 ChartRegion::Uk,
+                ReleaseType::Single,
                 format!("Song {i}"),
                 format!("Band {i}"),
                 i == 0,
                 500 + i as u32,
             );
         }
-        app.screen = Screen::Charts {
-            region: ChartRegion::Uk,
-            scroll: 25,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Uk,
+                format,
+                scroll: 25,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
 
-        // The derived Worldwide tab.
-        app.screen = Screen::Charts {
-            region: ChartRegion::Worldwide,
-            scroll: 0,
-        };
-        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        // The derived Worldwide tab, per format.
+        for format in [ReleaseType::Single, ReleaseType::Album] {
+            app.screen = Screen::Charts {
+                region: ChartRegion::Worldwide,
+                format,
+                scroll: 0,
+            };
+            terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        }
     }
 
     /// The pressing/distribution picker (design §E-3, M6) and the re-press
@@ -632,6 +644,7 @@ mod tests {
         });
         app.game.world.submit_chart_entry(
             ChartRegion::Uk,
+            crate::game::music::ReleaseType::Album,
             "Kicks".to_string(),
             band_name.clone(),
             false,
@@ -640,6 +653,7 @@ mod tests {
 
         app.screen = Screen::Charts {
             region: ChartRegion::Uk,
+            format: crate::game::music::ReleaseType::Album,
             scroll: 0,
         };
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();

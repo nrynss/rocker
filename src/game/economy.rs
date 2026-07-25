@@ -724,8 +724,11 @@ impl Game {
                 // score (home turf), then each of the four sales territories
                 // at `score × presence(territory)`; below a board's floor the
                 // entry simply doesn't take (`submit_chart_entry` drops it,
-                // exactly like the scene path). The best rank across every
-                // board it charts on becomes the release's headline
+                // exactly like the scene path). Since v0.9 (§E) it competes
+                // on its own format's half of each board — a single against
+                // singles — so a peak means what it means in the real world.
+                // The best rank across every board it charts on becomes the
+                // release's headline
                 // `peak_chart_position` — a legible "highest placement" that
                 // also drives the `is_some()` "this is a hit" flag; the
                 // aggregated Worldwide board is shown as its own tab and would
@@ -743,6 +746,7 @@ impl Game {
 
                 if let Some(position) = self.world.submit_chart_entry(
                     world::ChartRegion::Local,
+                    release.release_type,
                     release.name.clone(),
                     band_name.clone(),
                     true,
@@ -763,6 +767,7 @@ impl Game {
                         as u32;
                     if let Some(position) = self.world.submit_chart_entry(
                         territory,
+                        release.release_type,
                         release.name.clone(),
                         band_name.clone(),
                         true,

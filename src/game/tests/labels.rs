@@ -828,8 +828,11 @@ fn a_signed_scene_acts_chart_activity_lifts_its_labels_capital() {
         });
 
     // The act charts on two boards. (Scene entries are never `is_player`.)
+    // A signed act's records are albums (§E), which is where the scene pass
+    // puts them too.
     world.submit_chart_entry(
         ChartRegion::Local,
+        music::ReleaseType::Album,
         "Breakout".into(),
         band_name.clone(),
         false,
@@ -837,6 +840,7 @@ fn a_signed_scene_acts_chart_activity_lifts_its_labels_capital() {
     );
     world.submit_chart_entry(
         ChartRegion::Uk,
+        music::ReleaseType::Album,
         "Breakout".into(),
         band_name.clone(),
         false,

@@ -12,6 +12,7 @@ use super::constants::{self, *};
 use super::*;
 
 mod certifications;
+mod charts;
 mod deal_lifecycle;
 mod deals;
 mod determinism;

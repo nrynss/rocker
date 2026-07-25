@@ -128,10 +128,12 @@ fn signed_bands_do_not_run_their_own_marketing() {
 fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     let mut game = test_game();
     game.initialize_player("Test", "The Tests", genre::MusicGenre::Rock);
-    // A crowded Local board: scene records the player has to outsell.
+    // A crowded Local singles board: scene records the player's own single
+    // has to outsell. (§E — an album on the other board is no competition.)
     for i in 0..10 {
         game.world.submit_chart_entry(
             world::ChartRegion::Local,
+            ReleaseType::Single,
             format!("Scene Filler {i}"),
             "Scene Band".into(),
             false,
@@ -150,9 +152,9 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 
     assert!(
         game.world
-            .regional_charts
-            .get(&world::ChartRegion::Local)
-            .is_some_and(|entries| entries.iter().any(|e| e.is_player && e.title == "Big Hit")),
+            .chart_board(world::ChartRegion::Local, ReleaseType::Single)
+            .iter()
+            .any(|e| e.is_player && e.title == "Big Hit"),
         "a high-scoring release should land on the Local chart"
     );
     assert!(
@@ -175,9 +177,9 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
     assert!(
         !game
             .world
-            .regional_charts
-            .get(&world::ChartRegion::Local)
-            .is_some_and(|entries| entries.iter().any(|e| e.title == "Total Flop")),
+            .chart_board(world::ChartRegion::Local, ReleaseType::Single)
+            .iter()
+            .any(|e| e.title == "Total Flop"),
         "a flop should not crack the Local chart"
     );
 }
