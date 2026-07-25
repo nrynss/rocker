@@ -651,14 +651,20 @@ fn a_new_signed_release_freezes_the_labels_live_reach() {
     game.world.labels.get_mut(&label_id).unwrap().market_reach = live_reach;
 
     // Recording a NEW single freezes the label's CURRENT reach onto it.
+    // S-RECORD (§A): a single is an A-side plus a B-side, so it takes two.
     game.band.unreleased_songs.push(music::Song {
         id: 0,
         name: "New Cut".to_string(),
         songwriting_quality: 50,
     });
+    game.band.unreleased_songs.push(music::Song {
+        id: 1,
+        name: "B-Side".to_string(),
+        songwriting_quality: 50,
+    });
     game.player.money = 1_000_000;
     let mut rng = StdRng::seed_from_u64(0);
-    game.action_record_single(None, &mut rng)
+    game.action_record_single(MIN_SINGLE_SONGS, TEST_STUDIO, None, &mut rng)
         .expect("the label covers a signed release");
     let release = game.just_released_music.last().expect("recorded");
     assert_eq!(

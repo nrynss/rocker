@@ -3,6 +3,7 @@ use ratatui::crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, Ke
 
 use crate::data::constants;
 use crate::game::music::{DistributionChannel, ReleaseType};
+use crate::game::studios::{self, RecordingStudio};
 use crate::game::{
     BREAK_WEEKS, GIG_HEALTH_GUARD, GIG_STRESS_GUARD, Game, GameAction, PRESSING_TIERS,
     STUDIO_STRESS_BLOCK, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD, TourRig,
@@ -203,8 +204,14 @@ impl App {
     pub fn menu_entries(&self) -> Vec<MenuEntry> {
         let game = &self.game;
         let signed = game.band.current_deal().is_some();
-        let single_cost = game.recording_cost(&ReleaseType::Single);
-        let album_cost = game.recording_cost(&ReleaseType::Album);
+        // S-RECORD: the format→songs→studio picker with its live quote is
+        // S-UI's job (§H). Until it lands the menu quotes the *default*
+        // booking — the neutral demo room at the format's default song count —
+        // which is exactly what dispatching from here charges.
+        let single_songs = studios::default_song_count(&ReleaseType::Single);
+        let album_songs = studios::default_song_count(&ReleaseType::Album);
+        let single_cost = game.recording_cost(RecordingStudio::default(), single_songs);
+        let album_cost = game.recording_cost(RecordingStudio::default(), album_songs);
         // The cheapest pressing run, for affordability checks. M6: also the
         // currently-selected distribution channel's fee (§E-3) — Ok(0) while
         // signed, and `plan_distribution` folds the fame-gate check in too,
@@ -274,8 +281,10 @@ impl App {
                 label: "Record Single",
                 detail: if game.player.stress >= 90 {
                     "too stressed".into()
-                } else if songs == 0 {
-                    "no songs written".into()
+                } else if songs < constants::MIN_SINGLE_SONGS as usize {
+                    // A single is an A-side plus a B-side now (§A) — one song
+                    // banked is no longer a record.
+                    format!("{}/{} songs", songs, constants::MIN_SINGLE_SONGS)
                 } else if signed {
                     format!("${} — label presses", single_cost)
                 } else if !channel_available {

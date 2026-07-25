@@ -2,18 +2,45 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::data::format_money;
 use crate::game::music::{DistributionChannel, ReleaseType};
-use crate::game::{GameAction, PRESSING_TIERS, TourQuote, TourRig};
+use crate::game::studios::{self, RecordingStudio};
+use crate::game::{Game, GameAction, PRESSING_TIERS, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
+
+/// S-RECORD: the record action now carries a song count and a studio (§A/§C).
+/// The picker that lets the player *choose* them — format → songs → studio,
+/// quote-first — is S-UI's (§H); until then every dispatch books the default:
+/// the format's default song count in the neutral demo room, which reproduces
+/// the pre-cycle booking a player never had to think about.
+fn default_record_action(
+    game: &Game,
+    release_type: ReleaseType,
+    pressing: Option<usize>,
+) -> GameAction {
+    let songs = game
+        .band
+        .default_booking_songs(&release_type)
+        .unwrap_or_else(|| studios::default_song_count(&release_type));
+    let studio = RecordingStudio::default();
+    match release_type {
+        ReleaseType::Single => GameAction::RecordSingle {
+            songs,
+            studio,
+            pressing,
+        },
+        ReleaseType::Album => GameAction::RecordAlbum {
+            songs,
+            studio,
+            pressing,
+        },
+    }
+}
 
 impl App {
     /// A signed band's label decides the run; an indie band picks one — and,
     /// while unsigned, a distribution channel alongside it (design §E-3, M6).
     pub(crate) fn open_pressing_picker(&mut self, release_type: ReleaseType) {
         if self.game.band.current_deal().is_some() {
-            let action = match release_type {
-                ReleaseType::Single => GameAction::RecordSingle { pressing: None },
-                ReleaseType::Album => GameAction::RecordAlbum { pressing: None },
-            };
+            let action = default_record_action(&self.game, release_type, None);
             self.dispatch(action);
         } else {
             self.screen = Screen::PressingPicker {
@@ -89,14 +116,7 @@ impl App {
                 // default next time this picker opens.
                 self.game.current_distribution_channel = channel;
                 self.screen = Screen::Main;
-                let action = match release_type {
-                    ReleaseType::Single => GameAction::RecordSingle {
-                        pressing: Some(selected),
-                    },
-                    ReleaseType::Album => GameAction::RecordAlbum {
-                        pressing: Some(selected),
-                    },
-                };
+                let action = default_record_action(&self.game, release_type, Some(selected));
                 self.dispatch(action);
             }
             _ => {}

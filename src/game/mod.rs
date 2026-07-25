@@ -19,6 +19,7 @@ mod rng;
 mod shows;
 #[cfg(test)]
 mod sim; // Track D balance lab: bot-driven career sims, tests only.
+pub mod studios;
 pub mod timeline;
 mod turn;
 pub mod world;

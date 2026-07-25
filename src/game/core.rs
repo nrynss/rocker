@@ -14,6 +14,7 @@ use crate::game::genre;
 use crate::game::music::{DistributionChannel, MarketingCampaignType, Release};
 use crate::game::player::{LifestyleTier, Player};
 use crate::game::shows::{ShowReport, TourReport};
+use crate::game::studios::RecordingStudio;
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::{GameWorld, PotentialDealOffer};
 
@@ -22,10 +23,22 @@ pub enum GameAction {
     LazeAround,
     WriteSongs,
     Practice,
+    /// Song count and studio are explicit player choices, quoted before
+    /// booking (design §A/§C, S-RECORD): 2-3 songs for a single, 8-14 for an
+    /// album, in one of the five rooms. Fame never selects either; it only
+    /// gates which studios are available.
+    ///
+    /// `pressing` stays for now — recording still presses and distributes, as
+    /// it always has. §D (S-MASTER) is the task that splits recording from
+    /// pressing and takes this field with it.
     RecordSingle {
+        songs: u8,
+        studio: RecordingStudio,
         pressing: Option<usize>,
     },
     RecordAlbum {
+        songs: u8,
+        studio: RecordingStudio,
         pressing: Option<usize>,
     },
     Gig(usize),

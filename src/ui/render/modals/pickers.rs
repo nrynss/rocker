@@ -13,6 +13,7 @@ use crate::data::format_money;
 use crate::game::PRESSING_TIERS;
 use crate::game::TourRig;
 use crate::game::music::{DistributionChannel, ReleaseType};
+use crate::game::studios::{self, RecordingStudio};
 use crate::ui::app::{App, Screen};
 
 use super::super::{centered_rect, format_population};
@@ -97,10 +98,64 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let [tiers_area, channel_area] =
-        Layout::vertical([Constraint::Min(6), Constraint::Length(6)]).areas(inner);
+    let [session_area, tiers_area, channel_area] = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Min(6),
+        Constraint::Length(6),
+    ])
+    .areas(inner);
 
-    let recording = app.game.recording_cost(&release_type);
+    // S-RECORD (§C — "the quote comes first"): the booking this screen will
+    // dispatch, quoted from the same core the action charges from. The
+    // songs/studio *axes* of the picker are S-UI's (§H); until they land the
+    // booking is the default — the format's default song count, trimmed to the
+    // notebook, in the neutral demo room.
+    let songs = app
+        .game
+        .band
+        .default_booking_songs(&release_type)
+        .unwrap_or_else(|| studios::default_song_count(&release_type));
+    let quote = app
+        .game
+        .quote_recording(release_type, songs, RecordingStudio::default())
+        .ok();
+    let recording = quote.as_ref().map_or(0, |quote| quote.cost);
+    // Which rooms fame has opened (§C): a gate, never a price — the studio the
+    // booking uses is quoted above at the same cost whatever the fame is.
+    let rooms_open = RecordingStudio::ALL
+        .iter()
+        .filter(|studio| app.game.studio_is_available(**studio))
+        .map(|studio| studio.label())
+        .collect::<Vec<_>>()
+        .join(", ");
+    frame.render_widget(
+        Paragraph::new(match &quote {
+            Some(quote) => vec![
+                Line::from(format!(
+                    "{}-song {} at the {} — {} studio time, {} week session, songs avg {}, quality ~{}-{}",
+                    quote.songs,
+                    studios::format_label(&quote.release_type),
+                    quote.studio.label(),
+                    format_money(quote.cost),
+                    quote.weeks,
+                    quote.avg_song_quality,
+                    quote.quality_low,
+                    quote.quality_high
+                )),
+                Line::styled(
+                    format!("Rooms open to you: {}", rooms_open),
+                    Style::new().fg(Color::DarkGray),
+                ),
+            ],
+            None => vec![Line::styled(
+                "Not enough songs on hand for this format.",
+                Style::new().fg(Color::Red),
+            )],
+        })
+        .block(Block::default().title("Session")),
+        session_area,
+    );
+
     let items: Vec<ListItem> = PRESSING_TIERS
         .iter()
         .map(|(name, copies)| {

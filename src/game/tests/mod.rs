@@ -6,6 +6,7 @@
 //! Test function names are unchanged from when they lived in `mod.rs`.
 
 use crate::game::music::{Release, ReleaseType};
+use crate::game::studios::RecordingStudio;
 use crate::game::world::PotentialDealOffer;
 
 use super::constants::{self, *};
@@ -34,6 +35,12 @@ mod time;
 fn test_game() -> Game {
     Game::new().expect("data files present")
 }
+
+/// S-RECORD (design §C): the neutral baseline room — bonus 0, and the rate the
+/// rest of the economy was balanced against. Every test that isn't *about* the
+/// studio ladder books here, so its numbers mean what they meant before the
+/// studios existed.
+const TEST_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
 
 /// Resolve a commitment to the end with no weekly tick in between (§F).
 /// This is the pre-0.9 "the whole thing happens inside the action" path,

@@ -23,6 +23,7 @@ use crate::game::music::DistributionChannel;
 use crate::game::music::ReleaseType;
 use crate::game::player::LifestyleTier;
 use crate::game::player::Player;
+use crate::game::studios::{self, RecordingStudio};
 use crate::game::timeline::MusicTimeline;
 use crate::game::world::GameWorld;
 use crate::game::world::{LabelStrategy, LabelTier};
@@ -242,10 +243,42 @@ fn gig_or_rest(game: &Game) -> GameAction {
     }
 }
 
+/// S-RECORD (design §C): the room every bot books. The neutral demo room is
+/// the pre-cycle economy — choosing *up* the studio ladder is a decision S-SIM
+/// teaches the bots on purpose (§I), not one this compatibility pass should
+/// make for them behind its own back.
+const BOT_STUDIO: RecordingStudio = RecordingStudio::DemoRoom;
+
+/// How many songs a bot's booking takes (design §A): the format's default,
+/// trimmed to what is actually banked.
+fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
+    game.band
+        .default_booking_songs(&kind)
+        .unwrap_or_else(|| studios::default_song_count(&kind))
+}
+
+/// The record action a bot dispatches, so the booking it is billed for
+/// (`release_bill`) and the booking it makes can never disagree.
+fn bot_record(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> GameAction {
+    let songs = bot_songs(game, kind);
+    match kind {
+        ReleaseType::Single => GameAction::RecordSingle {
+            songs,
+            studio: BOT_STUDIO,
+            pressing,
+        },
+        ReleaseType::Album => GameAction::RecordAlbum {
+            songs,
+            studio: BOT_STUDIO,
+            pressing,
+        },
+    }
+}
+
 /// The out-of-pocket bill to record and press `kind` right now: studio time
 /// always, plus the pressing run when unsigned (a label presses for free).
 fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
-    let mut bill = game.recording_cost(&kind);
+    let mut bill = game.recording_cost(BOT_STUDIO, bot_songs(game, kind));
     if game.band.current_deal().is_none() {
         let (_, copies) = PRESSING_TIERS[pressing.unwrap_or(GARAGE_RUN)];
         bill += game.pressing_cost(&kind, copies);
@@ -263,20 +296,19 @@ fn studio_rat(game: &Game) -> GameAction {
             .player
             .can_afford(release_bill(game, ReleaseType::Album, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordAlbum {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Album, Some(GARAGE_RUN));
         }
         // Can't afford the album yet: press a spare song (anything beyond
         // the eight banked for the album) as a single to raise the cash.
-        if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+        // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+        // has to mean spare *after* the album pile, not one song over it.
+        if game.band.unreleased_songs.len()
+            >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
             && game
                 .player
                 .can_afford(release_bill(game, ReleaseType::Single, Some(GARAGE_RUN)))
         {
-            return GameAction::RecordSingle {
-                pressing: Some(GARAGE_RUN),
-            };
+            return bot_record(game, ReleaseType::Single, Some(GARAGE_RUN));
         }
         // Blocked on money with nothing spare to single off either: keep
         // writing. This is the bot's only bootstrap out of "broke, one
@@ -321,16 +353,19 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, pressing))
     {
-        return GameAction::RecordAlbum { pressing };
+        return bot_record(game, ReleaseType::Album, pressing);
     }
     // Songs above the album pile become singles: cash flow, a higher live
     // ceiling, and something on the shelves worth gigging on.
-    if game.band.unreleased_songs.len() > constants::MIN_ALBUM_SONGS as usize
+    // S-RECORD (§A): a single now eats MIN_SINGLE_SONGS songs, so "spare"
+    // has to mean spare *after* the album pile, not one song over it.
+    if game.band.unreleased_songs.len()
+        >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
         && game
             .player
             .can_afford(release_bill(game, ReleaseType::Single, pressing))
     {
-        return GameAction::RecordSingle { pressing };
+        return bot_record(game, ReleaseType::Single, pressing);
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
