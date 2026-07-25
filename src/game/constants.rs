@@ -578,6 +578,76 @@ pub(super) const TOUR_REGIONAL_FAME_GAIN_BASE: f32 = 7.0;
 pub(super) const TOUR_REGIONAL_FAME_GAIN_RNG_SPREAD: u8 = 5;
 
 // ============================================================================
+// S-RECORD: the five recording studios + what a format earns
+// (docs/DESIGN-v0.9-studio-cycle.md §A and §C). Same discipline as the tour
+// rigs above: fame gates which rooms are selectable and nothing else. Same
+// studio + same songs = same quote, at any fame.
+// ============================================================================
+
+/// The five studios (`RecordingStudio`, `game/studios.rs`), in ascending
+/// scale — index-aligned with every `STUDIO_*` table below.
+///
+/// The bottom two are ungated on purpose: a band with no name at all must
+/// still be able to make a record, and the home 4-track is the format's floor,
+/// not a punishment. [tune]
+pub(super) const STUDIO_FAME_GATE: [u8; 5] = [0, 0, 20, 45, 70];
+
+/// Added to release quality inside `calculate_release_quality`, before its
+/// clamp (design §C). An additive shift, deliberately not a multiplier: it
+/// moves the whole distribution, so a great band in a demo room still beats a
+/// poor band at the world-class room, and the top room can't turn weak songs
+/// into a hit on its own.
+///
+/// Index 1 (the local demo room) is 0 by design, not by tuning — it is the
+/// neutral baseline that reproduces the pre-cycle game for a default-picking
+/// player. Everything else is measured against it. [tune]
+pub(super) const STUDIO_QUALITY_BONUS: [i8; 5] = [-8, 0, 6, 12, 20];
+
+/// Studio time per song, before the era's `recording_cost_modifier` (design
+/// §C table). This is what replaces the retired flat
+/// `SINGLE_RECORDING_COST` / `ALBUM_RECORDING_BASE_COST` pair: a 14-track
+/// album now costs what fourteen tracks cost, and a 2-song single is
+/// genuinely cheap.
+///
+/// The baseline (index 1) is set so the default booking lands near the old
+/// bill rather than on it: a 2-song single is $440 against the old flat $300,
+/// a 10-track album $2,200 against the old flat $3,000. Per-song pricing
+/// cannot reproduce two flat numbers at both ends at once — the album was
+/// priced as though it were ten songs at $300 each — so §C's "reproduces
+/// today's numbers" is honoured at the album end, where the money actually
+/// is, and a single gets slightly dearer to record and (via
+/// `SINGLE_SALES_FACTOR`) much cheaper to earn from. [tune]
+pub(super) const STUDIO_RATE_PER_SONG: [u32; 5] = [60, 220, 650, 1_600, 4_000];
+
+/// Calendar weeks each song takes in each room (design §C table). A better
+/// room costs time as well as money, which is what stops the top of the ladder
+/// from being a pure money check: at these rates a 2-song single in the demo
+/// room is one week, a 10-track album at a major-city studio six, and a
+/// 14-track album at the world-class room twelve.
+///
+/// Quoted from S-RECORD, *spent* from S-TIME (design §F) — until that lands
+/// these weeks are a correct number the picker shows, not a commitment the
+/// calendar enforces. [tune]
+pub(super) const STUDIO_WEEKS_PER_SONG: [f32; 5] = [0.20, 0.30, 0.45, 0.60, 0.80];
+
+/// Ceiling on a booking's length (design §B). Fourteen songs at the top room
+/// is already 11.2 weeks, so this only ever bites on a combination that
+/// doesn't exist yet — it is here so a later cycle's slower room or longer
+/// format can't quietly book a band out of a year. [tune]
+pub(super) const RECORDING_MAX_WEEKS: u8 = 12;
+
+/// What a single earns against an album (design §A). Applied once, in
+/// `calculate_release_sales_score`, so it scales the initial sales score and —
+/// because the catalogue tail is computed from that stored score — the tail
+/// with it.
+///
+/// A single is the cheap, fast, low-ceiling release: the way you buy chart
+/// presence and fame between albums, not the way you get rich. Before this it
+/// sold exactly what an album of the same quality sold, which made the album
+/// strictly the worse deal per dollar of studio time. [tune]
+pub(super) const SINGLE_SALES_FACTOR: f32 = 0.35;
+
+// ============================================================================
 // M5: Label recoupment + label auto-repress
 // (docs/DESIGN-v0.7-money-cycle.md §E-2 and the §E-1 label half). The label's
 // money is a loan, not a gift: the advance at signing plus pressing and promo

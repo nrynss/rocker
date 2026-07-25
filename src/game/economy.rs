@@ -2,8 +2,9 @@
 //! and the weekly release/catalog payout.
 
 use crate::game::music::{DistributionChannel, Release, ReleaseType};
+use crate::game::studios::RecordingStudio;
 
-use super::constants::{self, *};
+use super::constants::*;
 use super::*;
 
 impl Game {
@@ -36,8 +37,18 @@ impl Game {
             })
             .unwrap_or(1.0);
 
+        // S-RECORD (design §A): a single earns less, and differently. This is
+        // the ONE place the factor is applied — the catalogue tail derives from
+        // the `initial_sales_score` this returns, so scaling here scales the
+        // tail with it and the two can never disagree.
+        let format_factor = match release.release_type {
+            ReleaseType::Single => SINGLE_SALES_FACTOR,
+            ReleaseType::Album => 1.0,
+        };
+
         let base_score = quality_score + marketing_score + fame_score;
-        (base_score * era_sales_modifier * genre_modifier * era_genre_modifier).max(0.0) as u32
+        (base_score * era_sales_modifier * genre_modifier * era_genre_modifier * format_factor)
+            .max(0.0) as u32
     }
 
     /// How much of a release's potential audience the band can actually
@@ -168,12 +179,18 @@ impl Game {
     }
 
     /// Studio cost of a release. Pressing is a separate bill.
-    pub fn recording_cost(&self, release_type: &ReleaseType) -> i32 {
-        let base = match release_type {
-            ReleaseType::Single => constants::SINGLE_RECORDING_COST,
-            ReleaseType::Album => constants::ALBUM_RECORDING_BASE_COST,
-        };
-        (base as f32 * self.timeline.get_recording_cost_modifier()) as i32
+    ///
+    /// S-RECORD (design §A): `per-song studio rate × songs × era modifier`.
+    /// The format no longer enters the price at all — a two-song album would
+    /// cost what a two-song single costs — because what you are paying for is
+    /// studio time, and the format's identity now lives in its song-count
+    /// bounds (§A) and its sales ceiling (`SINGLE_SALES_FACTOR`) instead.
+    /// Fame is deliberately absent: `studio` is gated by fame, never priced by
+    /// it (§C).
+    pub fn recording_cost(&self, studio: RecordingStudio, songs: u8) -> i32 {
+        (studio.rate_per_song() as f32
+            * f32::from(songs)
+            * self.timeline.get_recording_cost_modifier()) as i32
     }
 
     /// What a pressing run of `copies` costs to buy yourself.

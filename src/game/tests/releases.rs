@@ -185,18 +185,28 @@ fn a_hit_release_enters_the_charts_and_a_flop_misses() {
 #[test]
 fn failed_recording_does_not_eat_songs() {
     let mut game = test_game();
+    // S-RECORD (§A): two songs, so the attempt fails on the money it was
+    // written to fail on rather than on the new song-count floor.
     game.band.unreleased_songs.push(music::Song {
         id: 0,
         name: "Keeper".to_string(),
         songwriting_quality: 50,
     });
+    game.band.unreleased_songs.push(music::Song {
+        id: 1,
+        name: "Other Keeper".to_string(),
+        songwriting_quality: 50,
+    });
     game.player.money = 0;
 
     let mut rng = StdRng::seed_from_u64(0);
-    assert!(game.action_record_single(Some(0), &mut rng).is_err());
+    assert!(
+        game.action_record_single(MIN_SINGLE_SONGS, TEST_STUDIO, Some(0), &mut rng)
+            .is_err()
+    );
     assert_eq!(
         game.band.unreleased_songs.len(),
-        1,
+        2,
         "songs must survive a recording attempt the player cannot afford"
     );
 }

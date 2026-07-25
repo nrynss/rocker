@@ -11,7 +11,11 @@ fn a_full_season_of_turns_never_panics() {
             0 => GameAction::WriteSongs,
             1 => GameAction::Gig(0),
             2 => GameAction::LazeAround,
-            3 => GameAction::RecordSingle { pressing: Some(0) },
+            3 => GameAction::RecordSingle {
+                songs: MIN_SINGLE_SONGS,
+                studio: TEST_STUDIO,
+                pressing: Some(0),
+            },
             4 => GameAction::Practice,
             _ => GameAction::TakeBreak,
         };
