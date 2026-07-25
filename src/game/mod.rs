@@ -33,7 +33,7 @@ pub use constants::{
     TIER_INDEPENDENT_MIN_CAPITAL, TIER_MAJOR_MIN_CAPITAL, TOUR_HEALTH_GUARD, TOUR_STRESS_GUARD,
 };
 pub use core::{
-    BreakInProgress, Game, GameAction, OngoingActivity, SupportTourInProgress, SupportTourOffer,
-    TourInProgress,
+    BreakInProgress, Game, GameAction, OngoingActivity, RecordingInProgress, SupportTourInProgress,
+    SupportTourOffer, TourInProgress,
 };
 pub use shows::{ShowReport, TourReport};

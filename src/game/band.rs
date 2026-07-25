@@ -1,5 +1,5 @@
 use super::genre::MusicGenre;
-use super::music::{Release, Song}; // Import new structs
+use super::music::{Master, Release, Song}; // Import new structs
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,6 +17,14 @@ pub struct Band {
     pub peak_fame: u8,
     pub skill: u8, // 0-100
     pub unreleased_songs: Vec<Song>,
+    /// The vault: finished records the band owns and hasn't put out yet
+    /// (design §D). A session deposits one here; the Release action takes one
+    /// out. A master may sit here indefinitely — that is a strategy, not a
+    /// leak. `#[serde(default)]` so every pre-0.9 save loads with an empty
+    /// vault, which is exactly what it had: before §D, recording *was*
+    /// releasing and nothing could be in the can.
+    #[serde(default)]
+    pub masters: Vec<Master>,
     pub singles_released: Vec<Release>,
     pub albums_released: Vec<Release>,
     pub members: Vec<BandMember>,
@@ -170,6 +178,7 @@ impl Default for Band {
             peak_fame: 0,
             skill: 20,
             unreleased_songs: Vec::new(),
+            masters: Vec::new(),
             singles_released: Vec::new(),
             albums_released: Vec::new(),
             members: vec![

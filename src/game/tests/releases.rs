@@ -2,8 +2,6 @@
 //! recording safety, and era-genre fit.
 
 use crate::game::music::{MarketingCampaignType, ReleaseType};
-use rand::SeedableRng;
-use rand::rngs::StdRng;
 
 use super::*;
 
@@ -201,15 +199,14 @@ fn failed_recording_does_not_eat_songs() {
     });
     game.player.money = 0;
 
-    let mut rng = StdRng::seed_from_u64(0);
     assert!(
-        game.action_record_single(MIN_SINGLE_SONGS, TEST_STUDIO, Some(0), &mut rng)
+        game.action_record_single(MIN_SINGLE_SONGS, TEST_STUDIO)
             .is_err()
     );
     assert_eq!(
         game.band.unreleased_songs.len(),
         2,
-        "songs must survive a recording attempt the player cannot afford"
+        "songs must survive a booking the player cannot afford"
     );
 }
 

@@ -25,16 +25,15 @@ impl Game {
             GameAction::LazeAround => self.action_laze_around(),
             GameAction::WriteSongs => self.action_write_songs(rng),
             GameAction::Practice => self.action_practice(),
-            GameAction::RecordSingle {
-                songs,
-                studio,
-                pressing,
-            } => self.action_record_single(songs, studio, pressing, rng),
-            GameAction::RecordAlbum {
-                songs,
-                studio,
-                pressing,
-            } => self.action_record_album(songs, studio, pressing, rng),
+            // S-MASTER (§D): recording books a session and nothing else, and
+            // its rolls come off the activity stream at booking — so neither
+            // takes the turn's `rng`, exactly as `action_go_on_tour` stopped
+            // taking one when S-TIME made a tour a commitment.
+            GameAction::RecordSingle { songs, studio } => self.action_record_single(songs, studio),
+            GameAction::RecordAlbum { songs, studio } => self.action_record_album(songs, studio),
+            GameAction::ReleaseMaster { master, pressing } => {
+                self.action_release_master(master, pressing)
+            }
             GameAction::Gig(venue_index) => self.action_play_gig(venue_index, rng),
             GameAction::GoOnTour(region_index, rig, weeks) => {
                 self.action_go_on_tour(region_index, rig, weeks)

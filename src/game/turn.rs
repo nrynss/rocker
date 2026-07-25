@@ -307,6 +307,10 @@ impl Game {
         // be mutable throughout. Whatever comes back — a week further on, or
         // nothing at all because it settled — is what the resolver puts back.
         match self.ongoing_activity.take() {
+            // §D: a session's weeks decide nothing — the record was settled at
+            // booking — so this arm only counts them down and settles the
+            // master at the end.
+            Some(OngoingActivity::Recording(session)) => self.resolve_recording_week(session),
             Some(OngoingActivity::Tour(tour)) => self.resolve_tour_week(tour),
             Some(OngoingActivity::SupportTour(support)) => self.resolve_support_tour_week(support),
             Some(OngoingActivity::Break(rest)) => self.resolve_break_week(rest),
@@ -331,6 +335,7 @@ impl Game {
     /// resume into.
     fn abandon_ongoing_activity(&mut self) {
         match self.ongoing_activity.take() {
+            Some(OngoingActivity::Recording(session)) => self.settle_recording(session, false),
             Some(OngoingActivity::Tour(tour)) => self.settle_tour(tour, TourEnding::Abandoned),
             Some(OngoingActivity::SupportTour(support)) => self.settle_support_tour(support, false),
             Some(OngoingActivity::Break(rest)) => self.settle_break(rest, false),
@@ -384,6 +389,10 @@ impl Game {
                 | GameAction::StartMarketingCampaign(_, _)
                 | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
                 | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
+                // §D: the weeks a record costs were the session's. Putting the
+                // finished tapes on a truck is paperwork, and paperwork is
+                // instant here — the same call `RePress` above already makes.
+                | GameAction::ReleaseMaster { .. }
                 | GameAction::AbandonActivity // §F: the week you walk out of is yours to spend
                 | GameAction::Quit
         );

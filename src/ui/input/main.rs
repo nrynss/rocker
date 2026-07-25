@@ -34,11 +34,17 @@ impl App {
     pub(crate) fn activate(&mut self, kind: MenuKind) {
         match kind {
             MenuKind::Action(action) => self.dispatch(action),
-            MenuKind::RecordSingle => {
-                self.open_pressing_picker(crate::game::music::ReleaseType::Single)
-            }
-            MenuKind::RecordAlbum => {
-                self.open_pressing_picker(crate::game::music::ReleaseType::Album)
+            MenuKind::RecordSingle => self.book_recording(crate::game::music::ReleaseType::Single),
+            MenuKind::RecordAlbum => self.book_recording(crate::game::music::ReleaseType::Album),
+            MenuKind::Vault => {
+                if self.game.vault().is_empty() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        "Nothing in the vault — book a session and finish a record first.",
+                    );
+                } else {
+                    self.screen = Screen::Vault { selected: 0 };
+                }
             }
             MenuKind::Deals => {
                 if self.game.pending_deal_offers.is_empty() {

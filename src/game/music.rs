@@ -3,6 +3,7 @@ use crate::game::constants::{
     DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR, DISTRIBUTION_CHANNEL_REACH_FLOOR,
 };
 use crate::game::genre::MusicGenre;
+use crate::game::studios::RecordingStudio;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -156,6 +157,66 @@ impl DistributionChannel {
     /// regional fame adds on top (`economy::territory_presence`).
     pub fn international_floor(self) -> f32 {
         DISTRIBUTION_CHANNEL_INTERNATIONAL_FLOOR[self.ordinal()]
+    }
+}
+
+/// A finished record the band owns and has not yet put out (design §D).
+///
+/// Recording is not pressing. A session (design §B) yields one of these into
+/// `Band::masters`; a separate Release action buys the pressing run and the
+/// distribution channel and turns it into a `Release`. **Sitting on a master
+/// is legal** and sometimes right — finish the record, tour behind the last
+/// one, put this one out into a better market.
+///
+/// Everything the record *is* was decided in the studio, and all of it is
+/// frozen here: the tracklisting, the format, the quality that came out of
+/// the room, and which room it was. Nothing that happens between the last day
+/// of the session and release day can change any of it — which is the point
+/// of a master. What release day still decides is how many copies exist and
+/// how far they travel, and those live on the `Release`, not here.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Master {
+    /// The record's title, chosen in the studio — an album's from the title
+    /// generator, a single's from its A-side.
+    pub name: String,
+    pub release_type: ReleaseType,
+    /// What came out of the room: `calculate_release_quality` rolled once, at
+    /// booking, against the band's condition then (design §D).
+    pub release_quality: u8,
+    /// Average songwriting quality of the songs actually cut.
+    pub songs_involved_quality_avg: u8,
+    /// The tracklisting, taken out of the notebook when the session was booked.
+    pub songs: Vec<Song>,
+    /// The room it was cut in (design §C) — kept for the vault to name.
+    pub studio: RecordingStudio,
+    /// The week the session's last week resolved.
+    pub week_finished: u32,
+    /// The band's genre at the time of recording, stamped onto the `Release`.
+    pub genre: Option<MusicGenre>,
+}
+
+/// What it costs to put a master out (design §D): the pressing run and the
+/// distribution channel, and nothing else — the studio was paid for weeks
+/// ago, at booking. Produced by `Game::quote_release`, which the vault UI
+/// quotes from and `action_release_master` charges from, so the two can never
+/// disagree — the same single-source-of-truth shape `RecordingQuote` has for
+/// a booking and `TourQuote` has for a tour.
+#[derive(Debug, Clone, Copy)]
+pub struct ReleaseQuote {
+    /// Copies that will exist: the chosen tier's run, or the label's own.
+    pub copies: u32,
+    /// `0` when signed — the label presses on its own dime, as it always has.
+    pub pressing_cost: i32,
+    /// `0` when signed — a label deal ignores indie channels entirely.
+    pub distribution_fee: i32,
+    /// The channel the record would go out under, frozen onto the `Release`.
+    pub channel: DistributionChannel,
+}
+
+impl ReleaseQuote {
+    /// The whole bill due on release day.
+    pub fn total(&self) -> i32 {
+        self.pressing_cost + self.distribution_fee
     }
 }
 

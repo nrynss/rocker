@@ -54,6 +54,37 @@ fn finish_activity_in_one_sitting(game: &mut Game) {
     }
 }
 
+/// Book a session, play it out, and put the resulting master straight in the
+/// shops — the whole of the pre-§D "record" action in one call.
+///
+/// S-MASTER (§D) split recording from pressing, so a test that is *about* what
+/// a release does (charts, recoupment, re-pressing, catalogue tails) would
+/// otherwise have to spell the whole pipeline out every time. Tests that are
+/// about the split itself — the session's weeks, the master in the vault,
+/// releasing later — drive the three stages by hand, as they should.
+///
+/// Deliberately not `process_turn`: like the callers it replaces, this leaves
+/// the calendar alone, so a test that pins a week can keep pinning it.
+fn record_and_release(
+    game: &mut Game,
+    release_type: ReleaseType,
+    songs: u8,
+    studio: RecordingStudio,
+    pressing: Option<usize>,
+) -> Result<(), String> {
+    match release_type {
+        ReleaseType::Single => game.action_record_single(songs, studio)?,
+        ReleaseType::Album => game.action_record_album(songs, studio)?,
+    }
+    finish_activity_in_one_sitting(game);
+    let master = game
+        .vault()
+        .len()
+        .checked_sub(1)
+        .ok_or_else(|| "the session left no master in the vault".to_string())?;
+    game.action_release_master(master, pressing)
+}
+
 fn test_release(id: u32, release_type: ReleaseType) -> Release {
     Release {
         id,

@@ -13,7 +13,6 @@ use crate::data::format_money;
 use crate::game::PRESSING_TIERS;
 use crate::game::TourRig;
 use crate::game::music::{DistributionChannel, ReleaseType};
-use crate::game::studios::{self, RecordingStudio};
 use crate::ui::app::{App, Screen};
 
 use super::super::{centered_rect, format_population};
@@ -74,15 +73,23 @@ pub(crate) fn draw_venue_picker_modal(frame: &mut Frame, app: &App) {
 /// rig-on-↑↓/length-on-←→ split (`draw_tour_booking_picker_modal`). The
 /// channel row is only shown while unsigned; the label decides both pressing
 /// and reach for a signed act, and never reaches this screen.
+///
+/// S-MASTER (§D): this now presses a *finished master* out of the vault. The
+/// studio bill is gone from it entirely — that was paid at booking, weeks ago
+/// — so what a tier's row totals is the true release-day bill and nothing else.
 pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     let Screen::PressingPicker {
-        release_type,
+        master,
         selected,
         channel,
     } = app.screen
     else {
         return;
     };
+    let Some(master) = app.game.vault().get(master) else {
+        return;
+    };
+    let release_type = master.release_type;
     let signed = app.game.band.current_deal().is_some();
     let fee = if signed { 0 } else { channel.fee() };
 
@@ -94,7 +101,7 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     frame.render_widget(Clear, area);
     let block = Block::bordered()
         .title(format!(" 📀 Press the {} ", kind))
-        .title_bottom(" ↑↓ pressing run · ←→ distribution · Enter record · Esc cancel ");
+        .title_bottom(" ↑↓ pressing run · ←→ distribution · Enter release · Esc back ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
@@ -105,54 +112,28 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
     ])
     .areas(inner);
 
-    // S-RECORD (§C — "the quote comes first"): the booking this screen will
-    // dispatch, quoted from the same core the action charges from. The
-    // songs/studio *axes* of the picker are S-UI's (§H); until they land the
-    // booking is the default — the format's default song count, trimmed to the
-    // notebook, in the neutral demo room.
-    let songs = app
-        .game
-        .band
-        .default_booking_songs(&release_type)
-        .unwrap_or_else(|| studios::default_song_count(&release_type));
-    let quote = app
-        .game
-        .quote_recording(release_type, songs, RecordingStudio::default())
-        .ok();
-    let recording = quote.as_ref().map_or(0, |quote| quote.cost);
-    // Which rooms fame has opened (§C): a gate, never a price — the studio the
-    // booking uses is quoted above at the same cost whatever the fame is.
-    let rooms_open = RecordingStudio::ALL
-        .iter()
-        .filter(|studio| app.game.studio_is_available(**studio))
-        .map(|studio| studio.label())
-        .collect::<Vec<_>>()
-        .join(", ");
+    // What is being pressed — the record as it came out of the room (§D).
+    // Everything here is frozen on the master; nothing on this screen can
+    // change it, which is the whole point of a master.
     frame.render_widget(
-        Paragraph::new(match &quote {
-            Some(quote) => vec![
-                Line::from(format!(
-                    "{}-song {} at the {} — {} studio time, {} week session, songs avg {}, quality ~{}-{}",
-                    quote.songs,
-                    studios::format_label(&quote.release_type),
-                    quote.studio.label(),
-                    format_money(quote.cost),
-                    quote.weeks,
-                    quote.avg_song_quality,
-                    quote.quality_low,
-                    quote.quality_high
-                )),
-                Line::styled(
-                    format!("Rooms open to you: {}", rooms_open),
-                    Style::new().fg(Color::DarkGray),
+        Paragraph::new(vec![
+            Line::from(format!(
+                "'{}' — {} songs cut at the {}, songs avg {}, quality {}",
+                master.name,
+                master.songs.len(),
+                master.studio.label(),
+                master.songs_involved_quality_avg,
+                master.release_quality
+            )),
+            Line::styled(
+                format!(
+                    "Finished week {} — the studio time is long paid for.",
+                    master.week_finished
                 ),
-            ],
-            None => vec![Line::styled(
-                "Not enough songs on hand for this format.",
-                Style::new().fg(Color::Red),
-            )],
-        })
-        .block(Block::default().title("Session")),
+                Style::new().fg(Color::DarkGray),
+            ),
+        ])
+        .block(Block::default().title("Master")),
         session_area,
     );
 
@@ -160,7 +141,7 @@ pub(crate) fn draw_pressing_picker_modal(frame: &mut Frame, app: &App) {
         .iter()
         .map(|(name, copies)| {
             let pressing = app.game.pressing_cost(&release_type, *copies);
-            let total = recording + pressing + fee;
+            let total = pressing + fee;
             let affordable = app.game.player.can_afford(total);
             let style = if affordable {
                 Style::new().fg(Color::White)

@@ -39,6 +39,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::TourBookingPicker { .. } => {
                     modals::draw_tour_booking_picker_modal(frame, app)
                 }
+                Screen::Vault { .. } => modals::draw_vault_modal(frame, app),
                 Screen::PressingPicker { .. } => modals::draw_pressing_picker_modal(frame, app),
                 Screen::LifestylePicker { .. } => modals::draw_lifestyle_picker_modal(frame, app),
                 Screen::RePressPicker { .. } => modals::draw_repress_picker_modal(frame, app),
@@ -248,9 +249,27 @@ mod tests {
         }
     }
 
-    /// The pressing/distribution picker (design §E-3, M6) and the re-press
-    /// pickers (§E-1 indie half) should render without panicking, both
-    /// locked (low fame, National unavailable) and unlocked (high fame).
+    /// A master as a finished session would leave it (design §D), so the
+    /// vault and the release picker have something to draw.
+    fn vault_master(
+        name: &str,
+        release_type: crate::game::music::ReleaseType,
+    ) -> crate::game::music::Master {
+        crate::game::music::Master {
+            name: name.to_string(),
+            release_type,
+            release_quality: 62,
+            songs_involved_quality_avg: 58,
+            songs: Vec::new(),
+            studio: crate::game::studios::RecordingStudio::DemoRoom,
+            week_finished: 1,
+            genre: None,
+        }
+    }
+
+    /// The vault (design §D), the pressing/distribution picker (§E-3, M6) and
+    /// the re-press pickers (§E-1 indie half) should render without panicking,
+    /// both locked (low fame, National unavailable) and unlocked (high fame).
     #[test]
     fn pressing_and_repress_pickers_render_without_panicking() {
         use crate::game::music::{DistributionChannel, ReleaseType};
@@ -259,10 +278,22 @@ mod tests {
         let mut terminal = Terminal::new(backend).expect("test backend");
         let mut app = app_on_main();
 
+        // The vault, empty first — a band with nothing finished must still get
+        // a screen rather than an index panic.
+        app.screen = Screen::Vault { selected: 0 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        app.game.band.masters = vec![
+            vault_master("Single: Opening Shot", ReleaseType::Single),
+            vault_master("The Long Player", ReleaseType::Album),
+        ];
+        app.screen = Screen::Vault { selected: 1 };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
         // Low fame: National is locked, so the channel row must render its
         // 🔒 state rather than panicking.
         app.screen = Screen::PressingPicker {
-            release_type: ReleaseType::Single,
+            master: 0,
             selected: 0,
             channel: DistributionChannel::National,
         };
@@ -271,7 +302,7 @@ mod tests {
         // High fame, every channel unlocked; also exercise the album variant.
         app.game.band.fame = 90;
         app.screen = Screen::PressingPicker {
-            release_type: ReleaseType::Album,
+            master: 1,
             selected: 2,
             channel: DistributionChannel::Regional,
         };

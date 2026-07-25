@@ -300,24 +300,32 @@ fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
 
 /// The record action a bot dispatches, so the booking it is billed for
 /// (`release_bill`) and the booking it makes can never disagree.
-fn bot_record(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> GameAction {
+///
+/// S-MASTER (§D): this books a *session* — it yields a master, not a record on
+/// the shelves. `release_from_the_vault` is the other half.
+fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
     let songs = bot_songs(game, kind);
     match kind {
         ReleaseType::Single => GameAction::RecordSingle {
             songs,
             studio: BOT_STUDIO,
-            pressing,
         },
         ReleaseType::Album => GameAction::RecordAlbum {
             songs,
             studio: BOT_STUDIO,
-            pressing,
         },
     }
 }
 
-/// The out-of-pocket bill to record and press `kind` right now: studio time
-/// always, plus the pressing run when unsigned (a label presses for free).
+/// The out-of-pocket bill to get `kind` from nothing to on the shelves: studio
+/// time always, plus the pressing run when unsigned (a label presses for
+/// free).
+///
+/// S-MASTER (§D) split when those two are due — studio time at booking,
+/// pressing weeks later at release — but a bot that books a session it can
+/// never afford to press just strands a master in the vault, so the *decision*
+/// still weighs the whole bill. That keeps the pre-§D booking behaviour, which
+/// is what makes the sweeps comparable across the split.
 fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
     let mut bill = game.recording_cost(BOT_STUDIO, bot_songs(game, kind));
     if game.band.current_deal().is_none() {
@@ -327,17 +335,39 @@ fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 
     bill
 }
 
+/// S-MASTER (§D): a finished record sitting in the vault earns nothing. Put
+/// the oldest master out as soon as the pressing (and, unsigned, the channel
+/// fee) is covered.
+///
+/// Releasing is instant — no week is consumed — so this costs the bot only the
+/// bill, and the very next `decide` gets on with the day job. Without it every
+/// bot would record forever and release never, and the whole lab would report
+/// zero releases.
+fn release_from_the_vault(game: &Game, pressing: Option<usize>) -> Option<GameAction> {
+    game.quote_release(0, pressing)
+        .ok()
+        .filter(|quote| game.player.can_afford(quote.total()))
+        .map(|_| GameAction::ReleaseMaster {
+            master: 0,
+            pressing,
+        })
+}
+
 fn gig_grinder(game: &Game) -> GameAction {
     gig_or_rest(game)
 }
 
 fn studio_rat(game: &Game) -> GameAction {
+    // §D: press whatever came out of the last session before booking the next.
+    if let Some(release) = release_from_the_vault(game, Some(GARAGE_RUN)) {
+        return release;
+    }
     if game.band.can_record_album() {
         if game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, Some(GARAGE_RUN)))
         {
-            return bot_record(game, ReleaseType::Album, Some(GARAGE_RUN));
+            return bot_record(game, ReleaseType::Album);
         }
         // Can't afford the album yet: press a spare song (anything beyond
         // the eight banked for the album) as a single to raise the cash.
@@ -349,7 +379,7 @@ fn studio_rat(game: &Game) -> GameAction {
                 .player
                 .can_afford(release_bill(game, ReleaseType::Single, Some(GARAGE_RUN)))
         {
-            return bot_record(game, ReleaseType::Single, Some(GARAGE_RUN));
+            return bot_record(game, ReleaseType::Single);
         }
         // Blocked on money with nothing spare to single off either: keep
         // writing. This is the bot's only bootstrap out of "broke, one
@@ -375,6 +405,12 @@ fn studio_rat(game: &Game) -> GameAction {
 /// when signed the label presses regardless (`plan_pressing` checks the
 /// deal first), so `None` is fine there.
 fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> GameAction {
+    // §D: a finished master goes out first. It is instant and it is what puts
+    // a record on the shelves at all — everything below (gigging the sales
+    // window, banking the income toward the next session) depends on it.
+    if let Some(release) = release_from_the_vault(game, pressing) {
+        return release;
+    }
     // A support slot is exposure money can't buy — and it pays. The
     // homebody skips it (never tours); everyone else grabs it.
     if allow_support
@@ -394,7 +430,7 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
             .player
             .can_afford(release_bill(game, ReleaseType::Album, pressing))
     {
-        return bot_record(game, ReleaseType::Album, pressing);
+        return bot_record(game, ReleaseType::Album);
     }
     // Songs above the album pile become singles: cash flow, a higher live
     // ceiling, and something on the shelves worth gigging on.
@@ -406,7 +442,7 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
             .player
             .can_afford(release_bill(game, ReleaseType::Single, pressing))
     {
-        return bot_record(game, ReleaseType::Single, pressing);
+        return bot_record(game, ReleaseType::Single);
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
