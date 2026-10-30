@@ -316,8 +316,84 @@ mechanically present, not decorative.
 
 ---
 
+## Part 4 — Round 2: what the second pass added
+
+A second research round went at the open questions in
+`unresolved-questions.md`. Five of the top six moved. The changes that
+matter to design:
+
+### The retail chain is now modelled from real numbers
+One 1979 release gives retail, dealer price and margin that reconcile to
+the penny (F51): **£5.00 retail → £2.61 dealer ex-VAT → 40% dealer
+margin**, against a standard trade term of **36⅔%** (F52). Two
+consequences for M5:
+
+- Convert retail to dealer price at **~52% of RRP** (the shop buys at
+  ~63% of the ticket, with VAT inside it). Do not invent the split;
+  derive it.
+- Treat **40% as a competitive weapon** a label can offer a retailer, and
+  36⅔% as the baseline. That is a live lever in a promotion campaign.
+- The label/distributor split inside the dealer price remains
+  undivided (F53) — a tunable, not a fact.
+
+### Representation is two contracts, and the early one costs more
+- **Manager: 20% of all earnings, gross**, from an actual 1970 agreement
+  recited in a Court of Appeal judgment (F41). No royalty carve-out, no
+  expenses-first deduction.
+- **Agent and manager are separate instruments**, often signed the same
+  day (F42) — model two line items, not one representation slider.
+- **Agent: ~10% established, 15–20% for a first agency** (F44). Early
+  representation is *dearer*, which gives the player something concrete
+  to renegotiate on success.
+- The real hazard is **ownership, not percentage**: the manager in the
+  O'Sullivan case also owned the publisher (50% after 15% expenses) and
+  the label (up to 8%) (F43). Offer that as a choice — bigger cut with no
+  ownership, or smaller cut plus publishing.
+
+### Equipment has a real ladder, and it runs the opposite way to expectation
+New copy-grade guitars £36.57–£45, a 4-drum kit £122.94, a basic PA
+£71.30 (F56); used-professional gear £160–£170 for a guitar or kit
+(F57). The finding to design around: **in 1975 a new-but-budget rig
+(~£512) was cheaper than a used-professional one (~£688)** (F58), so
+bands moved from new cheap to used pro. The upgrade is *quality*, not
+novelty — the opposite of the usual shop-ladder.
+
+### Publishing is two splits, not one
+The writer keeps ~50% at home but only ~25% of US income, because the
+publisher splits 50:50 again between its UK and US companies (F47). The
+mechanical rate was 6.25% of retail (F48), and a writer's share on a hit
+album side was £900–£1,500 (F49) — hundreds, not thousands. That makes a
+£50–£500 advance legible as exploitation rather than abstraction.
+
+### Survival income is a dated step function that gets worse
+The single man's dole ran **£9.80 (1975) → £11.10 → £12.90 (Nov 1976)**
+against £66.97 average manual pay (F61); it was **contribution-gated**,
+so a band of school-leavers qualified for nothing (F62); the statutory
+test was being *available for work* — a status risk for a gigging
+musician, not an earnings test (F63) — and its real value **fell** from
+39.5% of average earnings (1971) to 29.8% (1979) (F64). Model a dated
+lookup table, never inflation drift.
+
+### Promotion: cheap at the small end, invisible at the expensive end
+Real rate cards: **£6.00–£6.50 a column inch**, 5–8p a word, with series
+discounts (F65). Against that, a major spent a reported **£200,000**
+launching one album (F66). The small end is priced, the display-page /
+plugger / publicist tier is not — which is itself a finding about where
+the money went.
+
+### What did not move
+Producer points remain unfound after two rounds (F50) — keep any value
+out of the game or flag it loudly as a placeholder. Support-slot terms
+are still undocumented (F71). The unknown band's night's pay is bounded
+but not nailed: £25–£45 per band per night exists, but from **c.1980–84
+fieldwork**, and must not be backdated silently (F69).
+
+---
+
 ## Sources
-All row-level sources with URLs are in `findings.xlsx`. Full research
-notes (per-dimension dives, cross-verification, resolution passes with
-page-level Music Week citations) are in `evidence/`. Open items are in
-`unresolved-questions.md`.
+All row-level sources with URLs are in `findings.csv` (F01–F40 round 1,
+F41–F72 round 2). Full research notes are in `evidence/`: round 1 is
+`01-live-circuit.md` … `08-retail-charts.md` plus `cross-verification.md`
+and the `resolution-*.md` passes; round 2 is `round2-*.md`, including the
+page-level *Music Week* citations in `round2-retail-chain.md`. Open items
+are in `unresolved-questions.md`.
