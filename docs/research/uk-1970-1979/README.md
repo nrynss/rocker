@@ -13,6 +13,12 @@ The second pass attacked six clusters of open questions and closed
 several of them outright, including the retail chain, which is now
 documented end to end for one release.
 
+A third, **design-facing** pass (2026-10-31) asked what the evidence means
+for the game: it audited the code against the findings, audited the open
+issues, and proposed what would make the world feel inhabited and the
+economy honest. That work is in `DESIGN-living-world.md`, not in the
+evidence below — it is design, and it is labelled as such.
+
 ## What is here
 
 | File | What it is |
@@ -21,6 +27,7 @@ documented end to end for one release.
 | `report.md` | Ten historically grounded game events and five economic mechanics, each linked to finding IDs, plus a check of the game's current assumptions against the evidence. |
 | `unresolved-questions.md` | What the sources still will not settle, with the specific archive that would close each one, plus every contradiction found and its resolution status. |
 | `evidence/` | The full research trail in two rounds. Round 1: `01-live-circuit.md` … `08-retail-charts.md`, `cross-verification.md`, three `resolution-*.md` passes. Round 2: `round2-*.md`, six notes aimed at the round-1 gaps. Everything in `findings.csv` can be traced back through here. |
+| `DESIGN-living-world.md` | **What to build from this evidence.** A synthesis of six design passes: where the code contradicts the history, what the world is missing, and a suggested order of work. Proposals only — nothing here is decided design. Its six backing notes (`design-gap-analysis.md`, `design-living-scene.md`, `design-living-industry.md`, `design-survival-layer.md`, `design-live-ladder.md`, `open-issues-audit.md`) are in `evidence/`. |
 
 The CSV is the copy of record: it diffs cleanly in review, while a
 spreadsheet's binary format does not. A `findings.xlsx` built from the
