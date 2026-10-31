@@ -39,6 +39,25 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 const GARAGE_RUN: usize = 0;
 const CLUB_RUN: usize = 1;
 
+/// The pressing run a band that can *sell* the copies would order.
+///
+/// `CLUB_RUN` (2,000) is a sensible first release and a bad fifteenth one: at
+/// fame 100 a bot ships ~110 albums and every one of them sells out its run, so
+/// receipts are capped by `copies x income_per_copy` and the *record's quality
+/// never reaches the money*. Measured: a 2,000-copy run returns $4,000 an album
+/// at every room from the home 4-track to the world-class room — the studio
+/// ladder is invisible to a library that sells out in week one.
+///
+/// Ordered by fame, this is the run that lets demand, not the press, decide.
+fn run_for_fame(fame: u8) -> usize {
+    match fame {
+        0..=24 => GARAGE_RUN,
+        25..=54 => CLUB_RUN,
+        55..=84 => 2, // regional run, 10,000
+        _ => 3,       // national run, 50,000
+    }
+}
+
 const SMOKE_HORIZON: u32 = 5 * constants::WEEKS_PER_YEAR;
 const SWEEP_HORIZON: u32 = 15 * constants::WEEKS_PER_YEAR;
 const WIN_TARGET: u32 = 12 * constants::WEEKS_PER_YEAR;
@@ -231,7 +250,9 @@ impl Bot {
         match self {
             Bot::GigGrinder => gig_grinder(game),
             Bot::StudioRat => studio_rat(game, studio),
-            Bot::BalancedIndie => indie_loop(game, Some(CLUB_RUN), true, studio),
+            Bot::BalancedIndie => {
+                indie_loop(game, Some(run_for_fame(game.band.fame)), true, studio)
+            }
             Bot::LabelLoyalist => label_loyalist(game, studio),
             Bot::Homebody => homebody(game, studio),
             Bot::RoadDog => road_dog(game, studio),
@@ -328,7 +349,32 @@ fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
 ///
 /// S-MASTER (§D): this books a *session* — it yields a master, not a record on
 /// the shelves. `release_from_the_vault` is the other half.
+/// The room this policy should book, given the room it *wants*.
+///
+/// A fame-gated room is a hard refusal (`recording_plan` -> "needs at least N
+/// fame"), and a bot has no way to argue with it: it submits the same
+/// unbookable session every turn, `drive` falls back to `LazeAround`, and the
+/// career burns a week per attempt. Measured at the world-class room (gate 70)
+/// that was **31% of all turns** rejected; at major-city (gate 45), 6%.
+///
+/// So a policy asks for the best room it can reach: the requested room if it is
+/// unlocked, otherwise the highest rung below it. A band therefore still climbs
+/// the ladder as its fame allows, which is the shape §C intends — the gate
+/// paces the climb rather than punishing the attempt.
+fn reachable_studio(game: &Game, wanted: RecordingStudio) -> RecordingStudio {
+    // Walk down from the wanted room until one is unlocked. Home (index 0) is
+    // ungated, so this always terminates.
+    for i in (0..=wanted.ordinal()).rev() {
+        let room = RecordingStudio::ALL[i];
+        if game.studio_is_available(room) {
+            return room;
+        }
+    }
+    RecordingStudio::ALL[0]
+}
+
 fn bot_record(game: &Game, kind: ReleaseType, studio: RecordingStudio) -> GameAction {
+    let studio = reachable_studio(game, studio);
     let songs = bot_songs(game, kind);
     match kind {
         ReleaseType::Single => GameAction::RecordSingle { songs, studio },
@@ -351,6 +397,7 @@ fn release_bill(
     pressing: Option<usize>,
     studio: RecordingStudio,
 ) -> i32 {
+    let studio = reachable_studio(game, studio);
     let songs = bot_songs(game, kind);
     let mut bill = game.recording_cost(studio, songs);
     if game.band.current_deal().is_none() {
@@ -565,7 +612,7 @@ fn homebody(game: &Game, studio: RecordingStudio) -> GameAction {
         return GameAction::ChangeLifestyle(down);
     }
     // The indie day job, minus the road: never accept a support tour.
-    indie_loop(game, Some(CLUB_RUN), false, studio)
+    indie_loop(game, Some(run_for_fame(game.band.fame)), false, studio)
 }
 
 /// M7 (§F): the biggest tour this act can afford right now — a region it
@@ -615,7 +662,7 @@ fn road_dog(game: &Game, studio: RecordingStudio) -> GameAction {
     {
         return GameAction::GoOnTour(region, rig, weeks);
     }
-    indie_loop(game, Some(CLUB_RUN), true, studio)
+    indie_loop(game, Some(run_for_fame(game.band.fame)), true, studio)
 }
 
 /// M7 (§F): the eternal independent — never signs (it simply never accepts;
@@ -624,7 +671,7 @@ fn road_dog(game: &Game, studio: RecordingStudio) -> GameAction {
 /// on the best distribution tier its fame and wallet allow, which is what
 /// sets it apart from balanced-indie's default mail-order reach.
 fn indie_lifer(game: &Game, studio: RecordingStudio) -> GameAction {
-    indie_loop(game, Some(CLUB_RUN), true, studio)
+    indie_loop(game, Some(run_for_fame(game.band.fame)), true, studio)
 }
 
 // ---------------------------------------------------------------------------
@@ -2584,15 +2631,15 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
     println!();
     println!("=== studio ladder: BalancedIndie, one room per column ===");
     println!(
-        "{:<16} {:>4} {:>5} {:>7} {:>9} {:>9} {:>9} {:>8} {:>5} {:>5}",
+        "{:<16} {:>4} {:>5} {:>9} {:>9} {:>6} {:>7} {:>6} {:>5} {:>5}",
         "room",
         "runs",
         "win%",
-        "win.yr",
         "med.fame",
-        "med.peak",
         "med.$",
-        "alb1.wk",
+        "albums",
+        "singles",
+        "wk/rel",
         "broke",
         "going"
     );
@@ -2610,13 +2657,7 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
         }
         let n = careers.len();
         let wins = careers.iter().filter(|c| c.won()).count();
-        let win_year = median(
-            careers
-                .iter()
-                .filter_map(|c| c.weeks_to_rockstar)
-                .map(|w| w / constants::WEEKS_PER_YEAR)
-                .collect(),
-        );
+
         let broke = careers
             .iter()
             .filter(|c| c.ending == Ending::WentBroke)
@@ -2625,31 +2666,30 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
             .iter()
             .filter(|c| c.ending == Ending::StillGoing)
             .count();
+        let albums = median(careers.iter().map(|c| c.albums).collect()).unwrap_or(0);
+        let singles = median(careers.iter().map(|c| c.singles).collect()).unwrap_or(0);
+        let weeks = median(careers.iter().map(|c| c.weeks).collect()).unwrap_or(1) as f32;
+        let per_rel = weeks / (albums + singles).max(1) as f32;
         println!(
-            "{:<16} {:>4} {:>4}% {:>7} {:>9} {:>9} {:>9} {:>8} {:>5} {:>5}",
+            "{:<16} {:>4} {:>4}% {:>9} {:>9} {:>6} {:>7} {:>6.1} {:>5} {:>5}",
             studio.label(),
             n,
             wins * 100 / n,
-            show(win_year),
             show(median(careers.iter().map(|c| c.final_fame).collect())),
-            show(median(careers.iter().map(|c| c.peak_fame).collect())),
             show(median(careers.iter().map(|c| c.final_money).collect())),
-            show(median(
-                careers
-                    .iter()
-                    .filter_map(|c| c.weeks_to_first_album)
-                    .collect()
-            )),
+            albums,
+            singles,
+            per_rel,
             broke,
             going,
         );
         table.push((studio, careers));
     }
 
-    // --- What the ladder actually is, and the assertion that found it ------
+    // --- What the ladder is now, and what it took to get there ------------
     //
-    // MEASURED 2026-10-31 (24 seeds, BalancedIndie, 15 years). Every rung up
-    // the ladder earns *less*:
+    // FOUND 2026-10-31, first run (24 seeds, BalancedIndie, 15 years). Every
+    // rung up the ladder earned *less*:
     //
     //   room             win%   med.$      alb1.wk
     //   Home 4-track      91%   4,463,933     25
@@ -2658,28 +2698,30 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
     //   Major city       100%   2,816,784     64
     //   World-class       87%   1,094,476    278
     //
-    // The cause is arithmetic, not a bug in any one constant. A room's quality
-    // bonus is additive (§C, `STUDIO_QUALITY_BONUS` = -8/+0/+6/+12/+20), and
-    // quality reaches sales at `SALES_QUALITY_WEIGHT` 2.5 in
-    // `calculate_release_sales_score`. So demo -> major-city buys +11 quality
-    // = +27.5 sales-score points against a base of ~257 at fame 100 — an
-    // **+10.7% sales uplift** — while the bill goes 2,200 -> 16,000 (**7.3x**)
-    // and the session goes 3 -> 6 weeks (**2x**), and those are weeks the act
-    // cannot gig. The top room is worse still: its fame gate (70) only opens
-    // once the fame term already dominates the score, so it buys the least
-    // where it costs the most.
+    // Two causes, and only one of them was the constants:
     //
-    // This is the same defect class as the full-production tour rig (PR #25)
-    // and the studio-rat's bootstrap single: a choice you can never come out
-    // ahead on is not a trade-off. The ladder S-UI made reachable is currently
-    // decoration, and §C's money-vs-time-vs-quality thesis does not hold in the
-    // shipped numbers.
+    // 1. **The bots could not book the rooms they were measuring** (a sim bug,
+    //    fixed here). No policy checked `studio_is_available`, so at the
+    //    world-class room (gate 70) 31% of all turns were a rejected booking
+    //    followed by a wasted week, and at major-city 6%. `reachable_studio`
+    //    now walks down to the best unlocked room, so a bot climbs the ladder
+    //    as its fame allows instead of hammering a locked door.
     //
-    // The fix is a [tune] decision — raise the quality bonus, raise the sales
-    // weight, or cut the top rooms' cash and weeks — and this sweep is the
-    // instrument for whichever is chosen. What it must not do is pass silently
-    // while the ladder is inverted, so the assertion pins the *property* (the
-    // best earner must not be the cheapest room) rather than a number.
+    // 2. **The economics were inverted** (the constants above). A room's bonus
+    //    is additive and quality reaches sales at `SALES_QUALITY_WEIGHT` 2.5,
+    //    while the old rate and weeks tables charged 7.3x the bill and double
+    //    the session for it. Time turned out to be the binding term: the old
+    //    weeks ladder pushed a ten-track album from 2 weeks to 8, and the
+    //    records a band never made cost more than the quality it bought.
+    //
+    // The retune in `STUDIO_*` is the fix, and this sweep is its evidence:
+    //   home $6.22M, demo $6.62M, regional $6.82M, major-city $6.95M,
+    //   world-class $7.07M — monotonic, every rung worth climbing, and the
+    //   margin small enough (~$200k) that an act's own circumstances decide.
+    //
+    // The assertion pins the *property*, not a number: the best earner must not
+    // be the cheapest room. It went red for two months' worth of reasons above
+    // and is green now — if it goes red again, the ladder has been re-broken.
     let demo = table
         .iter()
         .find(|(s, _)| *s == BOT_STUDIO)
@@ -2707,14 +2749,14 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
 
     assert!(
         best_room != RecordingStudio::Home,
-        "the home 4-track is the cheapest room AND the best earner, so no rung of the \
-         studio ladder pays for itself. Quality is additive and reaches sales at \
-         SALES_QUALITY_WEIGHT 2.5, so +11 quality buys ~10.7% more sales while the \
-         bill rises 7.3x and the session doubles in weeks — the ladder is dominated \
-         end to end (measured: home $4.46M, demo $4.06M, regional $3.47M, \
-         major-city $2.82M, world-class $1.09M over 24 seeds). This is S-SIM's to \
-         retune — raise the quality bonus, raise the sales weight, or cut the top \
-         rooms' cost and weeks — and this sweep is the instrument for whichever is \
-         chosen. See the block comment above."
+        "the home 4-track is the cheapest room AND the best earner, so the studio \
+         ladder has been re-broken. Check, in order: (a) `reachable_studio` still \
+         lets a policy book the room it asked for — a fame-gated booking is a \
+         wasted week and it was worth 31% of all turns at the world-class room; \
+         (b) `STUDIO_WEEKS_PER_SONG` has not been steepened — time is the binding \
+         constraint, and 0.28 per song already loses more albums than the quality \
+         buys; (c) `STUDIO_RATE_PER_SONG` has not been raised back toward the old \
+         18x spread; (d) `STUDIO_QUALITY_BONUS` still spans enough to matter. The \
+         working numbers and the measurement behind them are in `constants.rs`."
     );
 }

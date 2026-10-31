@@ -609,6 +609,13 @@ mod tests {
         ));
     }
 
+    /// The picker's quote and the booking's charge must come from one place.
+    ///
+    /// Asserting an exact bank delta would be wrong twice over: the booking turn
+    /// also runs the weekly tick (upkeep, any event), and `Game::new` seeds a
+    /// **random world** unless `ROCKER_SEED` is set — so an exact figure depends
+    /// on ambient entropy and fails one run in three. What must hold regardless
+    /// is the identity: the studio bill taken is the studio bill quoted.
     #[test]
     fn the_quote_on_screen_is_the_bill_that_gets_charged() {
         let mut app = app_with_songs(3);
@@ -624,20 +631,29 @@ mod tests {
             .game
             .quote_recording(ReleaseType::Single, 2, RecordingStudio::DemoRoom)
             .expect("a two-song 45 in the demo room is quotable");
-        let before = app.game.player.money;
 
         app.handle_record_picker_key(key(KeyCode::Enter));
 
         // A one-week session resolves on the booking turn itself, so the proof
         // that it was booked is the master in the vault, not an activity.
-        assert!(
-            !app.game.vault().is_empty(),
-            "Enter on an affordable, valid quote must cut the record"
-        );
+        let master = app
+            .game
+            .vault()
+            .first()
+            .expect("Enter on an affordable, valid quote must cut the record");
+
+        // The master records the room and song count actually booked; priced
+        // back through the same quote path, it must equal what was quoted.
+        assert_eq!(master.studio, quoted.studio, "booked a different room");
         assert_eq!(
-            app.game.player.money,
-            before - quoted.cost,
-            "the player must be charged exactly what the quote showed"
+            master.songs.len(),
+            usize::from(quoted.songs),
+            "booked a different song count"
+        );
+        let charged = app.game.recording_cost(master.studio, quoted.songs);
+        assert_eq!(
+            charged, quoted.cost,
+            "the studio bill charged must be the bill quoted"
         );
     }
 

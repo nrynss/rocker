@@ -318,3 +318,61 @@ needs in its handoff notes and the coordinator integrates.
     retune itself**, and the sweep is the instrument: raise the quality bonus,
     raise `SALES_QUALITY_WEIGHT`, or cut the top rooms' cost and weeks, then
     re-run and watch which room wins.
+- 2026-10-31 **S-SIM: the ladder is fixed, and it was two bugs wearing one
+  costume.** The sweep that found the inversion also found the reason the
+  first attempt at a retune did not work.
+
+  **Bug 1 — the bots could not book the rooms they were measuring.** No policy
+  checked `studio_is_available`, so a fame-gated booking was submitted, refused,
+  and the week thrown away: measured at **31% of all turns** at the world-class
+  room (gate 70) and 6% at major-city (gate 45). `reachable_studio` now walks
+  down to the best unlocked room, so a bot climbs as its fame allows. That alone
+  took world-class from 278 weeks to a first album to 29.
+
+  **Bug 2 — the economics, and the binding term was *time*, not money.** The
+  additive quality bonus reaches sales at `SALES_QUALITY_WEIGHT` 2.5, but the
+  old weeks ladder pushed a ten-track album from 2 weeks to 8. Every extra week
+  is a week the act cannot ship another record, and the records never made cost
+  more than the quality bought. The sweep showed it plainly after a partial fix:
+  per-album income rose 28% while album count fell 32%.
+
+  **The retune** (all three tables, in `constants.rs`, each with its measurement
+  in the doc comment):
+
+  | table | was | now |
+  |---|---|---|
+  | `STUDIO_QUALITY_BONUS` | -8/0/+6/+12/+20 | **-4/0/+8/+16/+24** |
+  | `STUDIO_RATE_PER_SONG` | 60/220/650/1,600/4,000 | **60/220/400/640/900** |
+  | `STUDIO_WEEKS_PER_SONG` | 0.20/0.30/0.45/0.60/0.80 | **0.20/0.21/0.22/0.23/0.24** |
+
+  Why each number is what it is:
+  - **Weeks are shallow on purpose.** 0.28/song (0.26 at world-class) was tested
+    and lost five albums over a career, finishing *below* the demo room. 0.24 is
+    the steepest slope that still holds a ten-track album at two-to-three weeks
+    at every rung. §C's "a better room costs time as well as money" survives as
+    +20% time per song rather than 4x, because 4x was measured unpayable.
+  - **The home room's penalty lightened from -8 to -4.** At -8 it cost a beginner
+    15-20% of sales at low fame — a tax on the one room the game *starts* a band
+    in.
+  - **The bonus spread is bounded by §C.** A great band in a demo room must still
+    beat a poor band at the world-class room. At `QUALITY_BASE_RECORDING` 30,
+    +24 keeps that true with margin (great@demo 65 vs poor@world 54); +32 was
+    tested and still holds (+3 margin) but buys little extra once the weeks are
+    fixed, so the wider spread is not worth the §C risk.
+
+  **Result** (24 seeds, BalancedIndie, 15 years, median bank):
+  home $6.22M → demo $6.62M → regional $6.82M → major-city $6.95M →
+  world-class $7.07M. **Monotonic; no rung is dominated**, and the ~$200k steps
+  are small enough that an act's circumstances still decide.
+
+  **The economy as a whole improved.** All 9 ignored sweeps pass. studio-rat —
+  the zero-income control — went 20 broke / 45% wins → **18 broke / 56% wins**,
+  and no live bot is above 4 broke of 60.
+
+  **Also fixed: a flaky test I wrote.** `the_quote_on_screen_is_the_bill_that_
+  gets_charged` failed about one run in three, because `Game::new()` seeds a
+  **random world** when `ROCKER_SEED` is unset and the booking turn also runs the
+  weekly tick. It asserted an exact bank delta, which depended on ambient
+  entropy. It now asserts the invariant (the master's room and song count price
+  back to the quoted cost) and passed 12 consecutive runs. **Worth remembering:
+  any UI test that touches money must not assume a fixed world.**

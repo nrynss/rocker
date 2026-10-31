@@ -601,7 +601,20 @@ pub(super) const STUDIO_FAME_GATE: [u8; 5] = [0, 0, 20, 45, 70];
 /// Index 1 (the local demo room) is 0 by design, not by tuning — it is the
 /// neutral baseline that reproduces the pre-cycle game for a default-picking
 /// player. Everything else is measured against it. [tune]
-pub(super) const STUDIO_QUALITY_BONUS: [i8; 5] = [-8, 0, 6, 12, 20];
+///
+/// [tune] **Re-priced 2026-10-31 (S-SIM) alongside the rate and weeks tables.**
+/// The spread is -4/0/+8/+16/+24. Two constraints fix it:
+/// - §C's invariant — a great band in a demo room must still beat a poor band
+///   at the world-class room — holds with room to spare (great@demo 65 vs
+///   poor@world 54).
+/// - The home room's penalty is deliberately light: at -8 it cost a beginner
+///   15-20% of sales at low fame, which is a tax on the one room the game
+///   *starts* a band in. At -4 a weak act still records from week one.
+///
+/// Measured effect (24 seeds, BalancedIndie, 15 years, median bank):
+/// home $6.22M, demo $6.62M, regional $6.82M, major-city $6.95M,
+/// world-class $7.07M — monotonic, and no rung is dominated.
+pub(super) const STUDIO_QUALITY_BONUS: [i8; 5] = [-4, 0, 8, 16, 24];
 
 /// Studio time per song, before the era's `recording_cost_modifier` (design
 /// §C table). This is what replaces the retired flat
@@ -617,7 +630,7 @@ pub(super) const STUDIO_QUALITY_BONUS: [i8; 5] = [-8, 0, 6, 12, 20];
 /// today's numbers" is honoured at the album end, where the money actually
 /// is, and a single gets slightly dearer to record and (via
 /// `SINGLE_SALES_FACTOR`) much cheaper to earn from. [tune]
-pub(super) const STUDIO_RATE_PER_SONG: [u32; 5] = [60, 220, 650, 1_600, 4_000];
+pub(super) const STUDIO_RATE_PER_SONG: [u32; 5] = [60, 220, 400, 640, 900];
 
 /// Calendar weeks each song takes in each room (design §C table). A better
 /// room costs time as well as money, which is what stops the top of the ladder
@@ -628,7 +641,7 @@ pub(super) const STUDIO_RATE_PER_SONG: [u32; 5] = [60, 220, 650, 1_600, 4_000];
 /// Quoted from S-RECORD, *spent* from S-TIME (design §F) — until that lands
 /// these weeks are a correct number the picker shows, not a commitment the
 /// calendar enforces. [tune]
-pub(super) const STUDIO_WEEKS_PER_SONG: [f32; 5] = [0.20, 0.30, 0.45, 0.60, 0.80];
+pub(super) const STUDIO_WEEKS_PER_SONG: [f32; 5] = [0.20, 0.21, 0.22, 0.23, 0.24];
 
 /// Ceiling on a booking's length (design §B). Fourteen songs at the top room
 /// is already 11.2 weeks, so this only ever bites on a combination that
