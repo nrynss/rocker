@@ -23,20 +23,22 @@ exists so a reader does not have to hold six documents at once.
 
 ---
 
-## The one thing that blocks everything else
+## The blocker that was, and where it now stands
 
-**The Studio Cycle does not exist in the build.**
-`ui/render/modals/pickers.rs:13-16` books `RecordingStudio::default()` —
-the neutral demo room — with the format's default song count, every
-time. The five-room ladder (`studios.rs:49`), the player's song choice,
-the per-song cost and the multi-week calendar are all present in the
-engine and unreachable from the UI. `HANDOFF.md:65` marks S-UI `⬜ open`;
-`HANDOFF.md:66` marks S-SIM open with a red assertion at line 140.
+**Resolved 2026-10-31: S-UI shipped.** When this synthesis was written, the
+Studio Cycle did not exist in the build — `pickers.rs` booked
+`RecordingStudio::default()` at the format's default song count every time, so
+the five-room ladder, the song choice, the per-song cost and the multi-week
+calendar were all present in the engine and unreachable from the UI.
 
-Everything in this synthesis is worth less while that is true, because
-the studio ladder is where the record-making decisions were supposed to
-live. **Do S-UI first.** It is a UI task, it needs no new evidence, and
-it makes the rest of the cycle real.
+The record picker now opens from both Record menu rows: songs on ↑↓, studio on
+←→, and a live quote recomputed from the same deterministic core the booking
+charges from. The activity screen and the discography split landed with it, so
+§H is closed in `HANDOFF.md`.
+
+**S-SIM is now the open item that blocks the cycle's close.** The balance work
+is only measurable against a reachable picker — a studio ladder no player could
+climb could not be balanced, which is exactly why it could not be done first.
 
 ---
 
@@ -162,8 +164,8 @@ so the player actually meets the bands they are competing with
 
 | # | Work | Why now | Size |
 |---|---|---|---|
-| 1 | **S-UI** record picker | the cycle's headline is unreachable | M |
-| 2 | **S-SIM** re-validation + close 0.9 | balance unproven, red assertion open | M |
+| ~~1~~ | ~~**S-UI** record picker~~ | **done 2026-10-31** — see `HANDOFF.md` | — |
+| 1 | **S-SIM** re-validation + close 0.9 | balance unproven, red assertion open | M |
 | 3 | **Currency/unit decision** | blocks every number below | S (decision) |
 | 4 | **Gig gate + deduction chain** | the largest single realism win | L |
 | 5 | **Survival layer** | supplies the pressure the gate change removes | L |

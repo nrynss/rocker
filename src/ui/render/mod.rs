@@ -40,6 +40,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                     modals::draw_tour_booking_picker_modal(frame, app)
                 }
                 Screen::Vault { .. } => modals::draw_vault_modal(frame, app),
+                Screen::RecordPicker { .. } => modals::draw_record_picker_modal(frame, app),
                 Screen::PressingPicker { .. } => modals::draw_pressing_picker_modal(frame, app),
                 Screen::LifestylePicker { .. } => modals::draw_lifestyle_picker_modal(frame, app),
                 Screen::RePressPicker { .. } => modals::draw_repress_picker_modal(frame, app),
@@ -427,7 +428,10 @@ mod tests {
 
         // Empty catalogue first: the modal must render its empty state, not
         // panic on an empty list.
-        app.screen = Screen::Discography { scroll: 0 };
+        app.screen = Screen::Discography {
+            scroll: 0,
+            format: None,
+        };
         terminal.draw(|frame| draw(frame, &mut app)).unwrap();
 
         // A gold album that charted, and a platinum-scale single.
@@ -697,5 +701,51 @@ mod tests {
             text.contains(&label_name),
             "a signed scene act should show its label on its chart row; got:\n{text}"
         );
+    }
+
+    /// The record picker (§H, S-UI) should render at every corner of its state
+    /// space without panicking: an empty notebook (the quote errors), a full
+    /// one at the album ceiling in the top room, and a fame-gated room the
+    /// player cannot afford — the modal must degrade to a message, never panic.
+    #[test]
+    fn record_picker_renders_without_panicking() {
+        use crate::game::music::Song;
+        use crate::game::studios::RecordingStudio;
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_main();
+
+        // Empty notebook: quote_recording refuses, and the modal must show the
+        // refusal rather than blow up on an unwrap.
+        app.screen = Screen::RecordPicker {
+            release_type: crate::game::music::ReleaseType::Single,
+            songs: 2,
+            studio: RecordingStudio::Home,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // A notebook at the album ceiling, in the best room, at max fame.
+        for i in 0..crate::data::constants::MAX_ALBUM_SONGS {
+            app.game.band.unreleased_songs.push(Song {
+                id: u32::from(i),
+                name: format!("Song {i}"),
+                songwriting_quality: 70,
+            });
+        }
+        app.game.band.fame = 100;
+        app.game.player.money = 1_000_000;
+        app.screen = Screen::RecordPicker {
+            release_type: crate::game::music::ReleaseType::Album,
+            songs: crate::data::constants::MAX_ALBUM_SONGS,
+            studio: RecordingStudio::WorldClass,
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+
+        // The same selection for a broke, unknown band: the room is gated and
+        // the cash is short, so the quote panel has to carry two problems.
+        app.game.player.money = 0;
+        app.game.band.fame = 0;
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
     }
 }

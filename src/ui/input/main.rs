@@ -22,6 +22,13 @@ impl App {
             }
             KeyCode::Char(c) => {
                 let c = c.to_ascii_lowercase();
+                // X abandons a running commitment (design §H, S-UI). It is not
+                // a menu row because it only exists while an activity runs, and
+                // the activity strip advertises it in place of a menu entry.
+                if c == 'x' && self.game.ongoing_activity.is_some() {
+                    self.dispatch(GameAction::AbandonActivity);
+                    return;
+                }
                 if let Some(entry) = entries.iter().find(|e| e.hotkey == c) {
                     let kind = entry.kind.clone();
                     self.activate(kind);
@@ -34,8 +41,15 @@ impl App {
     pub(crate) fn activate(&mut self, kind: MenuKind) {
         match kind {
             MenuKind::Action(action) => self.dispatch(action),
-            MenuKind::RecordSingle => self.book_recording(crate::game::music::ReleaseType::Single),
-            MenuKind::RecordAlbum => self.book_recording(crate::game::music::ReleaseType::Album),
+            // S-UI (§H): the Record rows open the format → songs → studio
+            // picker. They used to book the default room and song count on the
+            // spot, which made the whole studio ladder unreachable in play.
+            MenuKind::RecordSingle => {
+                self.open_record_picker(crate::game::music::ReleaseType::Single)
+            }
+            MenuKind::RecordAlbum => {
+                self.open_record_picker(crate::game::music::ReleaseType::Album)
+            }
             MenuKind::Vault => {
                 if self.game.vault().is_empty() {
                     self.push_log(
@@ -78,7 +92,12 @@ impl App {
                     scroll: 0,
                 }
             }
-            MenuKind::Discography => self.screen = Screen::Discography { scroll: 0 },
+            MenuKind::Discography => {
+                self.screen = Screen::Discography {
+                    scroll: 0,
+                    format: None,
+                }
+            }
             MenuKind::Labels => self.screen = Screen::Labels { scroll: 0 },
             MenuKind::TourReport => self.screen = Screen::TourReport { scroll: 0 },
             MenuKind::Marketing => {
@@ -261,21 +280,37 @@ impl App {
     }
 
     pub(crate) fn handle_discography_key(&mut self, key: KeyEvent) {
-        let Screen::Discography { scroll } = self.screen else {
+        let Screen::Discography { scroll, format } = self.screen else {
             return;
         };
-        let count = self.discography_rows().len();
+        let count = self.discography_rows(format).len();
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
+            // Tab cycles the §H split: everything → singles → albums.
+            KeyCode::Tab => {
+                let next = match format {
+                    None => Some(crate::game::music::ReleaseType::Single),
+                    Some(crate::game::music::ReleaseType::Single) => {
+                        Some(crate::game::music::ReleaseType::Album)
+                    }
+                    Some(crate::game::music::ReleaseType::Album) => None,
+                };
+                self.screen = Screen::Discography {
+                    scroll: 0,
+                    format: next,
+                };
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.screen = Screen::Discography {
                     scroll: scroll.saturating_sub(1),
+                    format,
                 };
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 let max_scroll = count.saturating_sub(1);
                 self.screen = Screen::Discography {
                     scroll: (scroll + 1).min(max_scroll),
+                    format,
                 };
             }
             _ => {}
@@ -375,5 +410,58 @@ mod tests {
         app.screen = Screen::TourReport { scroll: 0 };
         app.handle_tour_report_key(key(KeyCode::Up));
         assert!(matches!(app.screen, Screen::TourReport { scroll: 0 }));
+    }
+    #[test]
+    fn discography_tab_cycles_the_format_split() {
+        use crate::game::music::ReleaseType;
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Discography {
+            scroll: 0,
+            format: None,
+        };
+
+        // all -> singles -> albums -> all, resetting the scroll each time so a
+        // filter switch never leaves the view scrolled past the shorter list.
+        for expected in [Some(ReleaseType::Single), Some(ReleaseType::Album), None] {
+            app.handle_discography_key(key(KeyCode::Tab));
+            assert!(
+                matches!(app.screen, Screen::Discography { format, scroll: 0 } if format == expected),
+                "Tab should cycle the discography to {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn x_abandons_a_running_activity_but_is_inert_without_one() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Main;
+
+        // With nothing running, `x` must not be swallowed as an unknown
+        // hotkey error or start anything.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        assert!(app.game.ongoing_activity.is_none());
+
+        // Start a break, then abandon it with `x`.
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        assert!(
+            app.game.ongoing_activity.is_some(),
+            "a break should be a multi-week commitment"
+        );
+        app.screen = Screen::Main;
+        app.handle_main_key(key(KeyCode::Char('x')));
+        assert!(
+            app.game.ongoing_activity.is_none(),
+            "'x' on Main should abandon the running activity"
+        );
     }
 }

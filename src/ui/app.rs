@@ -60,9 +60,11 @@ pub enum Screen {
     },
     /// The band's discography browser: every record with its sales, income,
     /// chart peak, and certification (L-UI-1). Read-only; `scroll` is the
-    /// index of the first record shown.
+    /// index of the first record shown, and `format` filters the list to one
+    /// release kind (design §H's split — `Tab` cycles all → singles → albums).
     Discography {
         scroll: usize,
+        format: Option<crate::game::music::ReleaseType>,
     },
     /// The record-label ledger browser (L-UI-1, design §H). Read-only;
     /// `scroll` is the index of the first label shown.
@@ -99,6 +101,16 @@ pub enum Screen {
     /// Release action starts here.
     Vault {
         selected: usize,
+    },
+    /// The record picker (design §H, S-UI): format → songs → studio, with a
+    /// live quote before booking. The three axes are the screen's whole state;
+    /// `release_type` is fixed by which menu row opened it, `songs` is a bounded
+    /// spinner over the format's range, and `studio` moves along the five-room
+    /// ladder. Nothing is booked until Enter.
+    RecordPicker {
+        release_type: ReleaseType,
+        songs: u8,
+        studio: RecordingStudio,
     },
     /// Pressing run + distribution channel for the master at `master` in
     /// `Band::masters` — since §D this is the *release* picker, not part of
@@ -666,11 +678,24 @@ impl App {
     /// newest-first. The `bool` is `released` — `false` for a record still in
     /// its pre-release sales window (not yet in stores). Shared by the modal
     /// renderer and its scroll handler so both agree on the record count.
-    pub fn discography_rows(&self) -> Vec<(&crate::game::music::Release, bool)> {
+    /// The band's discography (design §H, S-UI), optionally filtered to one
+    /// format — the modal toggles singles against albums with `Tab`. `None`
+    /// shows everything, newest first; the split exists because a single and an
+    /// album are now different records with different economics (§A), so lumping
+    /// them into one list hides the thing the player is trying to judge.
+    pub fn discography_rows(
+        &self,
+        format: Option<crate::game::music::ReleaseType>,
+    ) -> Vec<(&crate::game::music::Release, bool)> {
+        let keep = |release: &&crate::game::music::Release| match format {
+            Some(wanted) => release.release_type == wanted,
+            None => true,
+        };
         let mut rows: Vec<(&crate::game::music::Release, bool)> = self
             .game
             .just_released_music
             .iter()
+            .filter(keep)
             .map(|release| (release, false))
             .collect();
         let mut released: Vec<&crate::game::music::Release> = self
@@ -679,6 +704,7 @@ impl App {
             .singles_released
             .iter()
             .chain(self.game.band.albums_released.iter())
+            .filter(keep)
             .collect();
         released.sort_by_key(|release| std::cmp::Reverse(release.week_released));
         rows.extend(released.into_iter().map(|release| (release, true)));
@@ -759,6 +785,7 @@ impl App {
             Screen::GameOver => self.should_exit = true,
             Screen::VenuePicker { .. } => self.handle_venue_picker_key(key),
             Screen::Vault { .. } => self.handle_vault_key(key),
+            Screen::RecordPicker { .. } => self.handle_record_picker_key(key),
             Screen::RegionPicker { .. } => self.handle_region_picker_key(key),
             Screen::TourBookingPicker { .. } => self.handle_tour_booking_picker_key(key),
             Screen::PressingPicker { .. } => self.handle_pressing_picker_key(key),

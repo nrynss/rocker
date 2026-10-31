@@ -51,25 +51,31 @@ fn format_copies(copies: u32) -> String {
 }
 
 pub(crate) fn draw_discography_modal(frame: &mut Frame, app: &App) {
-    let Screen::Discography { scroll } = app.screen else {
+    let Screen::Discography { scroll, format } = app.screen else {
         return;
     };
     let area = centered_rect(80, 72, frame.area());
     frame.render_widget(Clear, area);
+    let tab_label = match format {
+        None => "all",
+        Some(ReleaseType::Single) => "singles",
+        Some(ReleaseType::Album) => "albums",
+    };
     let block = Block::bordered()
-        .title(" 💿 Discography ")
+        .title(format!(" 💿 Discography — {tab_label} "))
         .title_style(Style::new().fg(Color::Yellow).bold())
-        .title_bottom(" ↑/↓ scroll · Esc close ");
+        .title_bottom(" ↑/↓ scroll · Tab singles/albums · Esc close ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let records = app.discography_rows();
+    let records = app.discography_rows(format);
     if records.is_empty() {
-        let lines = vec![
-            Line::from(""),
-            Line::from("No records yet — cut a single or album, then come back to watch it sell.")
-                .centered(),
-        ];
+        let empty = match format {
+            None => "No records yet — cut a single or album, then come back to watch it sell.",
+            Some(ReleaseType::Single) => "No singles yet — press Tab for albums, or cut one.",
+            Some(ReleaseType::Album) => "No albums yet — press Tab for singles, or cut one.",
+        };
+        let lines = vec![Line::from(""), Line::from(empty).centered()];
         frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
         return;
     }

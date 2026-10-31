@@ -9,7 +9,7 @@ the code rather than repeating it.
 
 | # | Source | What it says | Still real? | Blocking? | Size |
 |---|---|---|---|---|---|
-| 1 | `HANDOFF.md:65` | **S-UI** — record picker (format → songs → studio, quote-first), activity screen, discography split | **Yes, and worse than the board says.** `ui/render/modals/pickers.rs:13-16` books `RecordingStudio::default()` (the neutral demo room) with the format's default song count, always. The five-room ladder (`studios.rs:49`), the player's song choice and the multi-week session are unreachable in play. | **Yes** — the v0.9 Studio Cycle's headline feature cannot be used | M |
+| 1 | `HANDOFF.md:65` | **S-UI** — record picker, activity screen, discography split | **CLOSED 2026-10-31.** It was worse than the board said: `pickers.rs` booked `RecordingStudio::default()` at the default song count, so the ladder was unreachable in play. Now built — see `HANDOFF.md`'s S-UI note. | No longer blocking | M |
 | 2 | `HANDOFF.md:66` | **S-SIM** — bots for the new action shape, studio-ladder and singles-vs-albums balance, calendar-integrity assertion, §F economic-neutrality check | **Yes.** `HANDOFF.md:140` records a red studio-rat assertion (20/60 vs ≤19). Not re-measured this pass: the relevant test is `#[ignore]`d and the release sweep did not finish. | Yes — balance is unvalidated for the new action shape | M |
 | 3 | `CHANGELOG.md` "Known follow-ups" | M&A distress floor is `$0`, so it never fires in natural play | **Yes — but it is working as designed; the design is the problem.** `constants.rs:1131` `DISTRESS_CAPITAL_FLOOR = 0` only ticks on strictly negative capital, while `sim.rs:1430` asserts `min_capital_any > 0`; `sim.rs:1320-1332` records that raising the floor was *rejected*. So label attrition cannot occur in natural play — only under injected distress. | No | S |
 | 4 | `CHANGELOG.md` "Known follow-ups" | Certification frequency is ~71 events over a 15-year signed career, an order above the retired v0.7 target | **Yes, as a judgement call.** Not a bug: it follows from the international-reach fix. Needs a design decision, not a code fix. | No | S |
@@ -55,7 +55,7 @@ cannot be closed without re-running them.
 
 | Rank | Item | Why now | Depends on | Size | Evidence support |
 |---|---|---|---|---|---|
-| 1 | **S-UI** record picker | A whole cycle's headline is unreachable — players cannot choose a studio, songs or session length. Everything else is polish by comparison. | — | M | — (UI work) |
+| ~~1~~ | ~~**S-UI** record picker~~ | **Done 2026-10-31.** | — | M | — |
 | 2 | **S-SIM** re-validation | Balance for the new action shape is unproven, and one assertion is known red. Cannot ship 0.9 without it. | S-UI | M | — |
 | 3 | **Close the v0.9 cycle** | Version still 0.8.0; CHANGELOG has no 0.9.0 entry; the board has open rows. | 1, 2 | S | — |
 | 4 | **The Manager** (FUTURE §9.4) | Now the best-evidenced deferred feature: 20% of all earnings gross (F41), agent vs manager as separate contracts (F42), 15–20% for a first agency (F44). No more guessing. | — | M | **Strong** (F41, F42, F44) |

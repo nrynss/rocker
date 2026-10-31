@@ -284,6 +284,24 @@ pub(super) fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
 }
 
 pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
+    // The activity strip (design §H, S-UI) takes the top of this column while a
+    // commitment is running: what the band is doing, week n of m, and how to
+    // carry on or walk away. The menu stays below it because the turn is what
+    // advances the activity — any action resolves one more week — so hiding the
+    // menu would leave the player with no way to move.
+    let (strip_area, menu_area) = match &app.game.ongoing_activity {
+        Some(_) => {
+            let [strip, rest] =
+                Layout::vertical([Constraint::Length(6), Constraint::Min(4)]).areas(area);
+            (Some(strip), rest)
+        }
+        None => (None, area),
+    };
+
+    if let (Some(strip), Some(activity)) = (strip_area, &app.game.ongoing_activity) {
+        draw_activity_strip(frame, activity, strip);
+    }
+
     let entries = app.menu_entries();
     let items: Vec<ListItem> = entries
         .iter()
@@ -321,7 +339,68 @@ pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
 
     let mut state = ListState::default().with_selected(Some(app.menu_selected));
-    frame.render_stateful_widget(list, area, &mut state);
+    frame.render_stateful_widget(list, menu_area, &mut state);
+}
+
+/// The activity screen (design §H, S-UI): while a commitment runs, say what it
+/// is, which week of how many, and what the last settled week did. "Continue"
+/// is any menu action (the turn resolves one more week); "abandon" is the `x`
+/// hotkey, dispatched by `handle_main_key` as `GameAction::AbandonActivity`.
+fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivity, area: Rect) {
+    let total = activity.weeks_total();
+    let current = activity.week_number();
+    let final_week = activity.is_final_week();
+
+    let header = Line::from(vec![
+        Span::styled(
+            format!(" ▶ {} ", activity.label()),
+            Style::new().fg(ACCENT).bold(),
+        ),
+        Span::styled(activity.headline(), Style::new().fg(Color::White).bold()),
+    ]);
+
+    let week_line = Line::from(vec![
+        Span::styled(
+            format!("   Week {current} of {total}"),
+            Style::new().fg(Color::Yellow),
+        ),
+        Span::styled(
+            if final_week {
+                "   — this is the last week"
+            } else {
+                "   — any action below plays the next week"
+            },
+            Style::new().fg(Color::DarkGray),
+        ),
+    ]);
+
+    // A proportional progress bar, one cell per week, so a long tour reads as
+    // long at a glance.
+    let done = usize::from(activity.weeks_done());
+    let total_cells = usize::from(total).max(1);
+    let bar: String = (0..total_cells)
+        .map(|i| if i < done { '█' } else { '░' })
+        .collect();
+    let bar_line = Line::from(vec![
+        Span::raw("   "),
+        Span::styled(bar, Style::new().fg(Color::Green)),
+        Span::styled(
+            format!("  {} settled", activity.weeks_done()),
+            Style::new().fg(Color::DarkGray),
+        ),
+    ]);
+
+    let quit_line = Line::styled(
+        "   X  abandon this and go back to the week",
+        Style::new().fg(Color::DarkGray),
+    );
+
+    frame.render_widget(
+        Paragraph::new(vec![header, week_line, bar_line, quit_line])
+            .block(Block::bordered().title(" 🎬 Activity "))
+            .wrap(Wrap { trim: false }),
+        area,
+    );
 }
 
 pub(super) fn draw_log(frame: &mut Frame, app: &App, area: Rect) {

@@ -259,15 +259,26 @@ resolving week by week, activities get their own event taps:
 
 ## §H — UI
 
+> **Landed 2026-10-31 (S-UI).** All five items shipped; see the closing note
+> in `HANDOFF.md`. The record picker is the load-bearing one — until it
+> existed, the studio ladder, the song choice and the weeks-per-song
+> calendar were all unreachable in play.
+
 - **Record picker**: format → songs (bounded spinner) → studio, with a
   live quote (cost, weeks, projected quality band) — the tour picker's
-  quote-first pattern, reused.
+  quote-first pattern, reused. **Built** as `Screen::RecordPicker`: songs on
+  ↑↓ over the format's range, studio on ←→ along the five-room ladder, and
+  the quote recomputed every frame from `Game::quote_recording` (the same
+  core the booking charges from, so the two cannot drift).
 - **Vault**: masters awaiting release; the Release action starts here.
+  *(Already built by S-MASTER; unchanged by this task.)*
 - **Activity screen**: while an activity runs, the main screen shows what
   it is, week *n* of *m*, what happened this week, and "continue" /
-  "abandon".
-- **Charts modal**: singles/albums toggle.
-- **Discography**: split into singles and albums.
+  "abandon". **Built** as a strip above the menu: any menu action plays the
+  next week, `X` abandons via `GameAction::AbandonActivity`.
+- **Charts modal**: singles/albums toggle. *(Already built by S-CHARTS.)*
+- **Discography**: split into singles and albums. **Built** as a `Tab`
+  cycle (all → singles → albums), with the current filter named in the title.
 
 ---
 

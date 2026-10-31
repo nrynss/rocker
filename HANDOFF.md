@@ -62,7 +62,7 @@ Commit prefix: `studio(S-XXX): <short description>`.
 | **S-CHARTS** | §E — separate singles and albums charts per territory, with save migration (existing entries → albums board) and the charts modal toggle | M | — | `world/charts.rs`, `regional_charts` on `world/mod.rs`, `ui/render/modals/charts.rs` | ✅ done |
 | **S-MASTER** | §D — recording is not pressing. Masters vault, Release action, pressing/distribution move off the record action | M | S-RECORD, S-TIME | `music.rs` `Master`, `band.rs` `masters`, release action in `actions/studio.rs`, vault UI | ✅ done |
 | **S-EVENTS** | §G — random events during recording / gigs / tours / support tours, data-driven and activity-gated | M | S-TIME | `events.rs`, `events_apply.rs`, `data/incidents.json` | ✅ done |
-| **S-UI** | §H — record picker (format → songs → studio, quote-first), activity screen, discography split | M | S-RECORD, S-TIME, S-MASTER | `ui/render/modals/pickers.rs`, `ui/input/*`, `ui/app.rs`, discography modal | ⬜ open |
+| **S-UI** | §H — record picker (format → songs → studio, quote-first), activity screen, discography split | M | S-RECORD, S-TIME, S-MASTER | `ui/render/modals/pickers.rs`, `ui/input/*`, `ui/app.rs`, discography modal | ✅ done |
 | **S-SIM** | §I — bots for the new action shape, studio-ladder and singles-vs-albums balance, **calendar-integrity assertion**, §F economic-neutrality check | M | all | `sim.rs` | ⬜ open |
 
 ### Wave plan
@@ -177,3 +177,41 @@ needs in its handoff notes and the coordinator integrates.
     already calls for a proper singles-bot / album-bot pair; decide it there,
     with the whole cycle in place, rather than tuning global constants to
     rescue one bot.
+- 2026-10-31 **S-UI landed — the picker is reachable at last.** Wave 3 done.
+  Before this, `ui/input/pickers.rs` booked `RecordingStudio::default()` and
+  the format's default song count on every dispatch: the five-room ladder,
+  the song choice and the multi-week session all existed in the engine and
+  were unreachable from the UI. The cycle's headline feature was dead code.
+  - **Record picker** (§H): `Screen::RecordPicker` carries the three axes.
+    Songs spin on ↑↓ over the format's bounded range, studio moves on ←→ along
+    `RecordingStudio::ALL`, and the quote panel recomputes
+    `Game::quote_recording` every frame — the same deterministic core the
+    booking charges from, so the number shown is the number taken. Unaffordable
+    rooms and short notebooks render as a message, never a panic, and Enter is
+    the only thing that reports an error.
+  - **The menu rows open the picker.** `MenuKind::{RecordSingle, RecordAlbum}`
+    now call `open_record_picker`; `book_recording` survives as the no-choice
+    path. This is the actual bug fix — everything else in this task is the
+    screen it opens.
+  - **Activity screen** (§H): while a commitment runs, a strip above the menu
+    shows what it is, week *n* of *m*, a per-week progress bar, and how many
+    weeks have settled. Any menu action plays the next week (that is what the
+    turn already did); `X` abandons, dispatched as
+    `GameAction::AbandonActivity`.
+  - **Discography split** (§H): `Tab` cycles all → singles → albums, and the
+    title names the current filter. `discography_rows` now takes the filter;
+    an empty filter says so rather than showing a blank list.
+  - The two `#[allow(dead_code)]` holding patterns — on `RecordingStudio::ALL`
+    and on `RecordingQuote` — are **gone**, because they existed precisely
+    until this caller arrived. Every quote field is now read: `release_type`
+    was the last one with no reader, and the picker's quote line names it.
+  - **Tests:** 315 passing (from 306), 8 ignored, clippy `-D warnings` clean,
+    fmt clean, determinism trio unmodified. New coverage: the menu row opens
+    the picker without booking, songs/studio navigation and wrap-around, the
+    quote-equals-bill invariant, a refusal when songs are short, Esc leaving
+    without booking, a render smoke test across the picker's state space, the
+    discography Tab cycle, and `X` abandoning an activity (and being inert
+    when nothing runs).
+  - **Still open: S-SIM.** The balance work is now measurable against a
+    reachable picker — the studio ladder is only live once a human can climb
+    it, which is exactly why the sim's bots need re-running.

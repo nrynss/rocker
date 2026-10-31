@@ -6,6 +6,50 @@ Notable changes to Rocker, newest first. Format loosely follows
 
 ## Unreleased
 
+**The Studio Cycle's UI (S-UI)** — the record picker, the activity screen and
+the discography split. The picker is the fix: until it existed, the five
+studios, the song choice and the weeks-per-song calendar were unreachable in
+play, because every Record dispatch silently booked the default room at the
+default song count.
+
+### Added
+
+- **Record picker** (§H). `Record Single` and `Record Album` now open a
+  format → songs → studio screen instead of booking on the spot. Songs spin on
+  ↑↓ over the format's bounded range (2–3 for a single, 8–14 for an album);
+  studio moves on ←→ along the five-room ladder with each room's fame gate,
+  quality bonus, weeks-per-song and its bill for the current song count on
+  show. A quote panel recomputes `Game::quote_recording` every frame, so the
+  figure displayed is the figure charged — both paths go through
+  `recording_plan`. Unaffordable rooms and short notebooks render as a message;
+  only Enter reports an error, and Esc leaves without booking.
+- **Activity screen** (§H). While a commitment runs, a strip above the menu
+  names the activity, shows week *n* of *m* with a per-week progress bar and
+  how many weeks have settled. Any menu action plays the next week — which is
+  what the turn already did — and `X` abandons it.
+- **Discography split** (§H). `Tab` cycles all → singles → albums, with the
+  active filter named in the modal title and a format-specific empty state.
+- The activity strip and picker carry their own render smoke test across the
+  state space (empty notebook, album ceiling in the world-class room, gated and
+  broke), plus behavioural tests: the menu row opens the picker without
+  booking, navigation wraps at both ends, the quote equals the bill, a
+  short-notebook refusal stays on the picker, Esc books nothing, the
+  discography cycle resets scroll, and `X` abandons an activity while being
+  inert when nothing is running.
+
+### Changed
+
+- `RecordingStudio::ALL` and `RecordingQuote` lose their `#[allow(dead_code)]`
+  holding patterns — they were annotated precisely until this caller arrived,
+  and every quote field is now read.
+
+### Fixed
+
+- **The Studio Cycle was unreachable in play.** `pickers.rs` booked
+  `RecordingStudio::default()` and the format's default song count on every
+  dispatch, so the studio ladder this cycle was built around could not be
+  chosen by a player. The picker closes that gap.
+
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.
 

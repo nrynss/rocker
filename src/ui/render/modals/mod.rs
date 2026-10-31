@@ -19,8 +19,9 @@ pub(super) use labels::draw_labels_modal;
 pub(super) use lifestyle::draw_lifestyle_picker_modal;
 pub(super) use marketing::draw_marketing_modal;
 pub(super) use pickers::{
-    draw_pressing_picker_modal, draw_region_picker_modal, draw_repress_picker_modal,
-    draw_repress_tier_picker_modal, draw_tour_booking_picker_modal, draw_venue_picker_modal,
+    draw_pressing_picker_modal, draw_record_picker_modal, draw_region_picker_modal,
+    draw_repress_picker_modal, draw_repress_tier_picker_modal, draw_tour_booking_picker_modal,
+    draw_venue_picker_modal,
 };
 pub(super) use tour::draw_tour_report_modal;
 pub(super) use vault::draw_vault_modal;
