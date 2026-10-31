@@ -215,3 +215,60 @@ needs in its handoff notes and the coordinator integrates.
   - **Still open: S-SIM.** The balance work is now measurable against a
     reachable picker — the studio ladder is only live once a human can climb
     it, which is exactly why the sim's bots need re-running.
+- 2026-10-31 **S-SIM triage: the red sweep is not what it looked like.**
+  Before touching a constant, the studio-rat's two headline numbers were
+  traced to their sources. Both turned out to be *the bot*, not the economy.
+
+  **1. "studio-rat signed 0 deals in 60 runs" is not a scouting defect.**
+  `studio_rat` (`sim.rs:387-433`) has no `pending_deal_offers` branch at all —
+  a grep for `deal` in its body returns zero hits. Only `label_loyalist`
+  accepts offers (`sim.rs:495`), and `balanced_indie` and `indie_lifer` are
+  documented as *deliberately* ignoring them. The scouting market is never
+  exercised by those bots, so their deal counts say nothing about the gate.
+  A 37-album act failing every fame/catalog/buzz threshold at
+  `data/record_labels.json`'s `label_requirements` (major fame 40 / albums 1 /
+  singles 3 / buzz 30) was never plausible — and it isn't what happened.
+
+  **2. The 20/60 bankruptcies are a real bot, not a broken invariant.**
+  The 15-year sweep puts studio-rat at 20 broke, against a bar of 19. Look at
+  the company it keeps:
+
+  | bot | broke/60 | note |
+  |---|---|---|
+  | gig-grinder | **0** | never records |
+  | balanced-indie | **2** | the intended loop |
+  | indie-lifer | **2** | |
+  | label-loyalist | **2** | |
+  | homebody | 9 | |
+  | studio-rat | **20** | **never performs**; records only |
+  | road-dog | 2 | |
+
+  Every bot that touches the live economy is at ≤2. Studio-rat is the only bot
+  with *no live income at all*, and §B made recording cost weeks it never had
+  to spare. Its 20 is the documented cost of an extreme policy, not the
+  economy's default — the assertion's bar (`broke * 3 < runs`) was written when
+  records were instant and every bot could earn between sessions.
+
+  **What this means for S-SIM.** The invariant is measuring the wrong thing:
+  "no bot may go broke more than a third of the time" is not a property of the
+  economy when one bot is a deliberate zero-income control. The choices, in
+  preference order:
+  - **Narrow the assertion** to the bots that play the live loop, and give
+    studio-rat its own documented threshold (it is a *control*, not a
+    contender). This is honest and cheap.
+  - **Give studio-rat a way to survive** — it cannot tour by design, so the
+    only lever is making the release-only path not bankrupt a fifth of the
+    time: cheaper sessions, faster songs, or releasing from the vault sooner.
+    This changes the economy to rescue a bot, which is exactly the move
+    `HANDOFF.md` has twice warned against.
+  - **Retire studio-rat** from the sweep. Loses the only control for "is live
+    income necessary?", which is a question worth keeping.
+
+  **Recommendation: narrow the assertion.** Do not tune constants to make a
+  zero-income control behave like a working band.
+
+  **Still to do for S-SIM proper:** bots for the new action shape (§I), a
+  studio-ladder sweep (every bot still books `BOT_STUDIO = DemoRoom`,
+  `sim.rs:291` — the ladder S-UI just made reachable is unexercised by the
+  sim), the singles-vs-albums balance pass, and the §F economic-neutrality
+  check. The calendar-integrity assertion already exists at `sim.rs:743`.
