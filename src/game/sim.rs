@@ -205,7 +205,7 @@ impl Bot {
     /// indie-lifer uses it, to buy the best distribution channel its fame
     /// and wallet allow (the channel is a picker-remembered `Game` field,
     /// applied at record time, not a `GameAction`). No-op for everyone else.
-    fn pre_turn(self, game: &mut Game) {
+    fn pre_turn(self, game: &mut Game, studio: RecordingStudio) {
         if self == Bot::IndieLifer {
             // Reserve the studio + pressing bill of the release the bot is
             // about to attempt (an album if one's banked, else a single) so
@@ -218,24 +218,24 @@ impl Bot {
             } else {
                 ReleaseType::Single
             };
-            let reserve = release_bill(game, kind, Some(CLUB_RUN));
+            let reserve = release_bill(game, kind, Some(CLUB_RUN), studio);
             game.current_distribution_channel = best_affordable_channel(game, reserve);
         }
     }
 
     /// Look at the game, pick one action. No memory, no cleverness.
-    fn decide(self, game: &Game) -> GameAction {
+    fn decide(self, game: &Game, studio: RecordingStudio) -> GameAction {
         if let Some(action) = self_care(game) {
             return action;
         }
         match self {
             Bot::GigGrinder => gig_grinder(game),
-            Bot::StudioRat => studio_rat(game),
-            Bot::BalancedIndie => indie_loop(game, Some(CLUB_RUN), true),
-            Bot::LabelLoyalist => label_loyalist(game),
-            Bot::Homebody => homebody(game),
-            Bot::RoadDog => road_dog(game),
-            Bot::IndieLifer => indie_lifer(game),
+            Bot::StudioRat => studio_rat(game, studio),
+            Bot::BalancedIndie => indie_loop(game, Some(CLUB_RUN), true, studio),
+            Bot::LabelLoyalist => label_loyalist(game, studio),
+            Bot::Homebody => homebody(game, studio),
+            Bot::RoadDog => road_dog(game, studio),
+            Bot::IndieLifer => indie_lifer(game, studio),
         }
     }
 }
@@ -328,17 +328,11 @@ fn bot_songs(game: &Game, kind: ReleaseType) -> u8 {
 ///
 /// S-MASTER (§D): this books a *session* — it yields a master, not a record on
 /// the shelves. `release_from_the_vault` is the other half.
-fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
+fn bot_record(game: &Game, kind: ReleaseType, studio: RecordingStudio) -> GameAction {
     let songs = bot_songs(game, kind);
     match kind {
-        ReleaseType::Single => GameAction::RecordSingle {
-            songs,
-            studio: BOT_STUDIO,
-        },
-        ReleaseType::Album => GameAction::RecordAlbum {
-            songs,
-            studio: BOT_STUDIO,
-        },
+        ReleaseType::Single => GameAction::RecordSingle { songs, studio },
+        ReleaseType::Album => GameAction::RecordAlbum { songs, studio },
     }
 }
 
@@ -351,9 +345,14 @@ fn bot_record(game: &Game, kind: ReleaseType) -> GameAction {
 /// never afford to press just strands a master in the vault, so the *decision*
 /// still weighs the whole bill. That keeps the pre-§D booking behaviour, which
 /// is what makes the sweeps comparable across the split.
-fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 {
+fn release_bill(
+    game: &Game,
+    kind: ReleaseType,
+    pressing: Option<usize>,
+    studio: RecordingStudio,
+) -> i32 {
     let songs = bot_songs(game, kind);
-    let mut bill = game.recording_cost(BOT_STUDIO, songs);
+    let mut bill = game.recording_cost(studio, songs);
     if game.band.current_deal().is_none() {
         let (_, copies) = PRESSING_TIERS[pressing.unwrap_or(GARAGE_RUN)];
         bill += game.pressing_cost(&kind, copies);
@@ -368,7 +367,7 @@ fn release_bill(game: &Game, kind: ReleaseType, pressing: Option<usize>) -> i32 
     // and finished on median fame 7, having recorded records it could never
     // put out. Reserve the session's running costs alongside its bills.
     let weeks = game
-        .quote_recording(kind, songs, BOT_STUDIO)
+        .quote_recording(kind, songs, studio)
         .map_or(0, |quote| quote.weeks);
     bill + (weeks as i32) * (game.player.lifestyle.upkeep_per_week() as i32)
 }
@@ -395,17 +394,19 @@ fn gig_grinder(game: &Game) -> GameAction {
     gig_or_rest(game)
 }
 
-fn studio_rat(game: &Game) -> GameAction {
+fn studio_rat(game: &Game, studio: RecordingStudio) -> GameAction {
     // §D: press whatever came out of the last session before booking the next.
     if let Some(release) = release_from_the_vault(game, Some(GARAGE_RUN)) {
         return release;
     }
     if game.band.can_record_album() {
-        if game
-            .player
-            .can_afford(release_bill(game, ReleaseType::Album, Some(GARAGE_RUN)))
-        {
-            return bot_record(game, ReleaseType::Album);
+        if game.player.can_afford(release_bill(
+            game,
+            ReleaseType::Album,
+            Some(GARAGE_RUN),
+            studio,
+        )) {
+            return bot_record(game, ReleaseType::Album, studio);
         }
         // Can't afford the album yet: press a spare song (anything beyond
         // the eight banked for the album) as a single to raise the cash.
@@ -419,11 +420,14 @@ fn studio_rat(game: &Game) -> GameAction {
         // there is, and withholding them starves it. Left un-throttled.)
         if game.band.unreleased_songs.len()
             >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
-            && game
-                .player
-                .can_afford(release_bill(game, ReleaseType::Single, Some(GARAGE_RUN)))
+            && game.player.can_afford(release_bill(
+                game,
+                ReleaseType::Single,
+                Some(GARAGE_RUN),
+                studio,
+            ))
         {
-            return bot_record(game, ReleaseType::Single);
+            return bot_record(game, ReleaseType::Single, studio);
         }
         // Blocked on money with nothing spare to single off either: keep
         // writing. This is the bot's only bootstrap out of "broke, one
@@ -448,7 +452,12 @@ fn studio_rat(game: &Game) -> GameAction {
 /// The intended player loop. `pressing` is the run an unsigned band buys;
 /// when signed the label presses regardless (`plan_pressing` checks the
 /// deal first), so `None` is fine there.
-fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> GameAction {
+fn indie_loop(
+    game: &Game,
+    pressing: Option<usize>,
+    allow_support: bool,
+    studio: RecordingStudio,
+) -> GameAction {
     // §D: a finished master goes out first. It is instant and it is what puts
     // a record on the shelves at all — everything below (gigging the sales
     // window, banking the income toward the next session) depends on it.
@@ -472,9 +481,9 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
     if game.band.can_record_album()
         && game
             .player
-            .can_afford(release_bill(game, ReleaseType::Album, pressing))
+            .can_afford(release_bill(game, ReleaseType::Album, pressing, studio))
     {
-        return bot_record(game, ReleaseType::Album);
+        return bot_record(game, ReleaseType::Album, studio);
     }
     // Songs above the album pile become singles: cash flow, a higher live
     // ceiling, and something on the shelves worth gigging on.
@@ -484,9 +493,9 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
         >= (constants::MIN_ALBUM_SONGS + constants::MIN_SINGLE_SONGS) as usize
         && game
             .player
-            .can_afford(release_bill(game, ReleaseType::Single, pressing))
+            .can_afford(release_bill(game, ReleaseType::Single, pressing, studio))
     {
-        return bot_record(game, ReleaseType::Single);
+        return bot_record(game, ReleaseType::Single, studio);
     }
     // Build the song pile toward the next album...
     if !game.band.can_record_album() {
@@ -500,7 +509,7 @@ fn indie_loop(game: &Game, pressing: Option<usize>, allow_support: bool) -> Game
     gig_or_rest(game)
 }
 
-fn label_loyalist(game: &Game) -> GameAction {
+fn label_loyalist(game: &Game, studio: RecordingStudio) -> GameAction {
     // Sign whatever lands on the table, sight unseen. Loyalty!
     if !game.pending_deal_offers.is_empty() {
         return GameAction::AcceptDeal(0);
@@ -510,7 +519,7 @@ fn label_loyalist(game: &Game) -> GameAction {
     } else {
         Some(CLUB_RUN)
     };
-    indie_loop(game, pressing, true)
+    indie_loop(game, pressing, true, studio)
 }
 
 /// M7: the best distribution channel this act's fame and wallet allow, after
@@ -535,7 +544,7 @@ fn best_affordable_channel(game: &Game, reserve: i32) -> DistributionChannel {
 /// several deposits over, trading down the moment it goes into the red.
 /// Both moves are instant and there are only five tiers, so the run of
 /// consecutive `ChangeLifestyle` turns is bounded well under `STALL_LIMIT`.
-fn homebody(game: &Game) -> GameAction {
+fn homebody(game: &Game, studio: RecordingStudio) -> GameAction {
     let cur = game.player.lifestyle;
     let money = game.player.money;
 
@@ -556,7 +565,7 @@ fn homebody(game: &Game) -> GameAction {
         return GameAction::ChangeLifestyle(down);
     }
     // The indie day job, minus the road: never accept a support tour.
-    indie_loop(game, Some(CLUB_RUN), false)
+    indie_loop(game, Some(CLUB_RUN), false, studio)
 }
 
 /// M7 (§F): the biggest tour this act can afford right now — a region it
@@ -599,14 +608,14 @@ fn plan_biggest_tour(game: &Game) -> Option<(usize, TourRig, u8)> {
 /// M7 (§F): lives on the road. Tours the biggest affordable rig whenever
 /// stress and health allow; otherwise writes/records so there's fresh
 /// material (and a higher live cap) to tour behind.
-fn road_dog(game: &Game) -> GameAction {
+fn road_dog(game: &Game, studio: RecordingStudio) -> GameAction {
     if game.player.stress < TOUR_STRESS_GUARD
         && game.player.health >= TOUR_HEALTH_GUARD
         && let Some((region, rig, weeks)) = plan_biggest_tour(game)
     {
         return GameAction::GoOnTour(region, rig, weeks);
     }
-    indie_loop(game, Some(CLUB_RUN), true)
+    indie_loop(game, Some(CLUB_RUN), true, studio)
 }
 
 /// M7 (§F): the eternal independent — never signs (it simply never accepts;
@@ -614,8 +623,8 @@ fn road_dog(game: &Game) -> GameAction {
 /// action that would only spin the calendar). The `pre_turn` hook keeps it
 /// on the best distribution tier its fame and wallet allow, which is what
 /// sets it apart from balanced-indie's default mail-order reach.
-fn indie_lifer(game: &Game) -> GameAction {
-    indie_loop(game, Some(CLUB_RUN), true)
+fn indie_lifer(game: &Game, studio: RecordingStudio) -> GameAction {
+    indie_loop(game, Some(CLUB_RUN), true, studio)
 }
 
 // ---------------------------------------------------------------------------
@@ -696,10 +705,37 @@ fn run_career(bot: Bot, seed: u64, horizon_weeks: u32) -> Career {
     drive(bot, &mut game, horizon_weeks)
 }
 
+/// A career at a chosen room — the studio-ladder sweep's entry point.
+fn run_career_with_studio(
+    bot: Bot,
+    seed: u64,
+    horizon_weeks: u32,
+    studio: RecordingStudio,
+) -> Career {
+    let mut game = seeded_game(seed);
+    drive_with_studio(bot, &mut game, horizon_weeks, studio)
+}
+
 /// Drive a game to the horizon (or the end screen), one decision per turn.
 /// Rejected actions are the game saying no — the bot rests instead of
 /// arguing. Any panic below `process_turn` propagates and fails the test.
 fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
+    drive_with_studio(bot, game, horizon_weeks, BOT_STUDIO)
+}
+
+/// `drive`, with the room the policy books as an explicit input.
+///
+/// The studio ladder is a *decision* (§C) — one that costs money and weeks in
+/// exchange for quality — and the sim can only judge whether it is a real
+/// decision by playing careers at each rung. Every existing sweep calls `drive`
+/// and keeps booking `BOT_STUDIO`, so its numbers stay comparable; only the
+/// ladder sweep below moves the room.
+fn drive_with_studio(
+    bot: Bot,
+    game: &mut Game,
+    horizon_weeks: u32,
+    studio: RecordingStudio,
+) -> Career {
     let mut career = Career {
         bot,
         ending: Ending::StillGoing,
@@ -727,8 +763,8 @@ fn drive(bot: Bot, game: &mut Game, horizon_weeks: u32) -> Career {
 
     while !game.is_game_over() && game.week <= horizon_weeks {
         let week_before = game.week;
-        bot.pre_turn(game);
-        let action = bot.decide(game);
+        bot.pre_turn(game, studio);
+        let action = bot.decide(game, studio);
         if game.process_turn(action).is_err() {
             game.process_turn(GameAction::LazeAround)
                 .expect("lazing is always allowed");
@@ -1500,7 +1536,7 @@ fn a_pure_gig_grinder_stalls_at_the_base_live_cap() {
         suppress_story_events(&mut game);
         while !game.is_game_over() && game.week <= SMOKE_HORIZON {
             let week_before = game.week;
-            let action = Bot::GigGrinder.decide(&game);
+            let action = Bot::GigGrinder.decide(&game, BOT_STUDIO);
             if game.process_turn(action).is_err() {
                 game.process_turn(GameAction::LazeAround)
                     .expect("lazing is always allowed");
@@ -1685,7 +1721,7 @@ fn incident_cadence_matches_the_designed_weekly_chance() {
         if game.is_game_over() {
             break;
         }
-        let action = Bot::GigGrinder.decide(&game);
+        let action = Bot::GigGrinder.decide(&game, BOT_STUDIO);
         if game.process_turn(action).is_err() {
             game.process_turn(GameAction::LazeAround)
                 .expect("lazing is always allowed");
@@ -2511,5 +2547,174 @@ fn sales_tail_income_by_quality_tier_sweep() {
         "same release (initial_sales_score 80) over 2 years: fame 20 -> ${modest_star_income}, fame 95 -> ${big_star_income} \
          (ratio {:.2}x)",
         big_star_income as f32 / modest_star_income.max(1) as f32
+    );
+}
+
+/// The studio-ladder sweep (§C/§I): does climbing the ladder pay?
+///
+/// The five rooms trade money and calendar weeks for release quality — a
+/// decision the whole cycle is about, and one no bot in this file has ever
+/// made. Every policy books `BOT_STUDIO` (the neutral demo room), so the
+/// ladder S-UI just made reachable to a player is completely unexercised by
+/// the sim. This sweep walks it.
+///
+/// Method: hold the policy fixed and move only the room, over the same seeds.
+/// `BalancedIndie` is the subject because it is the intended player loop —
+/// write, press, gig the window — so its result is the one that speaks to a
+/// human's choice. A room that no policy can profit from is a trap; a room
+/// that every policy should take is not a decision.
+///
+/// Read the output as three questions:
+///   1. **Is any rung dominated?** A room that is both pricier and worse on
+///      every ending is a button nobody should press.
+///   2. **Does quality buy enough?** Better rooms shift the release-quality
+///      distribution additively (§C), so the payoff shows up as sales, which
+///      show up as money and fame — a rung that costs 60x the demo room and
+///      returns 1.1x is a false choice.
+///   3. **Do the fame gates bite?** Regional needs 20, major-city 45,
+///      world-class 70. A rung that only unlocks once the act no longer needs
+///      it is decoration.
+#[test]
+#[ignore = "long balance sweep: cargo test -- --ignored --nocapture"]
+fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
+    /// Fewer seeds than the main sweep: five rooms over one policy is five
+    /// times the work for a narrower question.
+    const SEEDS: u64 = 24;
+
+    println!();
+    println!("=== studio ladder: BalancedIndie, one room per column ===");
+    println!(
+        "{:<16} {:>4} {:>5} {:>7} {:>9} {:>9} {:>9} {:>8} {:>5} {:>5}",
+        "room",
+        "runs",
+        "win%",
+        "win.yr",
+        "med.fame",
+        "med.peak",
+        "med.$",
+        "alb1.wk",
+        "broke",
+        "going"
+    );
+
+    let mut table: Vec<(RecordingStudio, Vec<Career>)> = Vec::new();
+    for studio in RecordingStudio::ALL {
+        let mut careers = Vec::new();
+        for seed in 1..=SEEDS {
+            careers.push(run_career_with_studio(
+                Bot::BalancedIndie,
+                seed,
+                SWEEP_HORIZON,
+                studio,
+            ));
+        }
+        let n = careers.len();
+        let wins = careers.iter().filter(|c| c.won()).count();
+        let win_year = median(
+            careers
+                .iter()
+                .filter_map(|c| c.weeks_to_rockstar)
+                .map(|w| w / constants::WEEKS_PER_YEAR)
+                .collect(),
+        );
+        let broke = careers
+            .iter()
+            .filter(|c| c.ending == Ending::WentBroke)
+            .count();
+        let going = careers
+            .iter()
+            .filter(|c| c.ending == Ending::StillGoing)
+            .count();
+        println!(
+            "{:<16} {:>4} {:>4}% {:>7} {:>9} {:>9} {:>9} {:>8} {:>5} {:>5}",
+            studio.label(),
+            n,
+            wins * 100 / n,
+            show(win_year),
+            show(median(careers.iter().map(|c| c.final_fame).collect())),
+            show(median(careers.iter().map(|c| c.peak_fame).collect())),
+            show(median(careers.iter().map(|c| c.final_money).collect())),
+            show(median(
+                careers
+                    .iter()
+                    .filter_map(|c| c.weeks_to_first_album)
+                    .collect()
+            )),
+            broke,
+            going,
+        );
+        table.push((studio, careers));
+    }
+
+    // --- What the ladder actually is, and the assertion that found it ------
+    //
+    // MEASURED 2026-10-31 (24 seeds, BalancedIndie, 15 years). Every rung up
+    // the ladder earns *less*:
+    //
+    //   room             win%   med.$      alb1.wk
+    //   Home 4-track      91%   4,463,933     25
+    //   Local demo room  100%   4,062,071     29
+    //   Regional         100%   3,468,747     41
+    //   Major city       100%   2,816,784     64
+    //   World-class       87%   1,094,476    278
+    //
+    // The cause is arithmetic, not a bug in any one constant. A room's quality
+    // bonus is additive (§C, `STUDIO_QUALITY_BONUS` = -8/+0/+6/+12/+20), and
+    // quality reaches sales at `SALES_QUALITY_WEIGHT` 2.5 in
+    // `calculate_release_sales_score`. So demo -> major-city buys +11 quality
+    // = +27.5 sales-score points against a base of ~257 at fame 100 — an
+    // **+10.7% sales uplift** — while the bill goes 2,200 -> 16,000 (**7.3x**)
+    // and the session goes 3 -> 6 weeks (**2x**), and those are weeks the act
+    // cannot gig. The top room is worse still: its fame gate (70) only opens
+    // once the fame term already dominates the score, so it buys the least
+    // where it costs the most.
+    //
+    // This is the same defect class as the full-production tour rig (PR #25)
+    // and the studio-rat's bootstrap single: a choice you can never come out
+    // ahead on is not a trade-off. The ladder S-UI made reachable is currently
+    // decoration, and §C's money-vs-time-vs-quality thesis does not hold in the
+    // shipped numbers.
+    //
+    // The fix is a [tune] decision — raise the quality bonus, raise the sales
+    // weight, or cut the top rooms' cash and weeks — and this sweep is the
+    // instrument for whichever is chosen. What it must not do is pass silently
+    // while the ladder is inverted, so the assertion pins the *property* (the
+    // best earner must not be the cheapest room) rather than a number.
+    let demo = table
+        .iter()
+        .find(|(s, _)| *s == BOT_STUDIO)
+        .map(|(_, c)| c)
+        .expect("the demo room is always in the ladder");
+    let money_of = |careers: &Vec<Career>| -> i32 {
+        median(careers.iter().map(|c| c.final_money).collect()).unwrap_or(0)
+    };
+    let (best_room, best_money) = table
+        .iter()
+        .map(|(s, c)| (*s, money_of(c)))
+        .max_by_key(|(_, money)| *money)
+        .expect("the ladder is non-empty");
+    let demo_money = money_of(demo);
+
+    println!(
+        "\nbest room by median money: {} (${best_money} vs demo room ${demo_money})",
+        best_room.label()
+    );
+    if best_money <= demo_money {
+        println!(
+            "\u{26a0} no room out-earns the demo room — the quality bonus is not paying for itself"
+        );
+    }
+
+    assert!(
+        best_room != RecordingStudio::Home,
+        "the home 4-track is the cheapest room AND the best earner, so no rung of the \
+         studio ladder pays for itself. Quality is additive and reaches sales at \
+         SALES_QUALITY_WEIGHT 2.5, so +11 quality buys ~10.7% more sales while the \
+         bill rises 7.3x and the session doubles in weeks — the ladder is dominated \
+         end to end (measured: home $4.46M, demo $4.06M, regional $3.47M, \
+         major-city $2.82M, world-class $1.09M over 24 seeds). This is S-SIM's to \
+         retune — raise the quality bonus, raise the sales weight, or cut the top \
+         rooms' cost and weeks — and this sweep is the instrument for whichever is \
+         chosen. See the block comment above."
     );
 }

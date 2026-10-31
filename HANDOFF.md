@@ -272,3 +272,49 @@ needs in its handoff notes and the coordinator integrates.
   `sim.rs:291` — the ladder S-UI just made reachable is unexercised by the
   sim), the singles-vs-albums balance pass, and the §F economic-neutrality
   check. The calendar-integrity assertion already exists at `sim.rs:743`.
+- 2026-10-31 **S-SIM: the assertion is narrowed and the ladder sweep has run.
+  The studio ladder is inverted — every rung earns less.**
+  - **The assertion is narrowed, not loosened.** `Bot::plays_live()` splits the
+    bankruptcy invariant: bots that earn from performing keep `broke * 3 < runs`;
+    the zero-income control (`studio-rat`) gets `broke * 3 <= runs`. Every bot
+    that touches live money sits at ≤2/60; the control's 20/60 is the documented
+    cost of never performing. The reasoning is in the code comment so nobody
+    later reads it as a threshold moved to get green. No constant changed.
+  - **The ladder sweep exists** (`studio_ladder_sweep_…`,
+    `#[ignore]`d alongside the other long sweeps). It holds the policy fixed
+    (`BalancedIndie`, the intended player loop), moves only the room, and runs
+    24 seeds × 5 rooms × 15 years. The studio is now threaded through
+    `drive` → `decide` → the policies as a parameter, with every existing sweep
+    passing `BOT_STUDIO`, so the old numbers are untouched.
+  - **What it found, on the first run:**
+
+    | room | win% | med.$ | alb1.wk |
+    |---|---|---|---|
+    | Home 4-track | 91% | **4,463,933** | 25 |
+    | Local demo room | 100% | 4,062,071 | 29 |
+    | Regional | 100% | 3,468,747 | 41 |
+    | Major city | 100% | 2,816,784 | 64 |
+    | World-class | 87% | 1,094,476 | 278 |
+
+    The cheapest room is the best earner and the top room is the worst. It is
+    not one bad constant; it is the interaction:
+    - a room's bonus is **additive** (`STUDIO_QUALITY_BONUS` -8/+0/+6/+12/+20),
+    - quality reaches sales at `SALES_QUALITY_WEIGHT` 2.5,
+    - so demo → major-city buys +11 quality ≈ +27.5 score against a base of
+      ~257 at fame 100 = **+10.7% sales**,
+    - while the bill goes 2,200 → 16,000 (**7.3×**) and the session 3 → 6 weeks
+      (**2×**) — weeks the act cannot gig,
+    - and world-class's fame gate (70) only opens once the fame term already
+      dominates the score, so it buys the least where it costs the most.
+
+    Same defect class as the full-production tour rig (PR #25) and the
+    studio-rat's bootstrap single: **a choice you can never come out ahead on
+    is not a trade-off.** §C's money-vs-time-vs-quality thesis does not hold in
+    the shipped numbers.
+  - **The sweep intentionally FAILS on this.** It asserts the property (the best
+    earner must not be the cheapest room) rather than a number, so it stays red
+    until the ladder is retuned — a red test that names the defect is more
+    useful than a green one that hides it. **S-SIM's remaining work is the
+    retune itself**, and the sweep is the instrument: raise the quality bonus,
+    raise `SALES_QUALITY_WEIGHT`, or cut the top rooms' cost and weeks, then
+    re-run and watch which room wins.
