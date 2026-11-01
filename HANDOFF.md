@@ -532,11 +532,18 @@ needs in its handoff notes and the coordinator integrates.
   - **Atomic saves (CodeRabbit on ab3eb57, valid).** `Game::save_game` used
     `File::create` + `write_all`, so a write failing part-way truncated the
     file it was replacing — and the prompt writes, by default, over the
-    save the player loaded. It now writes `<path>.tmp`, `sync_all`s, and
-    renames over the target; a failure removes the temp file and leaves the
-    old save byte-for-byte intact (tested by squatting a directory on the
-    temp path).
-  - **Tests:** 348 passing (from 340 at 06752f2), 9 ignored. The prompt
+    save the player loaded. `core::write_atomically` now writes a temp
+    file beside the target, `sync_all`s it, and renames it over the target;
+    a failure removes that temp file and leaves the old save byte-for-byte
+    intact. Second CodeRabbit pass (983268f, valid): the temp name was
+    `<path>.tmp`, which `File::create` would truncate if a player had a
+    career saved under that name — it is now `.<name>.<pid>-<n>.tmp`,
+    opened with `create_new` (never an existing file; a clash moves to the
+    next counter), and cleanup only ever removes the file this call made.
+    Tests in `game::tests::save_compat` (a write dying mid-way; a
+    `career.sav.tmp` neighbour surviving a save and nothing left behind)
+    and a UI test where the rename fails (target is a directory).
+  - **Tests:** 350 passing (from 340 at 06752f2), 9 ignored. The prompt
     opening from `q` and from Enter, stray keys and cancels (no file, no
     exit, no week), `C` writing a loadable save and staying, `S` exiting
     with a receipt and the career intact, a failed save for both options,

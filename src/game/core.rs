@@ -531,31 +531,16 @@ impl Game {
         ];
     }
 
-    /// Write the career to `file_path`, atomically: the JSON goes to a
-    /// sibling `<path>.tmp`, is flushed to disk, and only then renamed over
-    /// the target. A write that fails part-way (a full disk, a permissions
-    /// change) therefore leaves any existing save at `file_path` intact —
-    /// which matters now that Quit's save-first prompt writes, unasked-for
-    /// filename and all, to the file the player last loaded (PR #52).
+    /// Write the career to `file_path`, atomically (`write_atomically`): a
+    /// write that fails part-way (a full disk, a permissions change) leaves
+    /// any existing save at `file_path` intact — which matters now that
+    /// Quit's save-first prompt writes, unasked, to the file the player last
+    /// loaded (PR #52).
     pub fn save_game(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_string = serde_json::to_string_pretty(self)?;
-        let tmp_path = format!("{file_path}.tmp");
-        let written = (|| -> std::io::Result<()> {
-            let mut file = File::create(&tmp_path)?;
-            file.write_all(json_string.as_bytes())?;
-            file.sync_all()?;
-            // `rename` replaces an existing file on every platform std
-            // supports (MoveFileEx with REPLACE_EXISTING on Windows).
-            std::fs::rename(&tmp_path, file_path)
-        })();
-        if let Err(e) = written {
-            // Best effort: don't leave a half-written temp file behind. If
-            // the temp path is not ours to remove (e.g. a directory), leave it.
-            if std::path::Path::new(&tmp_path).is_file() {
-                let _ = std::fs::remove_file(&tmp_path);
-            }
-            return Err(e.into());
-        }
+        write_atomically(std::path::Path::new(file_path), |file| {
+            file.write_all(json_string.as_bytes())
+        })?;
         Ok(())
     }
 
@@ -574,4 +559,60 @@ impl Game {
 
         Ok(loaded_game)
     }
+}
+
+/// Replace `target` with what `write` puts in a file, or leave it untouched.
+///
+/// `write` fills a temporary file created fresh (`create_new`, so it can never
+/// open — let alone truncate — a file that already exists, such as another
+/// career someone saved as `rocker.sav.tmp`) in `target`'s own directory,
+/// under a name unique to this process and call. The temp file is flushed to
+/// disk and renamed over `target`, which replaces it in one step on every
+/// platform std supports (MoveFileEx with REPLACE_EXISTING on Windows). On
+/// any failure only that temp file — the one this call created — is removed.
+pub(crate) fn write_atomically(
+    target: &std::path::Path,
+    write: impl FnOnce(&mut File) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+
+    let dir = match target.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => std::path::Path::new("."),
+    };
+    let name = target
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "save".to_string());
+
+    // Find a name nobody has: a clash (a leftover from a crashed save, or a
+    // file someone happens to have) just moves on to the next counter.
+    let (tmp_path, mut file) = loop {
+        let candidate = dir.join(format!(
+            ".{name}.{}-{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => break (candidate, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
+
+    let result = write(&mut file)
+        .and_then(|()| file.sync_all())
+        .and_then(|()| {
+            drop(file);
+            std::fs::rename(&tmp_path, target)
+        });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+    result
 }

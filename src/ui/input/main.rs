@@ -1045,37 +1045,37 @@ mod tests {
         let _ = std::fs::remove_file(&chosen);
     }
 
-    /// CodeRabbit on #52: the prompt writes over the file the player last
-    /// loaded, so a write that fails part-way must not truncate it. Force
-    /// the temp-file step to fail (a directory squats on `<path>.tmp`) and
-    /// the existing save survives byte for byte; a good save leaves no
-    /// temp file behind.
+    /// CodeRabbit on #52: a save that fails at the last step (here the
+    /// target is a directory, so the rename over it fails) reports the error
+    /// on the prompt, quits nothing, leaves what was at the target alone,
+    /// and cleans up its temp file. (`game::tests::save_compat` covers a
+    /// write dying mid-way over an existing save.)
     #[test]
-    fn a_failed_quit_save_leaves_the_existing_save_intact() {
-        let mut app = app_ready_to_quit("atomic");
-        let path = app.save_path.clone();
-        app.game.save_game(&path).expect("the first save works");
-        assert!(
-            !std::path::Path::new(&format!("{path}.tmp")).exists(),
-            "a good save leaves no temp file"
-        );
-        let before = std::fs::read(&path).expect("the save is on disk");
+    fn a_failed_quit_save_leaves_the_target_and_no_temp_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-rename-fails",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let target = dir.join("career.sav");
+        std::fs::create_dir_all(&target).expect("a directory squats on the target");
+        std::fs::write(target.join("keep.txt"), b"untouched").expect("seed");
 
-        let squatter = format!("{path}.tmp");
-        std::fs::create_dir_all(&squatter).expect("make the temp path unusable");
-        app.game.week += 5; // so a successful overwrite would differ
+        let mut app = app_ready_to_quit("unused-rename");
+        app.save_path = target.to_string_lossy().into_owned();
         app.handle_main_key(key(KeyCode::Char('q')));
         app.handle_key(key(KeyCode::Char('s')));
         assert!(!app.should_exit, "the failed save must not quit");
         assert!(matches!(app.screen, Screen::ConfirmQuit { error: Some(_) }));
         assert_eq!(
-            std::fs::read(&path).expect("the old save is still there"),
-            before,
-            "a failed save must not touch the existing one"
+            std::fs::read(target.join("keep.txt")).expect("still there"),
+            b"untouched"
         );
-        Game::load_game(&path).expect("and it still loads");
-
-        let _ = std::fs::remove_dir_all(&squatter);
-        let _ = std::fs::remove_file(&path);
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .expect("dir lists")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(leftovers.len(), 1, "only the target remains: {leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

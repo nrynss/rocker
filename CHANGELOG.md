@@ -108,10 +108,12 @@ default song count.
   last file saved or loaded through the Save/Load modal (`rocker.sav` by
   default) and prints where on exit. Quitting no longer ends the career, so
   a save made mid-tour resumes the tour. A failed save never quits: the
-  prompt stays up with the error. Saves are now atomic (written to
-  `<file>.tmp`, flushed, then renamed over the target), so a write that
-  fails part-way — say a full disk — can no longer truncate the save it was
-  replacing; this covers the Save modal too. The engine's `GameAction::Quit` is
+  prompt stays up with the error. Saves are now atomic (written to a
+  freshly created, uniquely named temp file beside the target, flushed, then
+  renamed over it), so a write that fails part-way — say a full disk — can
+  no longer truncate the save it was replacing, and no other file (not even
+  one named `<save>.tmp`) is ever opened for writing; this covers the Save
+  modal too. The engine's `GameAction::Quit` is
   untouched and bots never used it, so the sim is unaffected. Ctrl-C still
   exits at once without saving, as before.
 
