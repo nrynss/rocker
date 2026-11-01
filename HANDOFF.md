@@ -434,6 +434,16 @@ needs in its handoff notes and the coordinator integrates.
       booking rows refuse at the door so they never quote something that
       would be dropped; the others are the continue keys (see
       `a_week_taking_action_still_plays_the_activity_week`).
+    - **Sim impact** (15-year sweep, 60 seeds, before → after): bankruptcies
+      unchanged for every bot (studio-rat 18, homebody 8, indie-lifer 4, the
+      rest 2 or 0). The visible shift is **studio-rat's median albums 40 → 86**
+      (singles 11 → 18, wins 56% → 60%): it books sessions back to back, and
+      its `ReleaseMaster` submitted mid-session used to be swallowed as
+      another studio week, so masters sat in the vault. road-dog wins
+      11 → 22 of 60, label-loyalist median certs 58 → 59; balanced-indie and
+      indie-lifer reach fame 100 a little later (y2 87 → 81/80) but finish
+      the same. All 9 ignored sweeps pass. These are the bug's numbers
+      coming out of the sim, not a retune — worth a look in S-SIM.
     - Tests: `game/tests/instant_actions.rs` (one per action mid-tour, plus a
       release mid-*session*, the signed release path, the support-accept
       refusal, and the week-taking control) and
