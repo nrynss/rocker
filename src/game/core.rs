@@ -489,9 +489,8 @@ impl Game {
     }
 
     /// The commitment in progress, for the activity screen (§H). `None`
-    /// means the band is free and the ordinary action menu applies.
-    /// `allow(dead_code)`: S-UI is the caller, and wires up in wave 3.
-    #[allow(dead_code)]
+    /// means the band is free and the ordinary action menu applies. The UI
+    /// reads it to refuse booking pickers while a commitment runs.
     pub fn ongoing_activity(&self) -> Option<&OngoingActivity> {
         self.ongoing_activity.as_ref()
     }

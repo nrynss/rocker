@@ -49,6 +49,16 @@ default song count.
   `RecordingStudio::default()` and the format's default song count on every
   dispatch, so the studio ladder this cycle was built around could not be
   chosen by a player. The picker closes that gap.
+- **Booking pickers no longer open mid-activity** (post-#27 CodeRabbit
+  review). While a commitment runs, `process_turn` ignores the submitted action
+  and plays the activity's next week (§F), so the record picker — reachable by
+  a Record row's hotkey or Enter during a tour, a session or a break — showed a
+  valid quote, took the player's Enter, then silently dropped the booking and
+  spent the week on the running activity. `open_record_picker` now refuses
+  while an activity runs (alongside its existing stress guard), and Play a Gig
+  and Go on Tour, which had the same shape, refuse the same way. All four rows
+  grey out with `busy: <activity>` and the refusal names the activity and
+  points at `X`; nothing about the refusal consumes a week.
 
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.
