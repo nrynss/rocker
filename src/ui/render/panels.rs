@@ -286,9 +286,14 @@ pub(super) fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
 pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
     // The activity strip (design §H, S-UI) takes the top of this column while a
     // commitment is running: what the band is doing, week n of m, and how to
-    // carry on or walk away. The menu stays below it because the turn is what
-    // advances the activity — any action resolves one more week — so hiding the
-    // menu would leave the player with no way to move.
+    // carry on or walk away. The menu stays below it because a *turn* action is
+    // what advances the activity — the screen-opening rows (Charts, Discography,
+    // Save, Load) do not — so hiding the menu would leave the player with no way
+    // to move. Six rows: three content lines plus the border, with one spare so
+    // a two-line headline (a long band name in "Opening for …") cannot push the
+    // week counter out of the box. It comes out of the menu's height, so at
+    // 80x24 the action list scrolls — a fair trade, because the counter is the
+    // one thing this screen exists to show.
     let (strip_area, menu_area) = match &app.game.ongoing_activity {
         Some(_) => {
             let [strip, rest] =
@@ -359,44 +364,41 @@ fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivit
         Span::styled(activity.headline(), Style::new().fg(Color::White).bold()),
     ]);
 
-    let week_line = Line::from(vec![
-        Span::styled(
-            format!("   Week {current} of {total}"),
-            Style::new().fg(Color::Yellow),
-        ),
-        Span::styled(
-            if final_week {
-                "   — this is the last week"
-            } else {
-                "   — any action below plays the next week"
-            },
-            Style::new().fg(Color::DarkGray),
-        ),
-    ]);
+    // `n of m`, then a per-week bar and the settled count on one line — a long
+    // tour reads as long at a glance. Both lines are kept short enough to fit
+    // the strip at 80 columns: an earlier version put the hint on the counter's
+    // line, it wrapped, and the wrap pushed "Week n of m" out of the 6-row box
+    // entirely, so the one thing the screen exists to show was the thing
+    // clipped.
+    let week_line = Line::from(Span::styled(
+        format!("   Week {current} of {total}"),
+        Style::new().fg(Color::Yellow),
+    ));
 
-    // A proportional progress bar, one cell per week, so a long tour reads as
-    // long at a glance.
     let done = usize::from(activity.weeks_done());
     let total_cells = usize::from(total).max(1);
     let bar: String = (0..total_cells)
         .map(|i| if i < done { '█' } else { '░' })
         .collect();
     let bar_line = Line::from(vec![
-        Span::raw("   "),
         Span::styled(bar, Style::new().fg(Color::Green)),
         Span::styled(
-            format!("  {} settled", activity.weeks_done()),
+            format!("  {done} settled"),
+            Style::new().fg(Color::DarkGray),
+        ),
+        Span::styled("   ", Style::new()),
+        Span::styled(
+            if final_week {
+                "last week"
+            } else {
+                "X abandons"
+            },
             Style::new().fg(Color::DarkGray),
         ),
     ]);
 
-    let quit_line = Line::styled(
-        "   X  abandon this and go back to the week",
-        Style::new().fg(Color::DarkGray),
-    );
-
     frame.render_widget(
-        Paragraph::new(vec![header, week_line, bar_line, quit_line])
+        Paragraph::new(vec![header, week_line, bar_line])
             .block(Block::bordered().title(" 🎬 Activity "))
             .wrap(Wrap { trim: false }),
         area,

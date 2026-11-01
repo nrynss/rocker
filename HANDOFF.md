@@ -198,9 +198,11 @@ needs in its handoff notes and the coordinator integrates.
     screen it opens.
   - **Activity screen** (§H): while a commitment runs, a strip above the menu
     shows what it is, week *n* of *m*, a per-week progress bar, and how many
-    weeks have settled. Any menu action plays the next week (that is what the
-    turn already did); `X` abandons, dispatched as
-    `GameAction::AbandonActivity`.
+    weeks have settled. Any **turn-consuming** action plays the next week —
+    that is what the turn already did. The screen-opening rows do *not*:
+    Charts, Discography, Save and Load set `Screen` directly and dispatch
+    nothing, so they never advance an activity (nor should they). `X` abandons,
+    dispatched as `GameAction::AbandonActivity`.
   - **Discography split** (§H): `Tab` cycles all → singles → albums, and the
     title names the current filter. `discography_rows` now takes the filter;
     an empty filter says so rather than showing a blank list.

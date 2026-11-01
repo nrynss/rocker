@@ -464,4 +464,57 @@ mod tests {
             "'x' on Main should abandon the running activity"
         );
     }
+    /// Only *turn-consuming* menu rows advance a running activity.
+    ///
+    /// This pins the distinction the activity strip describes. Charts,
+    /// Discography, Save and Load open a screen and dispatch nothing, so a
+    /// player who ducks into the charts mid-tour must come back to the same
+    /// week — and a claim that "any menu action plays the next week" is false
+    /// precisely because of them.
+    #[test]
+    fn screen_opening_rows_do_not_advance_a_running_activity() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Main;
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        assert!(
+            app.game.ongoing_activity.is_some(),
+            "a break is a commitment"
+        );
+
+        let week = app.game.week;
+        let done = app
+            .game
+            .ongoing_activity
+            .as_ref()
+            .map(crate::game::OngoingActivity::weeks_done)
+            .expect("activity is running");
+
+        // Every screen-opening row, in turn: none may move the calendar.
+        for kind in [
+            MenuKind::Charts,
+            MenuKind::Discography,
+            MenuKind::Save,
+            MenuKind::Load,
+        ] {
+            app.screen = Screen::Main;
+            app.activate(kind);
+            assert_eq!(
+                app.game.week, week,
+                "opening a screen must not consume the week"
+            );
+            assert_eq!(
+                app.game
+                    .ongoing_activity
+                    .as_ref()
+                    .map(crate::game::OngoingActivity::weeks_done),
+                Some(done),
+                "opening a screen must not advance the activity"
+            );
+        }
+    }
 }
