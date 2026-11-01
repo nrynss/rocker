@@ -362,11 +362,12 @@ pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
 ///
 /// "Continue" is any *week-taking* menu row — its own action is ignored and
 /// the turn resolves one more week of the activity, which is what those rows
-/// now say (`keep touring` and the like — `App`'s `continue_detail`, #41). Instant rows (Vault, Re-press,
-/// Marketing, Lifestyle, Deals, the support slot's decline) apply and take
-/// no week (#37); screen rows (Charts, Discography, Save, Load) dispatch
-/// nothing; booking rows refuse. "Abandon" is the `x` hotkey, which opens the
-/// §F confirmation (`Screen::ConfirmAbandon`); only its `Y` dispatches
+/// now say (`keep touring` and the like — `App`'s `continue_detail`, #41).
+/// Instant rows (Vault, Re-press, Marketing, Lifestyle, Deals, the support
+/// slot's decline) apply and take no week (#37); screen rows (Charts,
+/// Discography, Save, Load, and Quit's save-first prompt) dispatch nothing;
+/// booking rows refuse. "Abandon" is the `x` hotkey, which opens the §F
+/// confirmation (`Screen::ConfirmAbandon`); only its `Y` dispatches
 /// `GameAction::AbandonActivity`.
 fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivity, area: Rect) {
     let total = activity.weeks_total();

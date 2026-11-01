@@ -471,11 +471,12 @@ needs in its handoff notes and the coordinator integrates.
   - **Continue rows (#41).** Mid-activity, every week-taking row (Laze,
     Write, Practice, Break, Doctor) says it carries the activity on — `keep
     touring` / `keep recording` / `keep opening` / `keep resting`
-    (`ui::app::continue_detail`) — and is never greyed out — continuing is always possible. `App::menu_entries`
-    post-processes the `MenuKind::Action` rows with the engine's own
-    `is_instant_action` (now `pub(crate)`), so a new action can't be labelled
-    one way and resolved another. The doctor's fee and money gate are gone
-    from the row while busy.
+    (`ui::app::continue_detail`) — and is never greyed out, since continuing
+    is always possible. `App::menu_entries` post-processes the
+    `MenuKind::Action` rows with the engine's own `is_instant_action` (now
+    `pub(crate)`), so a new action can't be labelled one way and resolved
+    another. The doctor's fee and money gate are gone from the row while
+    busy.
   - **Decision: no doctor mid-activity.** The doctor stays a continue key.
     §F's answer to a body giving out mid-run is the walk-out (and the
     emergency paths force one), and a house call would be a sim change this
