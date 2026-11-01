@@ -231,13 +231,19 @@ impl Bot {
             // the chosen channel's fee can't push that release out of reach.
             // Picking a channel on its fee alone could make the full bill
             // unaffordable, and the bot would skip recording — skewing the
-            // sweep. CLUB_RUN matches the pressing tier `indie_lifer` uses.
+            // sweep.
+            //
+            // The run must be the one `indie_lifer` will actually order, not a
+            // fixed `CLUB_RUN`: at fame 55+ it selects a regional or national
+            // run, and reserving the smaller club bill would let
+            // `best_affordable_channel` pick a distribution tier whose fee
+            // leaves the finished master unpressable at the larger run.
             let kind = if game.band.can_record_album() {
                 ReleaseType::Album
             } else {
                 ReleaseType::Single
             };
-            let reserve = release_bill(game, kind, Some(CLUB_RUN), studio);
+            let reserve = release_bill(game, kind, Some(run_for_fame(game.band.fame)), studio);
             game.current_distribution_channel = best_affordable_channel(game, reserve);
         }
     }
@@ -2722,41 +2728,66 @@ fn studio_ladder_sweep_prints_a_room_by_room_balance_report() {
     // The assertion pins the *property*, not a number: the best earner must not
     // be the cheapest room. It went red for two months' worth of reasons above
     // and is green now — if it goes red again, the ladder has been re-broken.
-    let demo = table
-        .iter()
-        .find(|(s, _)| *s == BOT_STUDIO)
-        .map(|(_, c)| c)
-        .expect("the demo room is always in the ladder");
     let money_of = |careers: &Vec<Career>| -> i32 {
         median(careers.iter().map(|c| c.final_money).collect()).unwrap_or(0)
     };
-    let (best_room, best_money) = table
+    let money_by_room: Vec<(RecordingStudio, i32)> = table
         .iter()
-        .map(|(s, c)| (*s, money_of(c)))
+        .map(|(studio, careers)| (*studio, money_of(careers)))
+        .collect();
+    let demo_money = money_by_room
+        .iter()
+        .find(|(studio, _)| *studio == BOT_STUDIO)
+        .map(|(_, money)| *money)
+        .expect("the demo room is always in the ladder");
+    let (best_room, _best_money) = money_by_room
+        .iter()
+        .copied()
         .max_by_key(|(_, money)| *money)
         .expect("the ladder is non-empty");
-    let demo_money = money_of(demo);
 
-    println!(
-        "\nbest room by median money: {} (${best_money} vs demo room ${demo_money})",
-        best_room.label()
-    );
-    if best_money <= demo_money {
+    println!("\nmedian bank by room:");
+    for (studio, money) in &money_by_room {
+        let delta = money - demo_money;
         println!(
-            "\u{26a0} no room out-earns the demo room — the quality bonus is not paying for itself"
+            "  {:<18} ${:>10}  ({}{} vs demo room)",
+            studio.label(),
+            money,
+            if delta >= 0 { "+" } else { "-" },
+            delta.abs()
         );
     }
+    println!("\nbest room by median money: {}", best_room.label());
 
-    assert!(
-        best_room != RecordingStudio::Home,
-        "the home 4-track is the cheapest room AND the best earner, so the studio \
-         ladder has been re-broken. Check, in order: (a) `reachable_studio` still \
-         lets a policy book the room it asked for — a fame-gated booking is a \
-         wasted week and it was worth 31% of all turns at the world-class room; \
-         (b) `STUDIO_WEEKS_PER_SONG` has not been steepened — time is the binding \
-         constraint, and 0.28 per song already loses more albums than the quality \
-         buys; (c) `STUDIO_RATE_PER_SONG` has not been raised back toward the old \
-         18x spread; (d) `STUDIO_QUALITY_BONUS` still spans enough to matter. The \
-         working numbers and the measurement behind them are in `constants.rs`."
-    );
+    // --- The property this sweep exists to defend -------------------------
+    //
+    // NOT simply "the winner is not the home room". That check passes when the
+    // *demo* room wins, which is the same broken ladder wearing a different
+    // label: the statement worth pinning is that **climbing pays**, i.e. every
+    // room above the demo room earns at least the demo room. A ladder where the
+    // middle rungs are dominated is a false choice even if its top rung is not
+    // the cheapest one.
+    //
+    // The demo room is the baseline rather than the home room because it is the
+    // neutral, ungated room a default-picking player gets — the rung that
+    // defines "no better and no worse than before this cycle".
+    for (studio, money) in &money_by_room {
+        if studio.ordinal() <= BOT_STUDIO.ordinal() {
+            continue; // the home room is allowed to be worse: it is cheaper
+        }
+        assert!(
+            *money >= demo_money,
+            "{} (${}) earns less than the demo room (${}), so climbing the ladder \
+             does not pay. Check, in order: (a) `reachable_studio` still lets a policy book the \
+             room it asked for — a fame-gated booking is a wasted week and it was worth 31% of all \
+             turns at the world-class room; (b) `STUDIO_WEEKS_PER_SONG` has not been steepened — \
+             time is the binding constraint, and 0.28 per song already loses more albums than the \
+             quality buys; (c) `STUDIO_RATE_PER_SONG` has not been raised back toward the old 18x \
+             spread; (d) `STUDIO_QUALITY_BONUS` still spans enough to matter. The working numbers \
+             and the measurement behind them are in `constants.rs`.",
+            studio.label(),
+            money,
+            demo_money
+        );
+    }
 }

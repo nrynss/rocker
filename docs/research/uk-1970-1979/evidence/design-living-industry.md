@@ -231,8 +231,11 @@ the two lines next to each other; that is the teaching moment, and it costs 3% o
 
 ### What exists today: nothing
 
-There is no publishing model (finding 4 above). `LABEL_MECHANICAL_PER_COPY` is a floating cost.
-The proposal is to give that £0.30 (→ £0.3125 on a £5.00 LP) a recipient.
+There is no publishing model (finding 4 above). `LABEL_MECHANICAL_PER_COPY` is a floating cost —
+**$0.30 in the code's dollars**, which is £0.18 at £1 = $1.65, *not* the £0.3125 that
+6.25% of a £5.00 LP implies. The proposal is to give that constant a recipient
+**and** to re-denominate it: the documented rate is the pound figure, so the
+dollar constant moves from $0.30 to **$0.52** (see the currency table below).
 
 ### The pool and its two splits
 
@@ -361,15 +364,45 @@ fields so a pending pre-change offer still deserializes. Extend `src/game/tests/
 
 **Sim harness.** `LABEL_INCOME_PER_COPY` is the *only* per-copy income constant and it is currently
 worth $3 — already at era scale after L-SCALE retired `SALES_INCOME_DIVISOR` to 1
-(`src/game/constants.rs:40-56`). The proposed chain pays **£2.61/copy to the dealer tier** and
-£0.1566 to the artist at 6% — i.e. an artist's per-copy income drops **2.3×** (£0.36 → £0.1566)
-versus today at 12%. That is a real balance break, not a rounding change, and it must land with a
-system-wide retune (advance sizes, pressing costs, gig income) refereed by `run_career` /
+(`src/game/constants.rs:40-56`).
+
+**Convert both sides into one currency before comparing them.** The code is
+dollar-denominated; the proposed chain is drawn from pound-denominated sources. At
+the FX rate used throughout this research pass (£1 = $1.65, itself an assumption
+recorded in `design-gap-analysis.md`):
+
+| | today (code, $) | proposed (sources, £) | proposed, in $ |
+|---|---|---|---|
+| Royalty base per copy | $3.00 (`LABEL_INCOME_PER_COPY`) | £2.61 (dealer price, F51) | **$4.31** |
+| Artist per copy @ 12% / 6% | $0.3600 | £0.1566 | **$0.2584** |
+| Mechanical per copy | $0.30 | £0.3125 (6.25% of £5.00) | **$0.5156** |
+| Label, pre-distributor | $2.70 | £2.30 | **$3.79** |
+
+Read off that table, the honest statements are:
+
+- **The artist's per-copy income falls ~1.4×, not 2.3×** — $0.3600 → $0.2584 at the
+  same 6% rate the proposal assumes. (An earlier draft compared a dollar figure
+  against a pound figure and overstated the drop.)
+- **The label's take per copy actually *rises*, ~1.4×** — $2.70 → $3.79 before the
+  distributor is paid, because £2.61 converts to more than the code's $4.00
+  wholesale. That is the opposite of the "squeeze" framing: the squeeze only
+  appears once the distributor's undocumented share (F53) is subtracted, which is
+  exactly the number this pass could not find.
+- **The mechanical more than doubles in dollar terms** — $0.30 → $0.52 — so giving
+  it a recipient is a bigger change than it looks, and it is taken from the label,
+  not the artist.
+
+So the retune this needs is **not** "artist income drops, survive it" but "the
+whole per-copy chain is re-denominated, and the distributor's cut is the free
+variable that decides who absorbs it". It must still land with a system-wide retune
+(advance sizes, pressing costs, gig income) refereed by `run_career` /
 `print_report` medians (`src/game/sim.rs:683-830`). Two guardrails:
 
-- Keep the **label's** total take per copy roughly constant (£2.61 − distributor ≈ £2.30 vs today's
-  £4.00 − 1.00 − 0.30 = £2.70); the squeeze is felt as *artist* income falling, which is the
-  historically correct direction, but it must not make `label_loyalist` bankrupt.
+- Keep the **label's** total take per copy roughly constant **in dollars** (dealer
+  $4.31 − distributor − mechanical $0.52); the figures above show the label is
+  currently *ahead* by ~1.4× before distribution, so there is room for the
+  distributor's share to come out of the label without a retune. Whatever is
+  chosen, it must not make `label_loyalist` bankrupt.
 - Add a `publishing_income` bot so the balance lab measures the second stream, and a
   `hype_signing` bot for F22 (accept the biggest advance, get dropped, repeat) — it must be
   survivable but not dominant, or F22 becomes an exploit.
