@@ -359,9 +359,10 @@ The dole is a **bridge between jobs**, which is what it was. It is not an income
 
 ### The ladder, from [F58]
 
-*[F58] is finding F58 in `findings.csv`: the 1975 counter-intuitive result that a
-new-budget rig (~£526) undercut a used-professional one (~£688). Cited by ID here
-rather than restated; the row carries the source URL.*
+*The ID refers to row **F58** of `findings.csv` — the 1975 counter-intuitive
+result that a new-budget rig (~£526) undercut a used-professional one (~£688).
+It is cited by ID rather than restated; that row carries the source URL and the
+confidence tier.*
 
 The counter-intuitive finding: in 1975 a **new-budget** full rig cost ~£526 while a **used-pro**
 rig cost ~£688. The poor band bought *new copies*; the band with gig money bought *old Fenders*.
