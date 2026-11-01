@@ -481,6 +481,134 @@ mod tests {
         assert_eq!(report.fame_gained, 0, "the tour's fame is forfeited");
     }
 
+    /// Press `x` then `y` on the main screen: the confirmed walk-out.
+    fn walk_out(app: &mut App) {
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        app.handle_confirm_abandon_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('y'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(app.game.ongoing_activity().is_none(), "walked out");
+    }
+
+    /// A recording walk-out keeps nothing and forfeits the songs and the
+    /// session fee, exactly as `settle_recording(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_recording() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        use crate::game::studios::RecordingStudio;
+        let mut app = app_on_main();
+        app.game.player.money = 500_000;
+        for i in 0..10 {
+            app.game
+                .band
+                .unreleased_songs
+                .push(crate::game::music::Song {
+                    id: 6_000 + i,
+                    name: format!("Song {i}"),
+                    songwriting_quality: 60,
+                });
+        }
+        app.dispatch(GameAction::RecordAlbum {
+            songs: 8,
+            studio: RecordingStudio::DemoRoom,
+        });
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::Recording(session)) = app.game.ongoing_activity() else {
+            panic!("an album session outlasts its booking week");
+        };
+        let (songs, cost) = (session.songs.len(), session.cost);
+        let (keep, forfeit) =
+            modals::abandon_terms(app.game.ongoing_activity().expect("recording"));
+        assert!(keep.starts_with("nothing"), "{keep}");
+        assert!(forfeit.contains(&format!("{songs} song")), "{forfeit}");
+        assert!(
+            forfeit.contains(&crate::data::format_money(cost)),
+            "{forfeit}"
+        );
+
+        let money_before = app.game.player.money;
+        let unreleased_before = app.game.band.unreleased_songs.len();
+        walk_out(&mut app);
+        assert!(app.game.vault().is_empty(), "no master from a walk-out");
+        assert_eq!(app.game.player.money, money_before, "no refund");
+        assert_eq!(
+            app.game.band.unreleased_songs.len(),
+            unreleased_before,
+            "the session's songs are not handed back"
+        );
+    }
+
+    /// A support-slot walk-out keeps the banked guarantee and forfeits the
+    /// exposure, exactly as `settle_support_tour(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_support_tour() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        let mut app = app_on_main();
+        app.game.pending_support_offer = Some(crate::game::SupportTourOffer {
+            host_band: "The Headliners".to_string(),
+            host_fame: 80,
+            weeks: 3,
+            pay: 3_000,
+            fame_gain: 6,
+            expires_week: app.game.week + 4,
+        });
+        app.dispatch(GameAction::AcceptSupportTour);
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::SupportTour(support)) = app.game.ongoing_activity() else {
+            panic!("a three-week support run is still going after week one");
+        };
+        let (pay, fame_gain) = (support.pay, support.fame_gain);
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("support"));
+        assert!(
+            keep.contains(&crate::data::format_money(pay as i32)),
+            "{keep}"
+        );
+        assert!(forfeit.contains(&format!("fame +{fame_gain}")), "{forfeit}");
+
+        let money_before = app.game.player.money;
+        let fame_before = app.game.band.fame;
+        walk_out(&mut app);
+        assert_eq!(
+            app.game.player.money, money_before,
+            "the guarantee stays banked"
+        );
+        assert_eq!(app.game.band.fame, fame_before, "the exposure is forfeited");
+    }
+
+    /// A break walk-out keeps the weeks off and forfeits the recharge,
+    /// exactly as `settle_break(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_break() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        let mut app = app_on_main();
+        app.dispatch(GameAction::TakeBreak);
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::Break(rest)) = app.game.ongoing_activity() else {
+            panic!("a break is still going after its first week");
+        };
+        let done = rest.weeks_done;
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("break"));
+        assert!(keep.contains(&format!("{done} week")), "{keep}");
+        assert!(forfeit.contains("recharge"), "{forfeit}");
+
+        app.game.player.stress = 40;
+        let happiness_before = app.game.player.happiness;
+        walk_out(&mut app);
+        assert_eq!(app.game.player.stress, 40, "no stress reset");
+        assert_eq!(
+            app.game.player.happiness, happiness_before,
+            "no happiness top-up"
+        );
+    }
+
     /// #41: the activity strip — continue labels, the `X` hint — fits an
     /// 80-column terminal, and the menu says `continue:` mid-tour.
     #[test]
