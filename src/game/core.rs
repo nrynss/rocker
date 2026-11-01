@@ -104,8 +104,9 @@ pub struct SupportTourOffer {
 /// behind `process_turn`'s back, so a four-week tour was four weeks of rent
 /// and zero weeks of everything else. Now `week` moves in exactly one place
 /// and a commitment is *state*: starting one charges its up-front cost and
-/// resolves its first week, every turn after that resolves one more (the
-/// submitted action is ignored), and the last one settles and clears.
+/// resolves its first week, every week-taking turn after that resolves one
+/// more (the submitted action is ignored; instant actions apply without
+/// spending a week), and the last one settles and clears.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum OngoingActivity {
     /// A booked studio session (design §B/§D) — S-MASTER filled the seam
@@ -433,8 +434,10 @@ pub struct Game {
     #[serde(default)]
     pub(super) last_sales_pass_week: Option<u32>,
     /// The multi-week commitment the band is in the middle of, if any
-    /// (design §F). While this is `Some`, `process_turn` ignores the
-    /// submitted action and resolves one more week of it.
+    /// (design §F). While this is `Some`, `process_turn` still applies an
+    /// instant action (deal answers, marketing, lifestyle, re-press, release,
+    /// abandon, quit) without spending a week; any other submitted action is
+    /// ignored and one more week of the activity resolves instead.
     /// `#[serde(default)]` so every pre-0.9 save loads with an empty
     /// calendar — and a save taken mid-tour resumes into the same week it
     /// was taken in, since the activity carries its own progress and keys
@@ -495,9 +498,9 @@ impl Game {
         self.ongoing_activity.as_ref()
     }
 
-    /// Whether the band is committed this week — the one question the UI has
-    /// to ask before drawing a menu (§F/§H). A busy band gets "continue" and
-    /// "abandon", not a list of choices.
+    /// Whether the band is committed this week (§F/§H). A busy band's turn
+    /// actions continue the commitment; only instant actions and "abandon"
+    /// do anything else.
     #[allow(dead_code)]
     pub fn is_busy(&self) -> bool {
         self.ongoing_activity.is_some()
