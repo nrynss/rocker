@@ -9,6 +9,7 @@ mod labels;
 mod lifestyle;
 mod marketing;
 mod pickers;
+mod quit;
 mod tour;
 mod vault;
 
@@ -27,5 +28,6 @@ pub(super) use pickers::{
     draw_repress_picker_modal, draw_repress_tier_picker_modal, draw_tour_booking_picker_modal,
     draw_venue_picker_modal,
 };
+pub(super) use quit::draw_confirm_quit_modal;
 pub(super) use tour::draw_tour_report_modal;
 pub(super) use vault::draw_vault_modal;

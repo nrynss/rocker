@@ -48,6 +48,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                     modals::draw_repress_tier_picker_modal(frame, app)
                 }
                 Screen::ConfirmAbandon => modals::draw_confirm_abandon_modal(frame, app),
+                Screen::ConfirmQuit { .. } => modals::draw_confirm_quit_modal(frame, app),
                 _ => {}
             }
         }
@@ -635,6 +636,47 @@ mod tests {
         assert!(text.contains("CRITICAL health"));
         assert!(text.contains("walk out (X)"));
         assert!(!text.contains("see a doctor"));
+    }
+
+    /// The save-first quit prompt fits 80x24 with every key hint on screen —
+    /// at its fullest too: mid-activity, a long save path, and an error.
+    #[test]
+    fn quit_prompt_shows_every_option_at_80x24() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test backend");
+        let mut app = app_on_main();
+        app.screen = Screen::ConfirmQuit { error: None };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "Quit?",
+            "rocker.sav",
+            "[S] save and quit",
+            "[C] save and continue playing",
+            "[N]/[Esc] cancel",
+        ] {
+            assert!(text.contains(needle), "prompt should show {needle:?}");
+        }
+
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        app.save_path = "a-rather-long-save-file-name-for-test.sav".to_string();
+        app.screen = Screen::ConfirmQuit {
+            error: Some(
+                "Save to a-rather-long-save-file-name-for-test.sav failed: \
+                 Permission denied (os error 13)"
+                    .to_string(),
+            ),
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "resumes on load",
+            "[S] save and quit",
+            "[C] save and continue playing",
+            "[N]/[Esc] cancel",
+            "not quitting.",
+        ] {
+            assert!(text.contains(needle), "full prompt should show {needle:?}");
+        }
     }
 
     /// L-UI-1 headline: the discography browser must render each record's

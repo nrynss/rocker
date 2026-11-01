@@ -25,13 +25,18 @@ impl App {
                 self.screen = Screen::Main;
                 match mode {
                     FileMode::Save => match self.game.save_game(&path) {
-                        Ok(()) => self.push_log(LogKind::Ui, format!("💾 Game saved to {}.", path)),
+                        Ok(()) => {
+                            self.push_log(LogKind::Ui, format!("💾 Game saved to {}.", path));
+                            self.save_path = path;
+                        }
                         Err(e) => self.push_log(LogKind::Error, format!("❌ Save failed: {}", e)),
                     },
                     FileMode::Load => match Game::load_game(&path) {
                         Ok(loaded) => {
                             self.game = loaded;
                             self.push_log(LogKind::Ui, format!("📂 Game loaded from {}.", path));
+                            // Quit's save-first prompt writes back here.
+                            self.save_path = path;
                             if self.game.is_game_over() {
                                 self.screen = Screen::GameOver;
                             }

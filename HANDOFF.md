@@ -505,3 +505,33 @@ needs in its handoff notes and the coordinator integrates.
     an 80x24 render of the modal naming the forfeit, the terms matching a
     real walk-out's report, and the strip/continue rows/health warning at 80
     columns. #42 alone changes no test count.
+- 2026-11-01 **`q` asks to save first** (PR #52, added at Narayan's request on
+  top of #41/#42: "It should ask to save and quit or save without quit").
+  - **What it did.** `q` / Enter on Quit dispatched `GameAction::Quit`:
+    game over ("walked away on your own terms"), the final-stats screen, and
+    exit on the next key. Nothing saved — there is no autosave anywhere, the
+    only save path is the Save modal — and a running activity was abandoned
+    by the game-over path. One stray key ended the career.
+  - **What it does.** `Screen::ConfirmQuit { error }` (`modals/quit.rs`,
+    `handle_confirm_quit_key`). `S` saves and quits; `C` saves and continues;
+    `N`/`Esc` cancel. Everything else (a second `q`, Enter, `j`/`k`, `y`,
+    `x`) is ignored. `S`/`C` rather than `Y`/`N`-style keys because there
+    are two ways to say yes; `C` rather than `K` because `k` is menu-up.
+  - **Decisions.** Quitting is now leaving the app, not retiring: the UI no
+    longer dispatches `GameAction::Quit`, so the "walked away" ending is not
+    reachable from the menu (the engine keeps the action — it is still the
+    `Deserialize`d enum's variant and `is_instant_action` lists it). No
+    "quit without saving" option, per the brief's two choices; cancel stays
+    so a stray `q` forces nothing, and Ctrl-C remains the hard exit. Save
+    target is `App::save_path`: the last file saved to or loaded from via
+    the File modal, else `rocker.sav`; the prompt names it and says it
+    replaces any save there. A failed save keeps the prompt up with the reason (also
+    logged) and never quits. The exit receipt is printed by `main` after
+    the terminal is restored (`App::run` now returns it).
+  - **Tests:** 347 passing (from 340 at 06752f2), 9 ignored. The prompt
+    opening from `q` and from Enter, stray keys and cancels (no file, no
+    exit, no week), `C` writing a loadable save and staying, `S` exiting
+    with a receipt and the career intact, a failed save for both options,
+    mid-activity (the two prompts ignore each other's keys, the break is in
+    the save at the same week), the Save modal moving the target, and an
+    80x24 render at the prompt's fullest (activity line, long path, error).

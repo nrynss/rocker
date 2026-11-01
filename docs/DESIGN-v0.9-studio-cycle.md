@@ -224,7 +224,11 @@ pub enum OngoingActivity {
   activity's progress untouched. Abandoning and quitting take no week
   either, but they are *about* the activity: `AbandonActivity` settles it as
   walked-out-of and clears it, and `Quit` reaches game over, whose emergency
-  path abandons it the same way. They used to be
+  path abandons it the same way. *(Note 2026-11-01, PR #52: the UI no
+  longer dispatches `Quit`. `q` opens a save-first prompt — save and quit,
+  or save and keep playing — and leaving just closes the app, so a save
+  made mid-activity resumes it. `GameAction::Quit` and its semantics here
+  are unchanged in the engine.)* They used to be
   swallowed — swapped for the activity's next week, so the action vanished
   *and* the week it was meant not to cost was spent. One predicate
   (`Game::is_instant_action`) decides both "lets through a commitment" and

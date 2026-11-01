@@ -146,6 +146,14 @@ pub enum Screen {
     /// `GameAction::AbandonActivity`, and `N`/`Esc` carry on with nothing
     /// spent. Stateless: it reads the running activity live.
     ConfirmAbandon,
+    /// "Save before you go?" — what `q` opens (and Enter on the Quit row).
+    /// `S` saves to `App::save_path` and exits; `C` saves and continues;
+    /// `N`/`Esc` close it with nothing saved; every other key, `q` included,
+    /// is ignored. A failed save never quits: the error is held here (and
+    /// logged) until the player retries or cancels.
+    ConfirmQuit {
+        error: Option<String>,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -200,6 +208,13 @@ pub struct App {
     pub band_input: String,
     pub genre_selected: usize,
     pub(crate) should_exit: bool,
+    /// Where `q`'s save-first prompt writes: the last file saved to or loaded
+    /// from through the Save/Load modal, else `SAVE_FILE_DEFAULT`, so "save
+    /// and quit" lands where the player has been keeping this career.
+    pub(crate) save_path: String,
+    /// Printed to the normal terminal once the TUI has been torn down — the
+    /// save-and-quit receipt, so the player sees where the career went.
+    pub(crate) exit_message: Option<String>,
 }
 
 /// What a week-taking menu row does while `activity` runs (#41): carry it on
@@ -230,10 +245,17 @@ impl App {
             band_input: String::new(),
             genre_selected: 0,
             should_exit: false,
+            save_path: SAVE_FILE_DEFAULT.to_string(),
+            exit_message: None,
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
+    /// Run the TUI until the player leaves. Returns the message to print
+    /// once the terminal is restored (the save-and-quit receipt), if any.
+    pub fn run(
+        mut self,
+        terminal: &mut DefaultTerminal,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
         while !self.should_exit {
             terminal.draw(|frame| render::draw(frame, &mut self))?;
             if let Event::Key(key) = event::read()?
@@ -242,7 +264,7 @@ impl App {
                 self.handle_key(key);
             }
         }
-        Ok(())
+        Ok(self.exit_message)
     }
 
     // --- Menu model ---
@@ -656,8 +678,8 @@ impl App {
             },
             MenuEntry {
                 hotkey: 'q',
-                label: "Quit",
-                detail: String::new(),
+                label: "Quit…",
+                detail: "save first".into(),
                 enabled: true,
                 kind: MenuKind::Quit,
             },
@@ -856,6 +878,7 @@ impl App {
             Screen::RePressPicker { .. } => self.handle_repress_picker_key(key),
             Screen::RePressTierPicker { .. } => self.handle_repress_tier_picker_key(key),
             Screen::ConfirmAbandon => self.handle_confirm_abandon_key(key),
+            Screen::ConfirmQuit { .. } => self.handle_confirm_quit_key(key),
         }
     }
 }

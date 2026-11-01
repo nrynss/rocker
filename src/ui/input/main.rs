@@ -1,7 +1,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::game::GameAction;
-use crate::ui::app::{App, MenuKind, Screen};
+use crate::ui::app::{App, LogKind, MenuKind, Screen};
 
 impl App {
     pub(crate) fn handle_main_key(&mut self, key: KeyEvent) {
@@ -207,7 +207,12 @@ impl App {
                     self.screen = Screen::RePressPicker { selected: 0 };
                 }
             }
-            MenuKind::Quit => self.dispatch(GameAction::Quit),
+            // Never on one keypress: `q` used to dispatch `GameAction::Quit`,
+            // which ended the career (game over) with nothing saved. Now it
+            // asks to save first and only then leaves — and leaving is just
+            // closing the app, so the save resumes the career, mid-activity
+            // included (§F: a save mid-activity resumes).
+            MenuKind::Quit => self.screen = Screen::ConfirmQuit { error: None },
         }
     }
 
@@ -230,6 +235,46 @@ impl App {
                 self.screen = Screen::Main;
             }
             _ => {}
+        }
+    }
+
+    /// The save-first quit prompt. `S` saves and quits, `C` saves and
+    /// continues playing, `N`/`Esc` cancel. Any other key — a second `q`
+    /// above all, and Enter or the `j`/`k` menu-navigation keys a player's
+    /// fingers may still be on — is ignored, so a stray press can't save
+    /// over a file or exit.
+    pub(crate) fn handle_confirm_quit_key(&mut self, key: KeyEvent) {
+        let quit = match key.code {
+            KeyCode::Char('s') | KeyCode::Char('S') => true,
+            KeyCode::Char('c') | KeyCode::Char('C') => false,
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.screen = Screen::Main;
+                return;
+            }
+            _ => return,
+        };
+        let path = self.save_path.clone();
+        match self.game.save_game(&path) {
+            Ok(()) => {
+                if quit {
+                    self.exit_message = Some(format!(
+                        "💾 Saved to {path}. Load it from the menu (L) to pick up where you left off."
+                    ));
+                    self.should_exit = true;
+                } else {
+                    self.screen = Screen::Main;
+                    self.push_log(LogKind::Ui, format!("💾 Game saved to {path}."));
+                }
+            }
+            Err(e) => {
+                // Don't quit on a failed save: stay on the prompt with the
+                // reason, so nothing is lost and the player chooses again.
+                let message = format!("Save to {path} failed: {e}");
+                self.push_log(LogKind::Error, format!("❌ {message}"));
+                self.screen = Screen::ConfirmQuit {
+                    error: Some(message),
+                };
+            }
         }
     }
 
@@ -778,5 +823,225 @@ mod tests {
                 "opening a screen must not advance the activity"
             );
         }
+    }
+
+    /// A scratch save path unique to this test process and `name`, cleared
+    /// before use so a previous run can't make an unsaved file look saved.
+    fn scratch_save(name: &str) -> String {
+        let path = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-{name}.sav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        path.to_string_lossy().into_owned()
+    }
+
+    fn app_ready_to_quit(name: &str) -> App {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Main;
+        app.save_path = scratch_save(name);
+        app
+    }
+
+    /// `q` (and Enter on the Quit row) only opens the prompt; stray keys —
+    /// a second `q`, Enter, the menu's `j`/`k`, `y`, `x` — neither save nor
+    /// exit; `n`/`N`/Esc close it with nothing saved and no week spent.
+    #[test]
+    fn q_opens_the_save_first_prompt_and_stray_keys_do_nothing() {
+        let mut app = app_ready_to_quit("stray");
+        let week = app.game.week;
+
+        app.handle_main_key(key(KeyCode::Char('q')));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(!app.should_exit, "one keypress must not quit");
+        assert!(!app.game.is_game_over(), "nor end the career");
+
+        for stray in [
+            KeyCode::Char('q'),
+            KeyCode::Char('Q'),
+            KeyCode::Char('x'),
+            KeyCode::Char('y'),
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Char('1'),
+            KeyCode::Enter,
+            KeyCode::Up,
+        ] {
+            app.handle_key(key(stray));
+            assert!(
+                matches!(app.screen, Screen::ConfirmQuit { error: None }),
+                "{stray:?} should leave the prompt up"
+            );
+            assert!(!app.should_exit, "{stray:?} must not quit");
+        }
+        assert!(
+            !std::path::Path::new(&app.save_path).exists(),
+            "stray keys must not save"
+        );
+
+        for cancel in [KeyCode::Char('n'), KeyCode::Char('N'), KeyCode::Esc] {
+            app.handle_main_key(key(KeyCode::Char('q')));
+            app.handle_key(key(cancel));
+            assert!(matches!(app.screen, Screen::Main), "{cancel:?} cancels");
+            assert!(!app.should_exit);
+            assert!(!std::path::Path::new(&app.save_path).exists());
+        }
+        assert_eq!(app.game.week, week, "the prompt never takes a week");
+
+        // The Quit row by Enter goes to the same prompt.
+        let quit_row = app
+            .menu_entries()
+            .iter()
+            .position(|entry| entry.hotkey == 'q')
+            .expect("menu has a Quit row");
+        app.menu_selected = quit_row;
+        app.handle_main_key(key(KeyCode::Enter));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(!app.should_exit);
+    }
+
+    /// `C` saves and keeps playing: the file is a loadable copy of this
+    /// career, the prompt closes, and the app stays up.
+    #[test]
+    fn c_saves_and_keeps_playing() {
+        let mut app = app_ready_to_quit("continue");
+        let week = app.game.week;
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('c')));
+        assert!(matches!(app.screen, Screen::Main));
+        assert!(!app.should_exit, "save and continue must not quit");
+        assert!(app.exit_message.is_none());
+        assert_eq!(app.game.week, week, "saving takes no week");
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        assert_eq!(saved.band.name, "The Rayguns");
+        assert_eq!(saved.week, week);
+        assert!(!saved.is_game_over());
+        assert!(app.log.iter().any(|line| line.text.contains("saved")));
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// `S` saves and quits — the app exits with a receipt naming the file,
+    /// and the career is *not* ended: the save resumes it.
+    #[test]
+    fn s_saves_and_quits_without_ending_the_career() {
+        let mut app = app_ready_to_quit("quit");
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('S')));
+        assert!(app.should_exit, "save and quit leaves the app");
+        assert!(
+            app.exit_message
+                .as_deref()
+                .is_some_and(|message| message.contains(&app.save_path)),
+            "the receipt names the file: {:?}",
+            app.exit_message
+        );
+        assert!(!app.game.is_game_over(), "quitting is not retiring");
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        assert!(!saved.is_game_over(), "the saved career carries on");
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// A failed save never quits: both options stay on the prompt with the
+    /// reason shown and logged, and Esc still backs out.
+    #[test]
+    fn a_failed_save_shows_the_error_and_does_not_quit() {
+        let mut app = app_ready_to_quit("unused");
+        let missing_dir = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-no-such-dir",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&missing_dir);
+        app.save_path = missing_dir
+            .join("career.sav")
+            .to_string_lossy()
+            .into_owned();
+
+        for option in ['s', 'c'] {
+            app.log.clear();
+            app.handle_main_key(key(KeyCode::Char('q')));
+            app.handle_key(key(KeyCode::Char(option)));
+            assert!(!app.should_exit, "{option:?}: a failed save must not quit");
+            assert!(app.exit_message.is_none());
+            match &app.screen {
+                Screen::ConfirmQuit { error: Some(error) } => {
+                    assert!(error.contains("failed"), "{error}")
+                }
+                _ => panic!("{option:?}: the prompt should stay up with the error"),
+            }
+            assert!(
+                app.log.iter().any(|line| line.text.contains("failed")),
+                "the failure is logged too"
+            );
+            app.handle_key(key(KeyCode::Esc));
+            assert!(matches!(app.screen, Screen::Main));
+        }
+    }
+
+    /// Mid-activity, `q` asks the same question, the walk-out box ignores
+    /// `q` (and this prompt ignores `x`), and save-and-quit keeps the
+    /// commitment — in memory and in the file — instead of abandoning it
+    /// the way the old one-keypress `GameAction::Quit` did.
+    #[test]
+    fn quitting_mid_activity_saves_the_activity_to_resume() {
+        let mut app = app_ready_to_quit("activity");
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        app.screen = Screen::Main;
+        let done = match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected a break, got {other:?}"),
+        };
+
+        // The two prompts don't leak into each other.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        app.handle_key(key(KeyCode::Esc));
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('x')));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(app.game.ongoing_activity().is_some(), "nothing walked out");
+
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(app.should_exit);
+        assert!(
+            app.game.ongoing_activity().is_some(),
+            "quitting no longer abandons the activity"
+        );
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        match saved.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => {
+                assert_eq!(rest.weeks_done, done, "the break resumes where it was")
+            }
+            other => panic!("the save should hold the break, got {other:?}"),
+        }
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// The prompt writes where the player has been saving: a save through
+    /// the Save modal moves `save_path`, and `C` then writes there.
+    #[test]
+    fn the_prompt_saves_to_the_last_file_used() {
+        let mut app = app_ready_to_quit("default");
+        let chosen = scratch_save("chosen");
+        app.screen = Screen::File {
+            mode: crate::ui::app::FileMode::Save,
+            input: chosen.clone(),
+        };
+        app.handle_file_key(key(KeyCode::Enter));
+        assert_eq!(app.save_path, chosen);
+        std::fs::remove_file(&chosen).expect("the modal saved");
+
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('c')));
+        assert!(
+            std::path::Path::new(&chosen).exists(),
+            "C wrote to the chosen file"
+        );
+        let _ = std::fs::remove_file(&chosen);
     }
 }

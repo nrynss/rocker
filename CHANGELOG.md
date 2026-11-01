@@ -97,6 +97,20 @@ default song count.
   confirmed" modal naming what you keep and what you forfeit; `Y` walks out,
   `N` or `Esc` carries on without taking a week, and every other key is
   ignored. Bots dispatch `AbandonActivity` directly, so the sim is untouched.
+- **`q` ended the career on one keypress, with nothing saved** (PR #52, at
+  the maintainer's request beyond #41/#42). The Quit row dispatched
+  `GameAction::Quit` — game over, "walked away" — and there was no autosave,
+  so a stray `q` threw away everything since the last manual save (and
+  abandoned any running activity on the way out). `q` (or Enter on the
+  Quit row) now opens a save-first prompt: `S` saves and quits, `C` saves
+  and continues playing, `N`/`Esc` cancel with nothing saved, and every
+  other key — a second `q`, Enter, `j`/`k` — is ignored. It saves to the
+  last file saved or loaded through the Save/Load modal (`rocker.sav` by
+  default) and prints where on exit. Quitting no longer ends the career, so
+  a save made mid-tour resumes the tour. A failed save never quits: the
+  prompt stays up with the error. The engine's `GameAction::Quit` is
+  untouched and bots never used it, so the sim is unaffected. Ctrl-C still
+  exits at once without saving, as before.
 
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.

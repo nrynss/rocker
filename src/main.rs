@@ -41,5 +41,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = ratatui::init();
     let result = App::new(game).run(&mut terminal);
     ratatui::restore();
-    result
+    if let Some(message) = result? {
+        println!("{message}");
+    }
+    Ok(())
 }

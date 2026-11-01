@@ -74,6 +74,8 @@ Each turn represents one week in your rock career:
 - **Marketing** (M) - Run press, radio, and promo-film campaigns for your releases (independents only — a label runs its own promo)
 - **Deal Offers** (V) - Review, accept, or reject record label offers
 - **Save / Load** (S / L) - Persist your career to a JSON save file
+- **Walk out** (X) - While a tour, session, support slot or break is running: leave it early. Asks first, naming what you keep and what you forfeit — Y walks out, N/Esc carries on
+- **Quit** (Q) - Asks to save first: S saves and quits, C saves and keeps playing, N/Esc cancels. It saves to the last file you saved or loaded (`rocker.sav` by default); quitting doesn't end the career — load the save to carry on, mid-tour included
 
 Navigate with ↑/↓ and Enter, or press an action's hotkey directly.
 Recording a release opens a 4-week sales window — market it before it drops
