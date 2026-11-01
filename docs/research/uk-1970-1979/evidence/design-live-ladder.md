@@ -11,10 +11,12 @@ the player chooses at each rung. Every historical number carries an F-id from
 
 The five-rung ladder should **not** be re-typed — it should be **re-framed**. The
 defect is not the capacity spine, which is close to right, and not the payment
-array as such, which is badly mis-scaled at exactly one rung (the theatre,
-where the guarantee is already 3x the gate — see the corrected table below);
-it is that a single `base_payment` scalar is
-used as *four different kinds of money* — a landlord's fee at the pub, a
+array as such, which is not "wrong" at any single rung so much as
+*incomparable* between them: measured against each rung's own gate, the payment
+falls monotonically from **75% of the gate at the pub to 4% at the arena**
+($300/$400, $900/$2,400, $2,400/$8,000, $9,000/$48,000, $45,000/$1,120,000).
+A single scalar cannot be a landlord's fee at one end and a net headline at the
+other: it is used as *four different kinds of money* — a landlord's fee at the pub, a
 promoter's percentage split at the club and theatre, an institutional guarantee
 at the SU, and a net headline fee at the arena — and is then multiplied by
 `attendance_ratio` in every case (`venues.rs:34`, `live.rs:303-305`).
@@ -466,28 +468,45 @@ moves a lot. Against today:
 | Hall 4,000 | *new rung* | $32,427 | — |
 | Arena (one-off) | $45,000 | $45,000 | 0% |
 
-*(Corrected 2026-11-01: the theatre's current guarantee is the **$9,000** of the
-2,000-cap rung in `world/venues.rs`; an earlier draft of this table carried
-$2,400, which is the 500-cap value, and so overstated the change tenfold.)*
+*(Two corrections, both 2026-11-01. First: the theatre's current guarantee is the
+**$9,000** of the 2,000-cap rung in `world/venues.rs`; an earlier draft carried
+$2,400, which is the 500-cap value. Second — caught on re-review — the gate
+comparison below was itself mixing currencies. Both fixed here, and every figure
+in this section is now in game dollars at `GIG_SCALE = 16`.)*
 
 Four of the six rungs land within ±27% of today (pub, club, SU, arena). The SU falls 27% on purpose —
 today's $2,400 at a 500-cap is already a generous guarantee, and the guarantee is
 now explicitly a discount on upside.
 
-The theatre's +62% is still the largest move on the ladder, and it is the size of
-the error rather than a tuning slip. A sold-out 2,000-seat theatre at £1.50 is a
-£3,000 gate, and $9,000 is **3× the entire gate** — while the *stack-based* net
-is $14,592, roughly 5× it. The existing guarantee is therefore not a small
-underpay to be topped up: it is a payment with no relationship to the room at
-all, which is what makes the venue ladder economically meaningless above the
-club rung.
+**The theatre, measured against its own gate.** A sold-out 2,000-seat theatre at
+£1.50 is a **£3,000** gate, which at `GIG_SCALE = 16` is **$48,000** in game
+money — the comparison has to be in dollars, because that is the unit the
+payments are in:
 
-The proposed theatre also runs at **~15× the proposed club net** ($14,592 vs
-$973), against a current ratio of 10× ($9,000 vs $900) — so the *shape* of the
-ladder is closer to today's than the gross numbers suggest, while every rung's
-*level* is rebuilt around a gate rather than a guarantee. That gap cannot be
-absorbed by a cost stack — a 40% stack still leaves several times the current
-take — so **this is a re-baseline, not a patch**, and it must be staged:
+| | game $ | share of the $48,000 gate |
+|---|---|---|
+| Current guarantee | $9,000 | **18.8%** |
+| Proposed stack-based net | $14,592 | **30.4%** |
+
+So the existing theatre is **not** paying several times the gate (an earlier
+draft of this paragraph claimed 3× and 5× — it had compared a £ gate against $
+payments, the same class of error as the table above). It pays 18.8% of the gate
+and the proposal pays 30.4%: **a guarantee that is a low-but-sane share of the
+gate, moving to a slightly better one.** The +62% on the rung is real, but it is
+an ordinary re-scale of an underpriced rung, not the discovery of a payment with
+no relationship to the room.
+
+That changes the staging conclusion. The theatre is **not** the reason this needs
+a re-baseline; the *shape* change (gate → split, rather than fee → multiply) is.
+The proposed theatre runs at **~15× the proposed club net** ($14,592 vs $973)
+against a current ratio of 10× ($9,000 vs $900), so the ladder's *slope* steepens
+as well as its levels — and a steeper slope is what makes `biggest_open_venue`
+sprint to the top rung (guard below). That is a reason to stage and to re-derive
+the bot baselines, not a reason to call the current theatre broken.
+
+Revised, the case for staging is about blast radius rather than about a single
+absurd rung:
+
 
 1. **Stage 1 (net-neutral):** `DealKind`, `ticket_pence`, `standing`, the
    per-show cost stack, the support-slot pay cut, and the widened attendance
@@ -501,8 +520,8 @@ take — so **this is a re-baseline, not a patch**, and it must be staged:
    ("median signed act recoups before the term's halfway mark") plus
    `src/game/tests/fame.rs` ceilings must be re-derived, not merely re-run.
 3. **Guard:** `sim.rs:272-277`'s `biggest_open_venue` picks the largest
-   affordable room; once the theatre nets ~15× the club, every bot will sprint
-   to prestige 70 and skip the middle rungs. Bots should be given a
+   affordable room; with the theatre at ~15× the club net (up from 10×), every
+   bot will sprint to prestige 70 and skip the middle rungs. Bots should be given a
    **risk-adjusted** chooser (expected net after stack and after the booking
    gate), or the ladder will be observed only at its top in every sim run.
 

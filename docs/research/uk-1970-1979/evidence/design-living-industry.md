@@ -18,8 +18,10 @@ The current per-copy pipeline, in order:
 1. **Royalty base is a flat dollar figure, not a price.** `calculate_release_outcome` computes
    `((units_sold * LABEL_INCOME_PER_COPY) as f32 * deal.royalty_rate) as u32`
    (`src/game/economy.rs:548`), with `LABEL_INCOME_PER_COPY: u32 = 3` (`src/game/constants.rs:58`).
-   A 12% deal therefore pays **$0.36/copy** — a rate applied to a number that is not a wholesale
-   price, not a "price to dealer", and not derived from anything the player can see.
+   The rate is per-deal (`deal.royalty_rate`), not a constant — but whatever it is, it is applied
+   to a fixed $3 that is not a wholesale price, not a "price to dealer", and not derived from
+   anything the player can see. A 12% deal pays **$0.36/copy** and a 6% deal $0.18; the base is the
+   defect, not the rate.
 2. **Recoupment nets the royalty before payment.** `apply_recoupment` takes
    `applied = royalty.min(deal.unrecouped)` and returns only the remainder
    (`src/game/economy.rs:263-274`); the call site pays `to_player` and leaves
@@ -78,12 +80,17 @@ label/distributor split as a tunable").
 | Retail (incl. 15% VAT) | player-facing sticker | £5.00 | F51 |
 | VAT | 15/115 of sticker | £0.6522 (13.04%) | F51 arithmetic, F54 |
 | Retail (ex-VAT) | sticker / 1.15 | £4.3478 | F51 arithmetic |
-| Dealer price | 52.20% of sticker, ex-VAT | £2.61 | F51 |
-| Retailer margin | 40.0% of VAT-inclusive RRP | £1.7378 (39.97% of net) | F51 |
+| Dealer price | 52.20% of the VAT-inclusive sticker; £2.61 is 60.03% of the ex-VAT retail | £2.61 | F51 |
+| Retailer margin | 40.0% of VAT-inclusive RRP (the dealer price is 60.0% of it) | £2.0000 | F51 |
 | Standard retailer margin | 36.67% of RRP, sale-or-return | dealer £2.7536 | F52 |
 
 **Check (as F51 states it):** £2.61 × 1.15 = £3.0015 ≈ £3.00; (£5.00 − £3.00)/£5.00 = 40.0%. ✓
-The three sticker shares sum to exactly 100.00%: VAT 13.04 + retailer 34.76 + dealer-tier 52.20.
+The three shares of the **VAT-inclusive sticker** sum to exactly 100.00%:
+VAT £0.6522 (13.04%) + retailer £2.0000 (40.00%) + dealer-tier £2.3478 (46.96%) = £5.00.
+*(Corrected 2026-11-01: an earlier draft gave retailer 34.76% and dealer-tier
+52.20%, which are shares of the **ex-VAT** £4.3478 — the right numbers on the
+wrong base, so they did not sum with the VAT line. The dealer price £2.61 is
+52.20% of the ex-VAT retail, which is where that figure legitimately appears.)*
 
 Island's 40% is a **weapon against the 36.67% norm** (F51, F52). The design consequence is a
 cost with a date on it: paying 40% costs the label £0.1436 more per copy than the standard term,
@@ -371,26 +378,48 @@ dollar-denominated; the proposed chain is drawn from pound-denominated sources. 
 the FX rate used throughout this research pass (£1 = $1.65, itself an assumption
 recorded in `design-gap-analysis.md`):
 
-| | today (code, $) | proposed (sources, £) | proposed, in $ |
-|---|---|---|---|
-| Royalty base per copy | $3.00 (`LABEL_INCOME_PER_COPY`) | £2.61 (dealer price, F51) | **$4.31** |
-| Artist per copy @ 12% / 6% | $0.3600 | £0.1566 | **$0.2584** |
-| Mechanical per copy | $0.30 | £0.3125 (6.25% of £5.00) | **$0.5156** |
-| Label, pre-distributor | $2.70 | £2.30 | **$3.79** |
+**Every row must subtract the same things.** An earlier version of this table
+compared the code's `$4.00 − $1.00 − $0.30 = $2.70` against `£2.61 − £0.3125`,
+which drops manufacturing from one side only and so made the label's margin look
+1.4× better than it is. Manufacturing is included on both sides below, and the
+distributor tier is shown as its own line because it is the one number the
+sources do not give (F53) — it is the doc's own invented 12% share, flagged as
+design.
+
+| Per copy, in game dollars | today (code) | proposed (sources → $) |
+|---|---|---|
+| Royalty base / dealer price | $3.00 (`LABEL_INCOME_PER_COPY`) | £2.61 → **$4.31** |
+| Artist royalty, at a like-for-like 6% | **$0.1800** | £0.1566 → **$0.2584** |
+| Artist royalty, at the code's 12% | $0.3600 | — |
+| Mechanical (publisher's pool) | $0.30 | £0.3125 → **$0.5156** |
+| Manufacturing | $1.00 | £0.85 → **$1.4025** |
+| Distributor (12% of dealer — *invented*) | — | £0.3132 → **$0.5168** |
+| **Label retains (residual)** | **$2.70** | £0.9777 → **$1.6132** |
+
+The label row is the *residual* of the four lines above it, which is how the
+proposal's own split table (`The dealer price, split`) already defines it — an
+earlier version of this table left the artist royalty out of the subtraction and
+so overstated the label's margin by exactly one royalty.
 
 Read off that table, the honest statements are:
 
-- **The artist's per-copy income falls ~1.4×, not 2.3×** — $0.3600 → $0.2584 at the
-  same 6% rate the proposal assumes. (An earlier draft compared a dollar figure
-  against a pound figure and overstated the drop.)
-- **The label's take per copy actually *rises*, ~1.4×** — $2.70 → $3.79 before the
-  distributor is paid, because £2.61 converts to more than the code's $4.00
-  wholesale. That is the opposite of the "squeeze" framing: the squeeze only
-  appears once the distributor's undocumented share (F53) is subtracted, which is
-  exactly the number this pass could not find.
-- **The mechanical more than doubles in dollar terms** — $0.30 → $0.52 — so giving
-  it a recipient is a bigger change than it looks, and it is taken from the label,
-  not the artist.
+- **The artist's rate is not "currently 12%" — it is whatever the signed deal
+  says.** `calculate_release_outcome` multiplies by `deal.royalty_rate`
+  (`economy.rs:548`), and 12% is only the top of the priced band. A like-for-like
+  comparison at the proposal's 6% gives **$0.1800 → $0.2584, a 1.4× *rise***; at
+  the code's 12% it is $0.3600 → $0.2584, a 1.4× fall. **The direction depends
+  entirely on which rate you assume**, which is why the rate must be stated with
+  the comparison rather than implied.
+- **The label's margin falls, 0.60×** — $2.70 → $1.61 — once manufacturing, the
+  mechanical, the distributor *and the artist's royalty* are all subtracted from
+  the dealer price. That is the "squeeze" the earlier draft claimed, and it is
+  real (and bigger than the draft said): the draft reached the right conclusion by
+  an invalid comparison and then had the sign backwards in the sentence that
+  followed.
+- **The mechanical and manufacturing both roughly double in dollar terms** ($0.30 →
+  $0.52 and $1.00 → $1.40), so a pound-sourced chain re-denominated into game
+  dollars raises the label's costs across the board. The retune has to absorb both,
+  not just the mechanical.
 
 So the retune this needs is **not** "artist income drops, survive it" but "the
 whole per-copy chain is re-denominated, and the distributor's cut is the free
@@ -398,11 +427,12 @@ variable that decides who absorbs it". It must still land with a system-wide ret
 (advance sizes, pressing costs, gig income) refereed by `run_career` /
 `print_report` medians (`src/game/sim.rs:683-830`). Two guardrails:
 
-- Keep the **label's** total take per copy roughly constant **in dollars** (dealer
-  $4.31 − distributor − mechanical $0.52); the figures above show the label is
-  currently *ahead* by ~1.4× before distribution, so there is room for the
-  distributor's share to come out of the label without a retune. Whatever is
-  chosen, it must not make `label_loyalist` bankrupt.
+- Keep the **label's** total take per copy from collapsing: the table above puts
+  it at **$2.70 → $1.61 (0.60×)**, a 40% cut, which is large enough to threaten
+  `label_loyalist` solvency and therefore large enough to need the sim's verdict
+  rather than a judgement call. Either the dealer price rises, manufacturing comes
+  down from the invented £0.85, or the distributor share is smaller than 12%.
+  Whatever is chosen, it must not make `label_loyalist` bankrupt.
 - Add a `publishing_income` bot so the balance lab measures the second stream, and a
   `hype_signing` bot for F22 (accept the biggest advance, get dropped, repeat) — it must be
   survivable but not dominant, or F22 becomes an exploit.
