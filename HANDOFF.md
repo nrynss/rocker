@@ -402,3 +402,31 @@ needs in its handoff notes and the coordinator integrates.
   entropy. It now asserts the invariant (the master's room and song count price
   back to the quoted cost) and passed 12 consecutive runs. **Worth remembering:
   any UI test that touches money must not assume a fixed world.**
+- 2026-11-01 **Post-#27 CodeRabbit follow-ups** (two comments landed on #27's
+  final commit just before merge and were never addressed).
+  - **Booking pickers refuse to open mid-activity.** While an activity runs,
+    `process_turn` ignores everything but `AbandonActivity`/`Quit` and plays
+    the activity's week instead (§F). The record picker could still open from
+    a Record row (hotkey or Enter — `MenuEntry::enabled` is only a render
+    hint), quote a valid session, and then drop it on Enter while a tour week
+    played. `open_record_picker` now refuses first (the stress guard stays),
+    and so do the Gig and Tour rows in `activate`, which had the same shape.
+    The shared check is `App::busy_with` (`ui/input/mod.rs`); the four rows
+    render greyed out with `busy: <activity>`.
+  - **Known, not fixed — needs a design call.** The *instant* rows have the
+    same silent-drop: Vault → Release, Re-press, Marketing, Lifestyle, Deal
+    Offers (accept/reject) and Support Slot (accept/decline) all open mid-
+    activity, and their action is swapped for the activity's week by
+    `process_turn` — so an action documented as "no week consumed" both
+    vanishes *and* advances the activity (verified for `ChangeLifestyle`
+    mid-break). Either let non-turn-consuming actions through
+    `overrides_ongoing_activity`, or refuse those rows the same way; the first
+    changes §F's engine contract, so it is left for an explicit decision.
+  - **`design-living-industry.md` currency table:** the mechanical rises +72%
+    ($0.30 → $0.5156) and manufacturing +40% ($1.00 → $1.4025), not "roughly
+    double". The label-margin comparison also set the code's before-royalty
+    $2.70 against the proposal's after-royalty $1.61; like-for-like it is
+    0.64× after a 6% royalty ($2.52 → $1.61) and 0.69× while recouping
+    ($2.70 → $1.87), not 0.60× — the guardrail now quotes both.
+  - **Tests:** 320 passing (from 317), 9 ignored, clippy `-D warnings` clean,
+    fmt clean, determinism trio unmodified.
