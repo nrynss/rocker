@@ -195,10 +195,22 @@ pub(crate) fn draw_support_modal(frame: &mut Frame, app: &App) {
             if weeks_left == 1 { "" } else { "s" }
         )),
         Line::from(""),
-        Line::styled(
-            "  [A]ccept · [R]eject · [Esc] think it over",
-            Style::new().fg(Color::DarkGray),
-        ),
+        // §F: a support run can't start on top of a running commitment, so
+        // mid-activity the accept key is replaced by the reason. Rejecting is
+        // instant and still works.
+        match app.game.ongoing_activity() {
+            Some(activity) => Line::styled(
+                format!(
+                    "  Busy ({}) — accept once it's over · [R]eject · [Esc] think it over",
+                    activity.label().to_lowercase()
+                ),
+                Style::new().fg(Color::DarkGray),
+            ),
+            None => Line::styled(
+                "  [A]ccept · [R]eject · [Esc] think it over",
+                Style::new().fg(Color::DarkGray),
+            ),
+        },
     ];
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
 }

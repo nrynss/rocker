@@ -271,11 +271,12 @@ impl Bot {
 /// real break before burning out, otherwise carry on with the day job.
 fn self_care(game: &Game) -> Option<GameAction> {
     let player = &game.player;
-    // §F: a commitment owns the turn, so the doctor's appointment or the break
+    // §F: a commitment owns the week, so the doctor's appointment or the break
     // below would simply be *discarded* while one is running — the bot would
     // reach for help every week and be ignored every week, which is how a
     // four-week booking turned into a death spiral (road-dog died 12/60 before
-    // this). Walking out is the only action a commitment yields to, and it is
+    // this). Walking out is the only *remedy* a commitment yields to (instant
+    // paperwork goes through too, but heals nobody), and it is
     // exactly what a player staring at 30 health would do. Before §F there was
     // nothing to walk out of, so no bot ever needed to know this.
     //

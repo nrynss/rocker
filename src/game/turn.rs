@@ -348,13 +348,47 @@ impl Game {
         }
     }
 
-    /// The two actions a committed band may still take (design §F): walking
-    /// out, and walking away from the game entirely. Everything else the
-    /// player submits while an activity runs is ignored — the UI offers
-    /// "continue", not a menu, and a stale keypress must not be able to
-    /// start a second commitment on top of the first.
+    /// Actions that take no week (design §F, M2, M6, §D): paperwork and
+    /// decisions that happen *around* the calendar rather than on it —
+    /// answering a deal, declining a support slot, booking marketing,
+    /// moving house, re-pressing, putting a finished master out, walking out
+    /// of a commitment, and quitting.
+    ///
+    /// One list, read twice: `process_turn` lets these through a running
+    /// commitment, and skips the week tick for them. Keeping both readings on
+    /// one predicate is what stops an action being "instant" in one place and
+    /// a turn in the other — which is exactly how instant actions used to be
+    /// swallowed mid-activity while the activity advanced a week.
+    fn is_instant_action(action: &GameAction) -> bool {
+        matches!(
+            action,
+            GameAction::AcceptDeal(_)
+                | GameAction::RejectDeal(_)
+                | GameAction::DeclineSupportTour
+                | GameAction::StartMarketingCampaign(_, _)
+                | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
+                | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
+                // §D: the weeks a record costs were the session's. Putting the
+                // finished tapes on a truck is paperwork, and paperwork is
+                // instant here — the same call `RePress` above already makes.
+                | GameAction::ReleaseMaster { .. }
+                | GameAction::AbandonActivity // §F: the week you walk out of is yours to spend
+                | GameAction::Quit
+        )
+    }
+
+    /// What a committed band may still do (design §F): every instant action
+    /// — they take no week, so they cannot collide with the activity's — plus
+    /// `AcceptSupportTour`, which is let through only so that its own guard
+    /// can *refuse* it out loud (it starts a second commitment) instead of the
+    /// acceptance being silently swallowed as another week of the first.
+    ///
+    /// Everything else that takes a week (writing, a gig, a booking, a break,
+    /// the doctor) is still ignored and plays the activity's next week: the
+    /// week is the activity's, and a stale keypress must not be able to start
+    /// a second commitment on top of the first.
     fn overrides_ongoing_activity(action: &GameAction) -> bool {
-        matches!(action, GameAction::AbandonActivity | GameAction::Quit)
+        Self::is_instant_action(action) || matches!(action, GameAction::AcceptSupportTour)
     }
 
     pub fn process_turn(&mut self, action: GameAction) -> Result<bool, String> {
@@ -367,8 +401,10 @@ impl Game {
         // consecutive turns always get consecutive streams.
         let mut rng = self.action_rng();
 
-        // §F: a commitment in progress owns the turn. The submitted action is
-        // ignored and one more week of the activity resolves instead — but
+        // §F: a commitment in progress owns the *week*. An instant action
+        // (`overrides_ongoing_activity`) runs as normal and takes no week, so
+        // the activity's progress is untouched. Any other action is ignored
+        // and one more week of the activity resolves instead — but
         // the *turn machinery* still needs to know what the band spent the
         // week doing, so the action that started the commitment stands in
         // for it (fame visibility §C and the lifestyle streaks both read it).
@@ -386,21 +422,7 @@ impl Game {
                 action
             };
 
-        let is_turn_consuming_action = !matches!(
-            action,
-            GameAction::AcceptDeal(_)
-                | GameAction::RejectDeal(_)
-                | GameAction::DeclineSupportTour
-                | GameAction::StartMarketingCampaign(_, _)
-                | GameAction::ChangeLifestyle(_) // M2: instant, no week consumed
-                | GameAction::RePress { .. } // M6: instant re-press, no week consumed (§E-1)
-                // §D: the weeks a record costs were the session's. Putting the
-                // finished tapes on a truck is paperwork, and paperwork is
-                // instant here — the same call `RePress` above already makes.
-                | GameAction::ReleaseMaster { .. }
-                | GameAction::AbandonActivity // §F: the week you walk out of is yours to spend
-                | GameAction::Quit
-        );
+        let is_turn_consuming_action = !Self::is_instant_action(&action);
 
         if is_turn_consuming_action {
             // §F: the one place in the codebase that moves the calendar, and

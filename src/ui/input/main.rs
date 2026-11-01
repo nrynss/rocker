@@ -117,8 +117,20 @@ impl App {
                     self.screen = Screen::MarketingRelease { selected: 0 };
                 }
             }
+            // A gig and a tour are bookings too: while an activity runs
+            // `process_turn` would drop them and play the activity's week
+            // instead (§F), so their pickers refuse to open — the same guard,
+            // and the same reason, as the Record rows' (`busy_with`).
             MenuKind::Gig => {
-                if self.game.player.stress >= crate::game::GIG_STRESS_GUARD {
+                if let Some(busy) = self.busy_with() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        format!(
+                            "You're in the middle of {busy} — no gigs until it's over \
+                             (or press X to walk out)."
+                        ),
+                    );
+                } else if self.game.player.stress >= crate::game::GIG_STRESS_GUARD {
                     self.push_log(
                         crate::ui::app::LogKind::Ui,
                         "You're too stressed out to perform!",
@@ -130,7 +142,15 @@ impl App {
                 }
             }
             MenuKind::GoOnTour => {
-                if self.game.player.stress >= crate::game::TOUR_STRESS_GUARD {
+                if let Some(busy) = self.busy_with() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        format!(
+                            "You're in the middle of {busy} — no new tour until it's over \
+                             (or press X to walk out)."
+                        ),
+                    );
+                } else if self.game.player.stress >= crate::game::TOUR_STRESS_GUARD {
                     self.push_log(
                         crate::ui::app::LogKind::Ui,
                         "You're too stressed to go on tour!",
@@ -464,6 +484,68 @@ mod tests {
             "'x' on Main should abandon the running activity"
         );
     }
+    /// Play a Gig and Go on Tour open booking pickers too, and a gig or a
+    /// tour submitted mid-activity is dropped by `process_turn` exactly like
+    /// a recording (§F). Both rows must refuse to open while a commitment
+    /// runs — without moving the calendar — and open again once it is over.
+    #[test]
+    fn gig_and_tour_pickers_refuse_to_open_while_an_activity_runs() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        // Clear every other gate, so only the activity can refuse.
+        app.game.band.fame = 50;
+        app.game.player.stress = 0;
+        app.game.player.health = 100;
+        app.screen = Screen::Main;
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        assert!(
+            app.game.ongoing_activity.is_some(),
+            "a break is a commitment"
+        );
+        app.game.player.stress = 0;
+        app.game.player.health = 100;
+
+        let week = app.game.week;
+        for (hotkey, what) in [('6', "no gigs"), ('7', "no new tour")] {
+            app.screen = Screen::Main;
+            app.log.clear();
+            app.handle_main_key(key(KeyCode::Char(hotkey)));
+            assert!(
+                matches!(app.screen, Screen::Main),
+                "'{hotkey}' must not open a picker mid-activity"
+            );
+            let entry = app.log.last().expect("the refusal is explained");
+            assert!(
+                entry.text.contains("middle of a break") && entry.text.contains(what),
+                "'{hotkey}' refusal should name the activity: {}",
+                entry.text
+            );
+            let entries = app.menu_entries();
+            let row = entries
+                .iter()
+                .find(|e| e.hotkey == hotkey)
+                .expect("row exists");
+            assert!(!row.enabled, "'{hotkey}' row is greyed out mid-activity");
+            assert_eq!(row.detail, "busy: break");
+        }
+        assert_eq!(app.game.week, week, "refusing must not consume the week");
+
+        // Walk out, and both pickers open again.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        assert!(app.game.ongoing_activity.is_none());
+        app.game.player.stress = 0;
+        app.game.player.health = 100;
+        app.handle_main_key(key(KeyCode::Char('6')));
+        assert!(matches!(app.screen, Screen::VenuePicker { .. }));
+        app.screen = Screen::Main;
+        app.handle_main_key(key(KeyCode::Char('7')));
+        assert!(matches!(app.screen, Screen::RegionPicker { .. }));
+    }
+
     /// Only *turn-consuming* menu rows advance a running activity.
     ///
     /// This pins the distinction the activity strip describes. Charts,

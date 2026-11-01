@@ -34,7 +34,7 @@ fn suppress_story_events(game: &mut Game) {
     park_events(game);
 }
 
-fn park_events(game: &mut Game) {
+pub(super) fn park_events(game: &mut Game) {
     game.events.last_event_week = u32::MAX;
 }
 
@@ -50,7 +50,7 @@ fn park_events(game: &mut Game) {
 /// charted, so the catalogue tail pays nothing and the money stays exact —
 /// which the equivalence test itself would catch if it ever stopped being
 /// true.
-fn touring_band(seed: u64) -> Game {
+pub(super) fn touring_band(seed: u64) -> Game {
     let mut game = crate::game::sim::seeded_game(seed);
     suppress_story_events(&mut game);
     game.band.fame = 60; // clears the 4-week length gate and the Bus rig gate
@@ -72,9 +72,9 @@ fn touring_band(seed: u64) -> Game {
     game
 }
 
-const TOUR_REGION: usize = 0;
-const TOUR_RIG: TourRig = TourRig::Bus;
-const TOUR_WEEKS: u8 = 4;
+pub(super) const TOUR_REGION: usize = 0;
+pub(super) const TOUR_RIG: TourRig = TourRig::Bus;
+pub(super) const TOUR_WEEKS: u8 = 4;
 
 /// The economically meaningful part of a resolved night. `ShowReport::week`
 /// is deliberately excluded: it is the one field the split *should* change,
@@ -430,7 +430,8 @@ fn a_support_tour_plays_its_weeks_one_at_a_time() {
     assert!(game.band.fame > fame_before, "the run paid its exposure");
 }
 
-/// §F: while a commitment runs it owns the turn. A stale keypress can
+/// §F: while a commitment runs it owns the week. A stale *week-taking*
+/// keypress (instant actions are `instant_actions.rs`'s business) can
 /// neither do something else nor start a second commitment on top.
 #[test]
 fn a_committed_band_ignores_the_submitted_action() {

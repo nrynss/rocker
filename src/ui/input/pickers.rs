@@ -27,7 +27,23 @@ impl App {
     /// Record row is still reachable by Enter or its number. Without this check
     /// the player walks into a picker whose every booking the engine then
     /// refuses, and the only feedback is an error after the fact.
+    ///
+    /// The same goes for a running commitment (§F): a booking takes weeks, so
+    /// `process_turn` ignores it while an activity runs and plays the
+    /// activity's next week instead (only instant actions get through), so a
+    /// picker opened mid-tour would take the player's Enter and silently drop
+    /// the session. Refuse before opening, and leave no picker state behind.
     pub(crate) fn open_record_picker(&mut self, release_type: ReleaseType) {
+        if let Some(busy) = self.busy_with() {
+            self.push_log(
+                LogKind::Error,
+                format!(
+                    "❌ You're in the middle of {busy} — studio time will have to wait. \
+                     Let it run its course, or press X to walk out."
+                ),
+            );
+            return;
+        }
         if self.game.player.stress >= STUDIO_STRESS_BLOCK {
             self.push_log(
                 LogKind::Error,
@@ -544,6 +560,113 @@ mod tests {
             app.game.player.money, 1_500,
             "the starting purse must be untouched — opening a picker books nothing"
         );
+    }
+
+    /// The post-#27 CodeRabbit finding: a Record row could open the picker
+    /// mid-activity, show a valid quote, then let Enter silently drop the
+    /// booking while `process_turn` played the activity's week instead.
+    /// The picker must refuse at the door — through the hotkey, Enter on the
+    /// row, and the direct call alike — and leave no picker state behind.
+    #[test]
+    fn record_picker_refuses_to_open_while_an_activity_runs() {
+        let mut app = app_with_songs(14);
+        app.game.player.money = 10_000;
+        app.screen = Screen::Main;
+        app.dispatch(GameAction::TakeBreak);
+        assert!(
+            app.game.ongoing_activity.is_some(),
+            "a break is a multi-week commitment"
+        );
+
+        let week = app.game.week;
+        let money = app.game.player.money;
+        let done = app
+            .game
+            .ongoing_activity
+            .as_ref()
+            .map(crate::game::OngoingActivity::weeks_done);
+
+        // Every way into the picker: the format calls, each row's hotkey,
+        // and Enter on each row.
+        enum Attempt {
+            Direct(ReleaseType),
+            Hotkey(char),
+            EnterOn(char),
+        }
+        let attempts = [
+            Attempt::Direct(ReleaseType::Single),
+            Attempt::Direct(ReleaseType::Album),
+            Attempt::Hotkey('4'),
+            Attempt::Hotkey('5'),
+            Attempt::EnterOn('4'),
+            Attempt::EnterOn('5'),
+        ];
+
+        for attempt in attempts {
+            app.screen = Screen::Main;
+            app.log.clear();
+            match attempt {
+                Attempt::Direct(release_type) => app.open_record_picker(release_type),
+                Attempt::Hotkey(hotkey) => app.handle_main_key(key(KeyCode::Char(hotkey))),
+                Attempt::EnterOn(hotkey) => {
+                    app.menu_selected = app
+                        .menu_entries()
+                        .iter()
+                        .position(|e| e.hotkey == hotkey)
+                        .expect("the Record rows exist");
+                    app.handle_main_key(key(KeyCode::Enter));
+                }
+            }
+            assert!(
+                matches!(app.screen, Screen::Main),
+                "no picker may open while an activity runs"
+            );
+            let entry = app.log.last().expect("the refusal is logged");
+            assert!(matches!(entry.kind, LogKind::Error));
+            assert!(
+                entry.text.contains("middle of a break"),
+                "the refusal names the running activity: {}",
+                entry.text
+            );
+            // Nothing moved: the refusal is not a turn.
+            assert_eq!(app.game.week, week, "refusing must not consume the week");
+            assert_eq!(app.game.player.money, money, "refusing books nothing");
+            assert_eq!(
+                app.game
+                    .ongoing_activity
+                    .as_ref()
+                    .map(crate::game::OngoingActivity::weeks_done),
+                done,
+                "refusing must not advance the activity"
+            );
+        }
+        assert!(app.game.vault().is_empty(), "no session was cut");
+
+        // And the rows say why before the player even tries.
+        for hotkey in ['4', '5'] {
+            let entries = app.menu_entries();
+            let row = entries
+                .iter()
+                .find(|e| e.hotkey == hotkey)
+                .expect("the Record rows exist");
+            assert!(!row.enabled, "Record rows are greyed out mid-activity");
+            assert_eq!(row.detail, "busy: break");
+        }
+    }
+
+    /// The stress guard the activity guard sits beside still holds on its own.
+    #[test]
+    fn record_picker_still_refuses_a_burnt_out_player() {
+        let mut app = app_with_songs(3);
+        app.screen = Screen::Main;
+        app.game.player.stress = STUDIO_STRESS_BLOCK;
+
+        app.open_record_picker(ReleaseType::Single);
+
+        assert!(matches!(app.screen, Screen::Main));
+        let entry = app.log.last().expect("the refusal is explained");
+        assert!(matches!(entry.kind, LogKind::Error));
+        assert!(entry.text.contains("too stressed"), "{}", entry.text);
     }
 
     #[test]

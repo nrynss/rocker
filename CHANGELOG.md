@@ -25,8 +25,10 @@ default song count.
   only Enter reports an error, and Esc leaves without booking.
 - **Activity screen** (§H). While a commitment runs, a strip above the menu
   names the activity, shows week *n* of *m* with a per-week progress bar and
-  how many weeks have settled. Any menu action plays the next week — which is
-  what the turn already did — and `X` abandons it.
+  how many weeks have settled. A week-taking menu action plays the next
+  week — which is what the turn already did — while the screen-opening rows
+  (Charts, Discography, Save, Load) and the instant rows do not, and `X`
+  abandons it.
 - **Discography split** (§H). `Tab` cycles all → singles → albums, with the
   active filter named in the modal title and a format-specific empty state.
 - The activity strip and picker carry their own render smoke test across the
@@ -49,6 +51,28 @@ default song count.
   `RecordingStudio::default()` and the format's default song count on every
   dispatch, so the studio ladder this cycle was built around could not be
   chosen by a player. The picker closes that gap.
+- **Booking pickers no longer open mid-activity** (post-#27 CodeRabbit
+  review). While a commitment runs, `process_turn` ignores the submitted action
+  and plays the activity's next week (§F), so the record picker — reachable by
+  a Record row's hotkey or Enter during a tour, a session or a break — showed a
+  valid quote, took the player's Enter, then silently dropped the booking and
+  spent the week on the running activity. `open_record_picker` now refuses
+  while an activity runs (alongside its existing stress guard), and Play a Gig
+  and Go on Tour, which had the same shape, refuse the same way. All four rows
+  grey out with `busy: <activity>` and the refusal names the activity and
+  points at `X`; nothing about the refusal consumes a week.
+- **Instant actions are no longer swallowed mid-activity** (PR #37).
+  `process_turn` used to let only Abandon and Quit through a running
+  commitment, so releasing a master (signed or not), re-pressing, marketing,
+  moving house, and answering a deal or a support slot were swapped for the
+  activity's next week: the action vanished *and* the week it was meant not
+  to cost was spent. Each of those now applies exactly once, takes no week,
+  and leaves the activity's progress untouched (Abandon and Quit still end
+  the activity, as before) — one predicate,
+  `Game::is_instant_action`, decides both that and the week-tick exemption.
+  Accepting a support slot is the deliberate exception: it would start a
+  second commitment, so it is refused out loud (offer kept, nothing charged)
+  instead of being swallowed; the modal says why and declining still works.
 
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.

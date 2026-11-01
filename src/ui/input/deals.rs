@@ -71,6 +71,20 @@ impl App {
         match key.code {
             KeyCode::Esc => self.screen = Screen::Main,
             KeyCode::Char('a') | KeyCode::Char('A') | KeyCode::Enter => {
+                // A support run is a commitment of its own (§F), so it cannot
+                // start on top of a running one. Say so and keep the offer on
+                // screen — declining (or waiting it out) still works. The
+                // engine refuses it too; this just answers before dispatching.
+                if let Some(busy) = self.busy_with() {
+                    self.push_log(
+                        crate::ui::app::LogKind::Ui,
+                        format!(
+                            "You're in the middle of {busy} — finish it (or press X on the \
+                             main screen to walk out) before taking a support slot."
+                        ),
+                    );
+                    return;
+                }
                 self.screen = Screen::Main;
                 self.dispatch(GameAction::AcceptSupportTour);
             }

@@ -393,18 +393,29 @@ design.
 
 | Per copy, in game dollars | today (code) | proposed (sources → $) |
 |---|---|---|
-| Royalty base / dealer price | $3.00 (`LABEL_INCOME_PER_COPY`) | £2.61 → **$4.31** |
+| Royalty base | $3.00 (`LABEL_INCOME_PER_COPY`) | £2.61 (dealer price) → **$4.31** |
+| Label's gross per copy | $4.00 (`LABEL_WHOLESALE_PER_COPY`) | £2.61 (dealer price) → **$4.31** |
 | Artist royalty, at a like-for-like 6% | **$0.1800** | £0.1566 → **$0.2584** |
 | Artist royalty, at the code's 12% | $0.3600 | — |
 | Mechanical (publisher's pool) | $0.30 | £0.3125 → **$0.5156** |
 | Manufacturing | $1.00 | £0.85 → **$1.4025** |
 | Distributor (12% of dealer — *invented*) | — | £0.3132 → **$0.5168** |
-| **Label retains (residual)** | **$2.70** | £0.9777 → **$1.6132** |
+| **Label retains, before any royalty** | **$2.70** | £1.1343 → **$1.8716** |
+| **Label retains, after a 6% royalty (residual)** | **$2.52** | £0.9777 → **$1.6132** |
 
-The label row is the *residual* of the four lines above it, which is how the
-proposal's own split table (`The dealer price, split`) already defines it — an
+The residual is the label's gross minus manufacturing, the mechanical, the
+distributor and the 6% royalty (the before-royalty row stops short of that last
+subtraction; the 12% row is shown only for the comparison below), which is how
+the proposal's own split table (`The dealer price, split`) already defines it — an
 earlier version of this table left the artist royalty out of the subtraction and
-so overstated the label's margin by exactly one royalty.
+so overstated the label's margin by exactly one royalty. The code's $2.70 is the
+**before-royalty** figure: `label_wholesale_margin` computes `$4.00 − $1.00 −
+$0.30` per copy and then subtracts the royalty *actually paid*
+(`src/game/economy.rs:429-433`), which is nothing while a deal is still recouping,
+only the remainder in the batch that clears the balance (`apply_recoupment`,
+`src/game/economy.rs:263-274`), and the full royalty once it has recouped. So the
+table carries the two endpoint states, and each comparison below pairs like with
+like.
 
 Read off that table, the honest statements are:
 
@@ -415,16 +426,24 @@ Read off that table, the honest statements are:
   the code's 12% it is $0.3600 → $0.2584, a 1.4× fall. **The direction depends
   entirely on which rate you assume**, which is why the rate must be stated with
   the comparison rather than implied.
-- **The label's margin falls, 0.60×** — $2.70 → $1.61 — once manufacturing, the
-  mechanical, the distributor *and the artist's royalty* are all subtracted from
-  the dealer price. That is the "squeeze" the earlier draft claimed, and it is
-  real (and bigger than the draft said): the draft reached the right conclusion by
-  an invalid comparison and then had the sign backwards in the sentence that
-  followed.
-- **The mechanical and manufacturing both roughly double in dollar terms** ($0.30 →
-  $0.52 and $1.00 → $1.40), so a pound-sourced chain re-denominated into game
-  dollars raises the label's costs across the board. The retune has to absorb both,
-  not just the mechanical.
+- **The label's margin falls by roughly a third** once manufacturing, the
+  mechanical and the distributor are subtracted on both sides and the artist's
+  royalty is treated the same way on both. After a 6% royalty it is
+  **$2.52 → $1.61, 0.64× (a 36% cut)**; while the deal is still recouping and no
+  royalty is paid it is **$2.70 → $1.87, 0.69× (a 31% cut)**. That is the
+  "squeeze" the earlier draft claimed, and it is real: the draft reached the right
+  conclusion by an invalid comparison and then had the sign backwards in the
+  sentence that followed. *(Corrected 2026-11-01: an earlier version of this
+  bullet said $2.70 → $1.61, 0.60×, a 40% cut — the code's before-royalty
+  figure set against the proposal's after-royalty one, which overstated the cut.)*
+- **The mechanical and manufacturing both rise in dollar terms, by different
+  amounts.** The mechanical goes $0.30 → $0.5156, **+72% (1.72×)**; manufacturing
+  goes $1.00 → $1.4025, **+40% (1.40×)**. *(Corrected 2026-11-01: an earlier
+  version said both "roughly double", which overstated both rises and the
+  manufacturing one most of all.)* So a pound-sourced chain re-denominated into
+  game dollars raises the label's costs across the board, and the larger dollar
+  increase is manufacturing's $0.40 rather than the mechanical's $0.22. The retune
+  has to absorb both, not just the mechanical.
 
 So the retune this needs is **not** "artist income drops, survive it" but "the
 whole per-copy chain is re-denominated, and the distributor's cut is the free
@@ -433,7 +452,8 @@ variable that decides who absorbs it". It must still land with a system-wide ret
 `print_report` medians (`src/game/sim.rs:683-830`). Two guardrails:
 
 - Keep the **label's** total take per copy from collapsing: the table above puts
-  it at **$2.70 → $1.61 (0.60×)**, a 40% cut, which is large enough to threaten
+  it at **0.64× after a 6% royalty ($2.52 → $1.61, a 36% cut)** and **0.69× while
+  recouping ($2.70 → $1.87, a 31% cut)**, which is large enough to threaten
   `label_loyalist` solvency and therefore large enough to need the sim's verdict
   rather than a judgement call. Either the dealer price rises, manufacturing comes
   down from the invented £0.85, or the distributor share is smaller than 12%.

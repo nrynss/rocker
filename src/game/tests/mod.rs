@@ -21,6 +21,7 @@ mod determinism;
 mod fame;
 mod history;
 mod incidents;
+mod instant_actions;
 mod label_moves;
 mod labels;
 mod lifestyle;

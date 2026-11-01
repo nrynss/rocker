@@ -212,10 +212,28 @@ pub enum OngoingActivity {
 ```
 
 - Starting one charges its up-front cost and resolves **its first week**.
-- While `ongoing_activity` is `Some`, `process_turn` ignores the
-  submitted action and resolves **one more week** of the activity, then
-  runs the normal weekly tick. The player sees the week pass with a
-  progress line; the UI offers "continue" rather than a menu.
+- While `ongoing_activity` is `Some`, `process_turn` ignores any other
+  submitted action that takes a week (accepting a support slot is the one
+  exception, refused below) and resolves **one more week** of the activity
+  instead, then runs the normal weekly tick. The player sees the
+  week pass with a progress line.
+- **Instant actions still go through** *(decided 2026-11-01, PR #37)*.
+  Answering a deal, declining a support slot, marketing, a lifestyle move,
+  a re-press and releasing a master (signed or not) take no week, so
+  mid-activity they apply exactly once and leave the calendar and the
+  activity's progress untouched. Abandoning and quitting take no week
+  either, but they are *about* the activity: `AbandonActivity` settles it as
+  walked-out-of and clears it, and `Quit` reaches game over, whose emergency
+  path abandons it the same way. They used to be
+  swallowed — swapped for the activity's next week, so the action vanished
+  *and* the week it was meant not to cost was spent. One predicate
+  (`Game::is_instant_action`) decides both "lets through a commitment" and
+  "skips the week tick", so the two cannot drift apart.
+- **Accepting a support slot is refused**, out loud, while an activity
+  runs: it starts a second commitment. The offer stays on the table (it can
+  still lapse at its own expiry), and declining it works. The UI's booking
+  rows — Record, Play a Gig, Go on Tour — likewise refuse to open their
+  pickers mid-activity rather than quote a booking that would be dropped.
 - On the final week the activity settles (tour report, master finished,
   etc.) and clears.
 - **A tour's shows now resolve five per week** rather than all at once,
@@ -274,8 +292,10 @@ resolving week by week, activities get their own event taps:
   *(Already built by S-MASTER; unchanged by this task.)*
 - **Activity screen**: while an activity runs, the main screen shows what
   it is, week *n* of *m*, what happened this week, and "continue" /
-  "abandon". **Built** as a strip above the menu: any menu action plays the
-  next week, `X` abandons via `GameAction::AbandonActivity`.
+  "abandon". **Built** as a strip above the menu: a week-taking menu action
+  plays the next week, the instant rows (Vault, Re-press, Marketing,
+  Lifestyle, Deals, Support Slot's decline) apply without spending one, the
+  booking rows refuse, and `X` abandons via `GameAction::AbandonActivity`.
 - **Charts modal**: singles/albums toggle. *(Already built by S-CHARTS.)*
 - **Discography**: split into singles and albums. **Built** as a `Tab`
   cycle (all → singles → albums), with the current filter named in the title.

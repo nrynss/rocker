@@ -309,6 +309,14 @@ impl App {
         // re-press right now — empty for a signed act (its label restocks
         // on its own).
         let repress_count = game.repressable_releases().len();
+        // §F: while a commitment runs, a new booking would be ignored by
+        // `process_turn` (it plays the activity's week instead — only instant
+        // actions get through), so the rows that open a booking picker grey
+        // out and say why. `activate` refuses them too — `enabled` is only a
+        // rendering hint. The instant rows (Vault, Re-press, Marketing,
+        // Lifestyle, Deals, Support Slot) stay live: they take no week.
+        let busy = game.ongoing_activity().map(|activity| activity.label());
+        let busy_detail = |label: &str| format!("busy: {}", label.to_lowercase());
 
         let mut entries = vec![
             MenuEntry {
@@ -343,7 +351,9 @@ impl App {
             MenuEntry {
                 hotkey: '4',
                 label: "Record Single",
-                detail: if game.player.stress >= 90 {
+                detail: if let Some(label) = busy {
+                    busy_detail(label)
+                } else if game.player.stress >= 90 {
                     "too stressed".into()
                 } else if songs < constants::MIN_SINGLE_SONGS as usize {
                     // A single is an A-side plus a B-side now (§A) — one song
@@ -360,7 +370,8 @@ impl App {
                         None => format!("${} studio time", single_cost),
                     }
                 },
-                enabled: game.player.stress < 90
+                enabled: busy.is_none()
+                    && game.player.stress < 90
                     && game.band.can_record_single()
                     && game.player.can_afford(single_min),
                 kind: MenuKind::RecordSingle,
@@ -368,7 +379,9 @@ impl App {
             MenuEntry {
                 hotkey: '5',
                 label: "Record Album",
-                detail: if game.player.stress >= 90 {
+                detail: if let Some(label) = busy {
+                    busy_detail(label)
+                } else if game.player.stress >= 90 {
                     "too stressed".into()
                 } else if songs < constants::MIN_ALBUM_SONGS as usize {
                     format!("{}/{} songs", songs, constants::MIN_ALBUM_SONGS)
@@ -381,7 +394,8 @@ impl App {
                         None => format!("${} studio time", album_cost),
                     }
                 },
-                enabled: game.player.stress < 90
+                enabled: busy.is_none()
+                    && game.player.stress < 90
                     && game.band.can_record_album()
                     && game.player.can_afford(album_min),
                 kind: MenuKind::RecordAlbum,
@@ -415,21 +429,26 @@ impl App {
             MenuEntry {
                 hotkey: '6',
                 label: "Play a Gig",
-                detail: if game.player.stress >= GIG_STRESS_GUARD {
+                detail: if let Some(label) = busy {
+                    busy_detail(label)
+                } else if game.player.stress >= GIG_STRESS_GUARD {
                     "too stressed out".into()
                 } else if game.player.health < GIG_HEALTH_GUARD {
                     "too unwell".into()
                 } else {
                     "venue picker".into()
                 },
-                enabled: game.player.stress < GIG_STRESS_GUARD
+                enabled: busy.is_none()
+                    && game.player.stress < GIG_STRESS_GUARD
                     && game.player.health >= GIG_HEALTH_GUARD,
                 kind: MenuKind::Gig,
             },
             MenuEntry {
                 hotkey: '7',
                 label: "Go on Tour",
-                detail: if game.band.fame < 25 {
+                detail: if let Some(label) = busy {
+                    busy_detail(label)
+                } else if game.band.fame < 25 {
                     "needs 25 fame".into()
                 } else if game.player.stress >= TOUR_STRESS_GUARD {
                     "too stressed out".into()
@@ -438,7 +457,8 @@ impl App {
                 } else {
                     "region picker".into()
                 },
-                enabled: game.band.fame >= 25
+                enabled: busy.is_none()
+                    && game.band.fame >= 25
                     && game.player.stress < TOUR_STRESS_GUARD
                     && game.player.health >= TOUR_HEALTH_GUARD,
                 kind: MenuKind::GoOnTour,

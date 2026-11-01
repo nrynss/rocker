@@ -402,3 +402,63 @@ needs in its handoff notes and the coordinator integrates.
   entropy. It now asserts the invariant (the master's room and song count price
   back to the quoted cost) and passed 12 consecutive runs. **Worth remembering:
   any UI test that touches money must not assume a fixed world.**
+- 2026-11-01 **Post-#27 CodeRabbit follow-ups** (two comments landed on #27's
+  final commit just before merge and were never addressed).
+  - **Booking pickers refuse to open mid-activity.** While an activity runs,
+    `process_turn` ignores every week-taking action and plays
+    the activity's week instead (§F). The record picker could still open from
+    a Record row (hotkey or Enter — `MenuEntry::enabled` is only a render
+    hint), quote a valid session, and then drop it on Enter while a tour week
+    played. `open_record_picker` now refuses first (the stress guard stays),
+    and so do the Gig and Tour rows in `activate`, which had the same shape.
+    The shared check is `App::busy_with` (`ui/input/mod.rs`); the four rows
+    render greyed out with `busy: <activity>`.
+  - **Instant actions now go through a running commitment** (decided by
+    Narayan: option 1, "let instant actions run"). They used to be swapped
+    for the activity's next week by `process_turn` — Vault → Release (signed
+    and unsigned), Re-press, Marketing, Lifestyle, Deal accept/reject and
+    Support decline all vanished *and* advanced the activity, though each is
+    documented as taking no week. `turn.rs` now has one predicate,
+    `Game::is_instant_action`, read twice: `overrides_ongoing_activity` lets
+    instant actions through, and the week tick skips them. Each applies
+    exactly once, spends no week, and leaves `weeks_done` alone — except
+    Abandon and Quit, which take no week but end the activity, as before.
+    - **Accepting a support slot stays blocked** — it starts a second
+      commitment. It is let through `overrides_ongoing_activity` only so
+      `action_accept_support_tour`'s own guard refuses it with an error
+      (offer kept, nothing banked, no week) instead of it being swallowed;
+      the support modal swaps its Accept hint for the reason and the input
+      refuses before dispatching. Declining works.
+    - **Still swallowed, by design:** every *week-taking* action (writing,
+      practice, laze, the doctor, a break, and any booking) plays the
+      activity's week instead — that is how a busy band "continues". The
+      booking rows refuse at the door so they never quote something that
+      would be dropped; the others are the continue keys (see
+      `a_week_taking_action_still_plays_the_activity_week`).
+    - **Sim impact** (15-year sweep, 60 seeds, before → after): bankruptcies
+      unchanged for every bot (studio-rat 18, homebody 8, indie-lifer 4, the
+      rest 2 or 0). The visible shift is **studio-rat's median albums 40 → 86**
+      (singles 11 → 18, wins 56% → 60%): it books sessions back to back, and
+      its `ReleaseMaster` submitted mid-session used to be swallowed as
+      another studio week, so masters sat in the vault. road-dog wins
+      11 → 22 of 60, label-loyalist median certs 58 → 59; balanced-indie and
+      indie-lifer reach fame 100 a little later (y2 87 → 81/80) but finish
+      the same. All 9 ignored sweeps pass. These are the bug's numbers
+      coming out of the sim, not a retune. **S-SIM stays ⬜ open** on the
+      task board: its remaining scope (bots for the new action shape, the
+      singles-vs-albums balance pass, the §F economic-neutrality check) is
+      untouched here, and it should re-baseline against these numbers.
+    - Tests: `game/tests/instant_actions.rs` (one per action mid-tour, plus a
+      release mid-*session*, the signed release path, the support-accept
+      refusal, and the week-taking control) and
+      `ui::input::instant_rows_mid_activity` (every instant row driven by its
+      hotkey and picker keys mid-break, then the booking rows refused).
+  - **`design-living-industry.md` currency table:** the mechanical rises +72%
+    ($0.30 → $0.5156) and manufacturing +40% ($1.00 → $1.4025), not "roughly
+    double". The label-margin comparison also set the code's before-royalty
+    $2.70 against the proposal's after-royalty $1.61; like-for-like it is
+    0.64× after a 6% royalty ($2.52 → $1.61) and 0.69× while recouping
+    ($2.70 → $1.87), not 0.60× — the guardrail now quotes both.
+  - **Tests:** 332 passing (from 317), 9 ignored — all 9 ignored sim sweeps
+    also pass with the instant-action change — clippy `-D warnings` clean,
+    fmt clean, determinism trio unmodified.
