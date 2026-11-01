@@ -644,7 +644,13 @@ pub(crate) fn draw_record_picker_modal(frame: &mut Frame, app: &App) {
             };
             // The room's own bill for the CURRENT song count, so moving the
             // spinner visibly re-prices the ladder.
-            let bill = room.rate_per_song() * u32::from(songs);
+            //
+            // Must go through `recording_cost`, not `rate_per_song() * songs`:
+            // the cost carries the era's `recording_cost_modifier` (0.8-1.5
+            // across the 1970s eras), so the raw rate shows a price up to 50%
+            // away from the one the quote — and therefore the booking — uses.
+            // Caught on review; the two are now the same function.
+            let bill = app.game.recording_cost(room, songs);
             let gate = if available {
                 format!("🔓 fame {}+", room.fame_gate())
             } else {
@@ -652,7 +658,7 @@ pub(crate) fn draw_record_picker_modal(frame: &mut Frame, app: &App) {
             };
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{:<18}", room.label()), style.bold()),
-                Span::styled(format!(" {:>7}", format_money(bill as i32)), style),
+                Span::styled(format!(" {:>7}", format_money(bill)), style),
                 Span::styled(format!("  q{:>+3}", room.quality_bonus()), style),
                 Span::styled(format!("  {:.2} wk/song", room.weeks_per_song()), style),
                 Span::raw("  "),

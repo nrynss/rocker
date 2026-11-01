@@ -693,4 +693,76 @@ mod tests {
         assert!(matches!(app.screen, Screen::Main));
         assert!(app.game.ongoing_activity.is_none());
     }
+    /// The ladder's per-room bill must include the era's cost modifier.
+    ///
+    /// It used to be raw `rate_per_song() * songs`, which omits
+    /// `recording_cost_modifier` (0.8–1.5 across the 1970s) — so the ladder
+    /// could advertise a rung up to 50% away from what booking it costs.
+    ///
+    /// The check renders the picker to a terminal buffer and reads the money
+    /// back out of the drawn row, because the bug lived in the *render* path:
+    /// asserting on `recording_cost` alone passes whether or not the ladder
+    /// calls it.
+    #[test]
+    fn the_ladder_row_shows_the_era_cost_modifier_price() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let mut app = app_with_songs(14);
+        // 1970's modifier is 1.0, so the bug is invisible there — move to an era
+        // where it bites, which is what a player hits two years into a career.
+        app.game.timeline.current_year = 1975;
+        let modifier = app.game.timeline.get_recording_cost_modifier();
+        assert_ne!(modifier, 1.0, "pick an era whose modifier is not 1.0");
+        app.game.band.fame = 100; // unlock every rung so all five rows price
+
+        let backend = TestBackend::new(100, 34);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Album,
+            songs: 10,
+            studio: RecordingStudio::DemoRoom,
+        };
+        terminal
+            .draw(|f| crate::ui::render::draw(f, &mut app))
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let mut screen = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                screen.push_str(buf[(x, y)].symbol());
+            }
+            screen.push('\n');
+        }
+
+        for room in RecordingStudio::ALL {
+            let real = app.game.recording_cost(room, 10);
+            let raw = (room.rate_per_song() * 10) as i32;
+            // The rendered line must carry the real price...
+            assert!(
+                screen.contains(&crate::data::format_money(real)),
+                "{}: the ladder should show {} (era-adjusted), screen was:\n{screen}",
+                room.label(),
+                crate::data::format_money(real)
+            );
+            // ...and, in this era, the raw rate must not be what the ladder
+            // shows. Substring matching is useless here — "$600" occurs inside
+            // "$6000" — so compare the drawn field by position: each room's
+            // bill is a right-aligned 7-character field after the 18-char label.
+            if raw != real {
+                let raw_field = format!("{:>7}", crate::data::format_money(raw));
+                let line = screen
+                    .lines()
+                    .find(|l| l.contains(room.label()))
+                    .unwrap_or_else(|| panic!("{}: no ladder row drawn", room.label()));
+                let after = &line[line.find(room.label()).expect("row") + room.label().len()..];
+                assert!(
+                    !after.starts_with(&raw_field),
+                    "{}: the ladder drew the raw rate field {raw_field:?} instead of the \
+                     era-adjusted one; row was {line:?}",
+                    room.label()
+                );
+            }
+        }
+    }
 }
