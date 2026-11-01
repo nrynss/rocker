@@ -3,36 +3,43 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use crate::data::format_money;
 use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::game::studios::{self, RecordingStudio};
-use crate::game::{Game, GameAction, PRESSING_TIERS, TourQuote, TourRig};
+use crate::game::{Game, GameAction, PRESSING_TIERS, STUDIO_STRESS_BLOCK, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
 
-/// S-RECORD: the record action now carries a song count and a studio (§A/§C).
-/// The picker that lets the player *choose* them — format → songs → studio,
-/// quote-first — is S-UI's (§H); until then every dispatch books the default:
-/// the format's default song count in the neutral demo room, which reproduces
-/// the pre-cycle booking a player never had to think about.
+/// The song count the picker opens on: whatever the band's notebook suggests,
+/// or the format's own default when it has no opinion.
 ///
-/// S-MASTER (§D): this books a session and nothing more. Pressing and
-/// distribution have left it entirely — they are the vault's, below.
-fn default_record_action(game: &Game, release_type: ReleaseType) -> GameAction {
-    let songs = game
-        .band
-        .default_booking_songs(&release_type)
-        .unwrap_or_else(|| studios::default_song_count(&release_type));
-    let studio = RecordingStudio::default();
-    match release_type {
-        ReleaseType::Single => GameAction::RecordSingle { songs, studio },
-        ReleaseType::Album => GameAction::RecordAlbum { songs, studio },
-    }
+/// One helper rather than two copies — the picker and the (now removed) one-click
+/// path used to compute this identically, and a divergence between them would
+/// mean the picker opened on a different count than a quick booking used.
+fn default_songs(game: &Game, release_type: &ReleaseType) -> u8 {
+    game.band
+        .default_booking_songs(release_type)
+        .unwrap_or_else(|| studios::default_song_count(release_type))
 }
 
 impl App {
-    /// Book a session straight away (design §D): there is nothing left to
-    /// choose at record time now that pressing and distribution live on the
-    /// release.
-    pub(crate) fn book_recording(&mut self, release_type: ReleaseType) {
-        let action = default_record_action(&self.game, release_type);
-        self.dispatch(action);
+    /// Open the record picker (§H) on a format — what the Record menu rows do.
+    ///
+    /// The stress guard belongs here, not only on the menu row. `MenuEntry`'s
+    /// `enabled` flag is a *rendering* hint — `handle_main_key` looks the entry
+    /// up by hotkey and activates it without consulting it — so a greyed-out
+    /// Record row is still reachable by Enter or its number. Without this check
+    /// the player walks into a picker whose every booking the engine then
+    /// refuses, and the only feedback is an error after the fact.
+    pub(crate) fn open_record_picker(&mut self, release_type: ReleaseType) {
+        if self.game.player.stress >= STUDIO_STRESS_BLOCK {
+            self.push_log(
+                LogKind::Error,
+                "❌ You're too stressed to record quality music.".to_string(),
+            );
+            return;
+        }
+        self.screen = Screen::RecordPicker {
+            release_type,
+            songs: default_songs(&self.game, &release_type),
+            studio: RecordingStudio::default(),
+        };
     }
 
     /// The vault (design §D/§H): the masters awaiting release, and where the
@@ -381,6 +388,371 @@ impl App {
                 }
             }
             _ => {}
+        }
+    }
+}
+
+impl App {
+    /// The record picker (§H): songs on ↑↓, studio on ←→, Enter books, Esc
+    /// backs out. Every move recomputes the quote through
+    /// `Game::quote_recording` — the same deterministic core the booking
+    /// charges from — so what the player is shown cannot drift from what they
+    /// are charged.
+    ///
+    /// Errors are *not* pushed to the log on navigation: a picker the player is
+    /// still dialling in should not shout at them for an unaffordable room. The
+    /// live quote panel shows the shortfall instead, and Enter is the only thing
+    /// that reports (matching the tour booking picker's gate).
+    pub(crate) fn handle_record_picker_key(&mut self, key: KeyEvent) {
+        let Screen::RecordPicker {
+            release_type,
+            songs,
+            studio,
+        } = self.screen
+        else {
+            return;
+        };
+        let (min_songs, max_songs) = studios::song_count_bounds(&release_type);
+
+        match key.code {
+            KeyCode::Esc => self.screen = Screen::Main,
+            // Songs on the vertical axis: a bounded spinner (§H).
+            KeyCode::Up | KeyCode::Char('k') => {
+                let next = if songs >= max_songs {
+                    min_songs
+                } else {
+                    songs + 1
+                };
+                self.screen = Screen::RecordPicker {
+                    release_type,
+                    songs: next,
+                    studio,
+                };
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let next = if songs <= min_songs {
+                    max_songs
+                } else {
+                    songs - 1
+                };
+                self.screen = Screen::RecordPicker {
+                    release_type,
+                    songs: next,
+                    studio,
+                };
+            }
+            // Studio on the horizontal axis, the two-axis convention the tour
+            // booking and pressing pickers already use.
+            KeyCode::Left | KeyCode::Char('h') => {
+                let idx = super::cycle_index(studio.ordinal(), RecordingStudio::ALL.len(), false);
+                self.screen = Screen::RecordPicker {
+                    release_type,
+                    songs,
+                    studio: RecordingStudio::ALL[idx],
+                };
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                let idx = super::cycle_index(studio.ordinal(), RecordingStudio::ALL.len(), true);
+                self.screen = Screen::RecordPicker {
+                    release_type,
+                    songs,
+                    studio: RecordingStudio::ALL[idx],
+                };
+            }
+            KeyCode::Enter => match self.game.quote_recording(release_type, songs, studio) {
+                Ok(quote) => {
+                    if self.game.player.can_afford(quote.cost) {
+                        self.screen = Screen::Main;
+                        self.dispatch(match release_type {
+                            ReleaseType::Single => GameAction::RecordSingle { songs, studio },
+                            ReleaseType::Album => GameAction::RecordAlbum { songs, studio },
+                        });
+                    } else {
+                        self.push_log(
+                            LogKind::Error,
+                            format!(
+                                "❌ That session costs {} — you have {}.",
+                                format_money(quote.cost),
+                                format_money(self.game.player.money)
+                            ),
+                        );
+                    }
+                }
+                // The engine names the shortfall (too few songs, fame-gated
+                // room) better than the UI can — surface it verbatim.
+                Err(msg) => self.push_log(LogKind::Error, format!("❌ {msg}")),
+            },
+            _ => {}
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::crossterm::event::KeyModifiers;
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::empty())
+    }
+
+    fn app_with_songs(songs: usize) -> App {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        for i in 0..songs {
+            app.game
+                .band
+                .unreleased_songs
+                .push(crate::game::music::Song {
+                    id: i as u32,
+                    name: format!("Song {i}"),
+                    songwriting_quality: 50,
+                });
+        }
+        app
+    }
+
+    #[test]
+    fn record_menu_row_opens_the_picker_instead_of_booking() {
+        let mut app = app_with_songs(3);
+        app.screen = Screen::Main;
+
+        // The bug S-UI exists to fix: this used to dispatch the recording
+        // action on the spot, in the default room, with the default song count.
+        app.open_record_picker(ReleaseType::Single);
+
+        match app.screen {
+            Screen::RecordPicker {
+                release_type,
+                songs,
+                studio,
+            } => {
+                assert_eq!(release_type, ReleaseType::Single);
+                assert_eq!(songs, studios::default_song_count(&ReleaseType::Single));
+                assert_eq!(studio, RecordingStudio::default());
+            }
+            _ => panic!("Record Single must open the picker, not book a session"),
+        }
+        // Nothing was booked: no session, no master, no money spent.
+        assert!(app.game.ongoing_activity.is_none());
+        assert!(app.game.vault().is_empty(), "no record was cut");
+        assert_eq!(
+            app.game.player.money, 1_500,
+            "the starting purse must be untouched — opening a picker books nothing"
+        );
+    }
+
+    #[test]
+    fn songs_spin_within_the_format_bounds_and_wrap() {
+        let mut app = app_with_songs(14);
+        let (min, max) = studios::song_count_bounds(&ReleaseType::Album);
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Album,
+            songs: min,
+            studio: RecordingStudio::DemoRoom,
+        };
+
+        // Down from the minimum wraps to the maximum — a bounded spinner.
+        app.handle_record_picker_key(key(KeyCode::Down));
+        assert!(
+            matches!(app.screen, Screen::RecordPicker { songs, .. } if songs == max),
+            "spin down at the floor should wrap to the ceiling ({max})"
+        );
+
+        // And up from the maximum wraps back to the minimum.
+        app.handle_record_picker_key(key(KeyCode::Up));
+        assert!(
+            matches!(app.screen, Screen::RecordPicker { songs, .. } if songs == min),
+            "spin up at the ceiling should wrap to the floor ({min})"
+        );
+    }
+
+    #[test]
+    fn studio_moves_along_the_five_room_ladder() {
+        let mut app = app_with_songs(3);
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Single,
+            songs: 2,
+            studio: RecordingStudio::Home,
+        };
+
+        app.handle_record_picker_key(key(KeyCode::Right));
+        assert!(matches!(
+            app.screen,
+            Screen::RecordPicker {
+                studio: RecordingStudio::DemoRoom,
+                ..
+            }
+        ));
+
+        app.handle_record_picker_key(key(KeyCode::Left));
+        assert!(matches!(
+            app.screen,
+            Screen::RecordPicker {
+                studio: RecordingStudio::Home,
+                ..
+            }
+        ));
+    }
+
+    /// The picker's quote and the booking's charge must come from one place.
+    ///
+    /// Asserting an exact bank delta would be wrong twice over: the booking turn
+    /// also runs the weekly tick (upkeep, any event), and `Game::new` seeds a
+    /// **random world** unless `ROCKER_SEED` is set — so an exact figure depends
+    /// on ambient entropy and fails one run in three. What must hold regardless
+    /// is the identity: the studio bill taken is the studio bill quoted.
+    #[test]
+    fn the_quote_on_screen_is_the_bill_that_gets_charged() {
+        let mut app = app_with_songs(3);
+        // Money enough for the room, so Enter actually books.
+        app.game.player.money = 10_000;
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Single,
+            songs: 2,
+            studio: RecordingStudio::DemoRoom,
+        };
+
+        let quoted = app
+            .game
+            .quote_recording(ReleaseType::Single, 2, RecordingStudio::DemoRoom)
+            .expect("a two-song 45 in the demo room is quotable");
+
+        app.handle_record_picker_key(key(KeyCode::Enter));
+
+        // A one-week session resolves on the booking turn itself, so the proof
+        // that it was booked is the master in the vault, not an activity.
+        let master = app
+            .game
+            .vault()
+            .first()
+            .expect("Enter on an affordable, valid quote must cut the record");
+
+        // The master records the room and song count actually booked; priced
+        // back through the same quote path, it must equal what was quoted.
+        assert_eq!(master.studio, quoted.studio, "booked a different room");
+        assert_eq!(
+            master.songs.len(),
+            usize::from(quoted.songs),
+            "booked a different song count"
+        );
+        let charged = app.game.recording_cost(master.studio, quoted.songs);
+        assert_eq!(
+            charged, quoted.cost,
+            "the studio bill charged must be the bill quoted"
+        );
+    }
+
+    #[test]
+    fn enter_refuses_when_the_band_lacks_the_songs() {
+        let mut app = app_with_songs(0);
+        app.game.player.money = 10_000;
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Single,
+            songs: 2,
+            studio: RecordingStudio::Home,
+        };
+
+        app.handle_record_picker_key(key(KeyCode::Enter));
+
+        assert!(
+            app.game.ongoing_activity.is_none(),
+            "a band with no songs must not book a session"
+        );
+        assert!(
+            matches!(app.screen, Screen::RecordPicker { .. }),
+            "the picker should stay open so the player can fix the choice"
+        );
+    }
+
+    #[test]
+    fn esc_leaves_the_picker_without_booking() {
+        let mut app = app_with_songs(3);
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Single,
+            songs: 2,
+            studio: RecordingStudio::Home,
+        };
+
+        app.handle_record_picker_key(key(KeyCode::Esc));
+
+        assert!(matches!(app.screen, Screen::Main));
+        assert!(app.game.ongoing_activity.is_none());
+    }
+    /// The ladder's per-room bill must include the era's cost modifier.
+    ///
+    /// It used to be raw `rate_per_song() * songs`, which omits
+    /// `recording_cost_modifier` (0.8–1.5 across the 1970s) — so the ladder
+    /// could advertise a rung up to 50% away from what booking it costs.
+    ///
+    /// The check renders the picker to a terminal buffer and reads the money
+    /// back out of the drawn row, because the bug lived in the *render* path:
+    /// asserting on `recording_cost` alone passes whether or not the ladder
+    /// calls it.
+    #[test]
+    fn the_ladder_row_shows_the_era_cost_modifier_price() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let mut app = app_with_songs(14);
+        // 1970's modifier is 1.0, so the bug is invisible there — move to an era
+        // where it bites, which is what a player hits two years into a career.
+        app.game.timeline.current_year = 1975;
+        let modifier = app.game.timeline.get_recording_cost_modifier();
+        assert_ne!(modifier, 1.0, "pick an era whose modifier is not 1.0");
+        app.game.band.fame = 100; // unlock every rung so all five rows price
+
+        let backend = TestBackend::new(100, 34);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        app.screen = Screen::RecordPicker {
+            release_type: ReleaseType::Album,
+            songs: 10,
+            studio: RecordingStudio::DemoRoom,
+        };
+        terminal
+            .draw(|f| crate::ui::render::draw(f, &mut app))
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let mut screen = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                screen.push_str(buf[(x, y)].symbol());
+            }
+            screen.push('\n');
+        }
+
+        for room in RecordingStudio::ALL {
+            let real = app.game.recording_cost(room, 10);
+            let raw = (room.rate_per_song() * 10) as i32;
+            // The rendered line must carry the real price...
+            assert!(
+                screen.contains(&crate::data::format_money(real)),
+                "{}: the ladder should show {} (era-adjusted), screen was:\n{screen}",
+                room.label(),
+                crate::data::format_money(real)
+            );
+            // ...and, in this era, the raw rate must not be what the ladder
+            // shows. Substring matching is useless here — "$600" occurs inside
+            // "$6000" — so compare the drawn field by position: each room's
+            // bill is a right-aligned 7-character field after the 18-char label.
+            if raw != real {
+                let raw_field = format!("{:>7}", crate::data::format_money(raw));
+                let line = screen
+                    .lines()
+                    .find(|l| l.contains(room.label()))
+                    .unwrap_or_else(|| panic!("{}: no ladder row drawn", room.label()));
+                let after = &line[line.find(room.label()).expect("row") + room.label().len()..];
+                assert!(
+                    !after.starts_with(&raw_field),
+                    "{}: the ladder drew the raw rate field {raw_field:?} instead of the \
+                     era-adjusted one; row was {line:?}",
+                    room.label()
+                );
+            }
         }
     }
 }

@@ -13,6 +13,7 @@ use crate::data::format_money;
 use crate::game::PRESSING_TIERS;
 use crate::game::TourRig;
 use crate::game::music::{DistributionChannel, ReleaseType};
+use crate::game::studios::{self, RecordingStudio};
 use crate::ui::app::{App, Screen};
 
 use super::super::{centered_rect, format_population};
@@ -541,6 +542,191 @@ pub(crate) fn draw_tour_booking_picker_modal(frame: &mut Frame, app: &App) {
     };
     frame.render_widget(
         Paragraph::new(quote_lines).wrap(Wrap { trim: false }),
+        quote_area,
+    );
+}
+
+/// The record picker (design §H, S-UI): format → songs → studio, quote-first.
+///
+/// Three panels, the tour booking picker's shape reused: the song spinner with
+/// its bounds, the five-room ladder with fame gates and per-song rates, and a
+/// live quote underneath. The quote is recomputed from `Game::quote_recording`
+/// on every frame, which is the same deterministic core the booking charges
+/// from — so the number on screen is the number that will be taken.
+pub(crate) fn draw_record_picker_modal(frame: &mut Frame, app: &App) {
+    let Screen::RecordPicker {
+        release_type,
+        songs,
+        studio,
+    } = app.screen
+    else {
+        return;
+    };
+    let (format, article) = match release_type {
+        ReleaseType::Single => ("Single", "a"),
+        ReleaseType::Album => ("Album", "an"),
+    };
+    let (min_songs, max_songs) = studios::song_count_bounds(&release_type);
+
+    let area = centered_rect(84, 74, frame.area());
+    frame.render_widget(Clear, area);
+
+    let block = Block::bordered()
+        .title(format!(" 🎛  Cut {article} {format} "))
+        .title_bottom(" ↑↓ songs · ←→ studio · Enter book · Esc back ");
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let [songs_area, studio_area, quote_area] = Layout::vertical([
+        Constraint::Length(4),
+        Constraint::Length(7),
+        Constraint::Min(8),
+    ])
+    .areas(inner);
+
+    // --- Songs: a bounded spinner, with what the band actually has ---
+    let available = app.game.band.unreleased_songs.len();
+    let songs_short = (songs as usize) > available;
+    let songs_line = Line::from(vec![
+        Span::styled(format!(" ◀  {songs} songs  ▶ "), Style::new().bold()),
+        Span::styled(
+            format!(
+                "  ({min_songs}–{max_songs} for {article} {})",
+                format.to_lowercase()
+            ),
+            Style::new().fg(Color::DarkGray),
+        ),
+        Span::raw("   "),
+        Span::styled(
+            format!("{available} unreleased in the notebook"),
+            if songs_short {
+                Style::new().fg(Color::Red)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            },
+        ),
+    ]);
+    let songs_hint = if songs_short {
+        Line::styled(
+            format!(
+                "  Need {} more song{} first.",
+                songs as usize - available,
+                if songs as usize - available == 1 {
+                    ""
+                } else {
+                    "s"
+                }
+            ),
+            Style::new().fg(Color::Red),
+        )
+    } else {
+        Line::styled(
+            "  The best songs in the notebook are cut first.",
+            Style::new().fg(Color::DarkGray),
+        )
+    };
+    frame.render_widget(
+        Paragraph::new(vec![songs_line, songs_hint])
+            .block(Block::default().title("Songs"))
+            .wrap(Wrap { trim: false }),
+        songs_area,
+    );
+
+    // --- Studios: the five-room ladder, gates shown, never a price ---
+    let studio_items: Vec<ListItem> = RecordingStudio::ALL
+        .iter()
+        .map(|&room| {
+            let available = app.game.studio_is_available(room);
+            let style = if available {
+                Style::new().fg(Color::White)
+            } else {
+                Style::new().fg(Color::DarkGray)
+            };
+            // The room's own bill for the CURRENT song count, so moving the
+            // spinner visibly re-prices the ladder.
+            //
+            // Must go through `recording_cost`, not `rate_per_song() * songs`:
+            // the cost carries the era's `recording_cost_modifier` (0.8-1.5
+            // across the 1970s eras), so the raw rate shows a price up to 50%
+            // away from the one the quote — and therefore the booking — uses.
+            // Caught on review; the two are now the same function.
+            let bill = app.game.recording_cost(room, songs);
+            let gate = if available {
+                format!("🔓 fame {}+", room.fame_gate())
+            } else {
+                format!("🔒 needs fame {}", room.fame_gate())
+            };
+            ListItem::new(Line::from(vec![
+                Span::styled(format!("{:<18}", room.label()), style.bold()),
+                Span::styled(format!(" {:>7}", format_money(bill)), style),
+                Span::styled(format!("  q{:>+3}", room.quality_bonus()), style),
+                Span::styled(format!("  {:.2} wk/song", room.weeks_per_song()), style),
+                Span::raw("  "),
+                Span::styled(gate, style),
+            ]))
+        })
+        .collect();
+    let studio_list = List::new(studio_items)
+        .block(Block::default().title("Studio"))
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut studio_state = ListState::default().with_selected(Some(studio.ordinal()));
+    frame.render_stateful_widget(studio_list, studio_area, &mut studio_state);
+
+    // --- The quote: what this booking costs, how long, what it might sound like ---
+    let quote_lines = match app.game.quote_recording(release_type, songs, studio) {
+        Ok(quote) => {
+            let affordable = app.game.player.can_afford(quote.cost);
+            let mut lines = vec![
+                Line::styled(
+                    format!(
+                        " {} — {} songs at the {}",
+                        match quote.release_type {
+                            ReleaseType::Single => "a single",
+                            ReleaseType::Album => "an album",
+                        },
+                        quote.songs,
+                        quote.studio.label()
+                    ),
+                    Style::new().bold(),
+                ),
+                Line::from(format!("   Studio time: {}", format_money(quote.cost))),
+                Line::from(format!(
+                    "   In the room: {} week{}",
+                    quote.weeks,
+                    if quote.weeks == 1 { "" } else { "s" }
+                )),
+                Line::from(format!(
+                    "   Songs on hand average {} — projected quality {}-{}",
+                    quote.avg_song_quality, quote.quality_low, quote.quality_high
+                )),
+            ];
+            if affordable {
+                lines.push(Line::styled(
+                    "   Press Enter to book the session.",
+                    Style::new().fg(Color::Green),
+                ));
+            } else {
+                lines.push(Line::styled(
+                    format!(
+                        "   Not enough cash — you have {}.",
+                        format_money(app.game.player.money)
+                    ),
+                    Style::new().fg(Color::Red),
+                ));
+            }
+            lines
+        }
+        // The engine's refusal is more specific than anything the UI could
+        // invent (too few songs, or a fame-gated room).
+        Err(msg) => vec![
+            Line::styled("Quote", Style::new().bold()),
+            Line::styled(format!("   {msg}"), Style::new().fg(Color::Red)),
+        ],
+    };
+    frame.render_widget(
+        Paragraph::new(quote_lines)
+            .block(Block::default().title("Quote"))
+            .wrap(Wrap { trim: false }),
         quote_area,
     );
 }

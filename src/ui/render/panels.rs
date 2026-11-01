@@ -284,6 +284,29 @@ pub(super) fn draw_scene_panel(frame: &mut Frame, game: &Game, area: Rect) {
 }
 
 pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
+    // The activity strip (design §H, S-UI) takes the top of this column while a
+    // commitment is running: what the band is doing, week n of m, and how to
+    // carry on or walk away. The menu stays below it because a *turn* action is
+    // what advances the activity — the screen-opening rows (Charts, Discography,
+    // Save, Load) do not — so hiding the menu would leave the player with no way
+    // to move. Six rows: three content lines plus the border, with one spare so
+    // a two-line headline (a long band name in "Opening for …") cannot push the
+    // week counter out of the box. It comes out of the menu's height, so at
+    // 80x24 the action list scrolls — a fair trade, because the counter is the
+    // one thing this screen exists to show.
+    let (strip_area, menu_area) = match &app.game.ongoing_activity {
+        Some(_) => {
+            let [strip, rest] =
+                Layout::vertical([Constraint::Length(6), Constraint::Min(4)]).areas(area);
+            (Some(strip), rest)
+        }
+        None => (None, area),
+    };
+
+    if let (Some(strip), Some(activity)) = (strip_area, &app.game.ongoing_activity) {
+        draw_activity_strip(frame, activity, strip);
+    }
+
     let entries = app.menu_entries();
     let items: Vec<ListItem> = entries
         .iter()
@@ -321,7 +344,69 @@ pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
         .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
 
     let mut state = ListState::default().with_selected(Some(app.menu_selected));
-    frame.render_stateful_widget(list, area, &mut state);
+    frame.render_stateful_widget(list, menu_area, &mut state);
+}
+
+/// The activity screen (design §H, S-UI): while a commitment runs, say what it
+/// is, which week of how many, and what the last settled week did. "Continue"
+/// is any menu action (the turn resolves one more week); "abandon" is the `x`
+/// hotkey, dispatched by `handle_main_key` as `GameAction::AbandonActivity`.
+fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivity, area: Rect) {
+    let total = activity.weeks_total();
+    let current = activity.week_number();
+    let final_week = activity.is_final_week();
+
+    let header = Line::from(vec![
+        Span::styled(
+            format!(" ▶ {} ", activity.label()),
+            Style::new().fg(ACCENT).bold(),
+        ),
+        Span::styled(activity.headline(), Style::new().fg(Color::White).bold()),
+    ]);
+
+    // `n of m`, then a per-week bar and the settled count on one line — a long
+    // tour reads as long at a glance. Both lines are kept short enough to fit
+    // the strip at 80 columns: an earlier version put the hint on the counter's
+    // line, it wrapped, and the wrap pushed "Week n of m" out of the 6-row box
+    // entirely, so the one thing the screen exists to show was the thing
+    // clipped.
+    let week_line = Line::from(Span::styled(
+        format!("   Week {current} of {total}"),
+        Style::new().fg(Color::Yellow),
+    ));
+
+    let done = usize::from(activity.weeks_done());
+    let total_cells = usize::from(total).max(1);
+    let bar: String = (0..total_cells)
+        .map(|i| if i < done { '█' } else { '░' })
+        .collect();
+    let bar_line = Line::from(vec![
+        Span::styled(bar, Style::new().fg(Color::Green)),
+        Span::styled(
+            format!("  {done} settled"),
+            Style::new().fg(Color::DarkGray),
+        ),
+        Span::styled(
+            if final_week {
+                "  last week"
+            } else {
+                // Names the *kind* of action, not "any action": Charts,
+                // Discography, Save and Load open a screen and dispatch nothing,
+                // so they never advance a commitment. "turns advance" rather
+                // than "turn actions advance" purely for width — at 80 columns
+                // the longer phrase is clipped mid-word in this box.
+                "  turns advance"
+            },
+            Style::new().fg(Color::DarkGray),
+        ),
+    ]);
+
+    frame.render_widget(
+        Paragraph::new(vec![header, week_line, bar_line])
+            .block(Block::bordered().title(" 🎬 Activity  —  X abandons "))
+            .wrap(Wrap { trim: false }),
+        area,
+    );
 }
 
 pub(super) fn draw_log(frame: &mut Frame, app: &App, area: Rect) {

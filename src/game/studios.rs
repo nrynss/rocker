@@ -38,15 +38,9 @@ impl Default for RecordingStudio {
 }
 
 impl RecordingStudio {
-    /// In picker order, cheapest room to dearest.
-    ///
-    /// `allow(dead_code)`: S-MASTER (§D) moved the pressing picker onto the
-    /// *release*, and the session panel that listed the open rooms went with
-    /// it — the room axis lands for real in S-UI's format→songs→studio picker
-    /// (§H), which is the caller this exists for. Same holding pattern
-    /// `core.rs` uses for `OngoingActivity`'s activity-screen accessors, and
-    /// the tests exercise it meanwhile.
-    #[allow(dead_code)]
+    /// In picker order, cheapest room to dearest. The record picker (§H) walks
+    /// this list; `ordinal()` is the same index, so navigation and pricing can
+    /// never disagree.
     pub const ALL: [RecordingStudio; 5] = [
         RecordingStudio::Home,
         RecordingStudio::DemoRoom,
@@ -137,11 +131,10 @@ pub fn default_song_count(release_type: &ReleaseType) -> u8 {
 /// core `action_record_*` charges from, so the quote cannot drift from the
 /// booking.
 ///
-/// `allow(dead_code)`: the menu row reads `cost`, `weeks` and the projected
-/// band, which is §C's promise; the rest describe the booking's *axes* and
-/// land when S-UI's format→songs→studio picker (§H) lets the player move them.
+/// Every field is read: the menu row shows cost, weeks and the projected band,
+/// and the record picker (§H) shows the format, room and song count alongside
+/// them as the player moves each axis.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct RecordingQuote {
     pub release_type: ReleaseType,
     pub studio: RecordingStudio,
