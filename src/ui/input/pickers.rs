@@ -28,8 +28,9 @@ impl App {
     /// the player walks into a picker whose every booking the engine then
     /// refuses, and the only feedback is an error after the fact.
     ///
-    /// The same goes for a running commitment (§F): `process_turn` ignores the
-    /// booking while an activity runs and plays its next week instead, so a
+    /// The same goes for a running commitment (§F): a booking takes weeks, so
+    /// `process_turn` ignores it while an activity runs and plays the
+    /// activity's next week instead (only instant actions get through), so a
     /// picker opened mid-tour would take the player's Enter and silently drop
     /// the session. Refuse before opening, and leave no picker state behind.
     pub(crate) fn open_record_picker(&mut self, release_type: ReleaseType) {

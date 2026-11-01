@@ -310,9 +310,11 @@ impl App {
         // on its own).
         let repress_count = game.repressable_releases().len();
         // §F: while a commitment runs, a new booking would be ignored by
-        // `process_turn` (it plays the activity's week instead), so the rows
-        // that open a booking picker grey out and say why. `activate` refuses
-        // them too — `enabled` is only a rendering hint.
+        // `process_turn` (it plays the activity's week instead — only instant
+        // actions get through), so the rows that open a booking picker grey
+        // out and say why. `activate` refuses them too — `enabled` is only a
+        // rendering hint. The instant rows (Vault, Re-press, Marketing,
+        // Lifestyle, Deals, Support Slot) stay live: they take no week.
         let busy = game.ongoing_activity().map(|activity| activity.label());
         let busy_detail = |label: &str| format!("busy: {}", label.to_lowercase());
 
