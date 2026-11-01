@@ -528,7 +528,14 @@ needs in its handoff notes and the coordinator integrates.
     replaces any save there. A failed save keeps the prompt up with the reason (also
     logged) and never quits. The exit receipt is printed by `main` after
     the terminal is restored (`App::run` now returns it).
-  - **Tests:** 347 passing (from 340 at 06752f2), 9 ignored. The prompt
+  - **Atomic saves (CodeRabbit on ab3eb57, valid).** `Game::save_game` used
+    `File::create` + `write_all`, so a write failing part-way truncated the
+    file it was replacing — and the prompt writes, by default, over the
+    save the player loaded. It now writes `<path>.tmp`, `sync_all`s, and
+    renames over the target; a failure removes the temp file and leaves the
+    old save byte-for-byte intact (tested by squatting a directory on the
+    temp path).
+  - **Tests:** 348 passing (from 340 at 06752f2), 9 ignored. The prompt
     opening from `q` and from Enter, stray keys and cancels (no file, no
     exit, no week), `C` writing a loadable save and staying, `S` exiting
     with a receipt and the career intact, a failed save for both options,

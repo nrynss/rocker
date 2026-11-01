@@ -531,10 +531,31 @@ impl Game {
         ];
     }
 
+    /// Write the career to `file_path`, atomically: the JSON goes to a
+    /// sibling `<path>.tmp`, is flushed to disk, and only then renamed over
+    /// the target. A write that fails part-way (a full disk, a permissions
+    /// change) therefore leaves any existing save at `file_path` intact —
+    /// which matters now that Quit's save-first prompt writes, unasked-for
+    /// filename and all, to the file the player last loaded (PR #52).
     pub fn save_game(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_string = serde_json::to_string_pretty(self)?;
-        let mut file = File::create(file_path)?;
-        file.write_all(json_string.as_bytes())?;
+        let tmp_path = format!("{file_path}.tmp");
+        let written = (|| -> std::io::Result<()> {
+            let mut file = File::create(&tmp_path)?;
+            file.write_all(json_string.as_bytes())?;
+            file.sync_all()?;
+            // `rename` replaces an existing file on every platform std
+            // supports (MoveFileEx with REPLACE_EXISTING on Windows).
+            std::fs::rename(&tmp_path, file_path)
+        })();
+        if let Err(e) = written {
+            // Best effort: don't leave a half-written temp file behind. If
+            // the temp path is not ours to remove (e.g. a directory), leave it.
+            if std::path::Path::new(&tmp_path).is_file() {
+                let _ = std::fs::remove_file(&tmp_path);
+            }
+            return Err(e.into());
+        }
         Ok(())
     }
 

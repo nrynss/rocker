@@ -1044,4 +1044,38 @@ mod tests {
         );
         let _ = std::fs::remove_file(&chosen);
     }
+
+    /// CodeRabbit on #52: the prompt writes over the file the player last
+    /// loaded, so a write that fails part-way must not truncate it. Force
+    /// the temp-file step to fail (a directory squats on `<path>.tmp`) and
+    /// the existing save survives byte for byte; a good save leaves no
+    /// temp file behind.
+    #[test]
+    fn a_failed_quit_save_leaves_the_existing_save_intact() {
+        let mut app = app_ready_to_quit("atomic");
+        let path = app.save_path.clone();
+        app.game.save_game(&path).expect("the first save works");
+        assert!(
+            !std::path::Path::new(&format!("{path}.tmp")).exists(),
+            "a good save leaves no temp file"
+        );
+        let before = std::fs::read(&path).expect("the save is on disk");
+
+        let squatter = format!("{path}.tmp");
+        std::fs::create_dir_all(&squatter).expect("make the temp path unusable");
+        app.game.week += 5; // so a successful overwrite would differ
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(!app.should_exit, "the failed save must not quit");
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: Some(_) }));
+        assert_eq!(
+            std::fs::read(&path).expect("the old save is still there"),
+            before,
+            "a failed save must not touch the existing one"
+        );
+        Game::load_game(&path).expect("and it still loads");
+
+        let _ = std::fs::remove_dir_all(&squatter);
+        let _ = std::fs::remove_file(&path);
+    }
 }
