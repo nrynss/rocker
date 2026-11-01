@@ -840,10 +840,6 @@ impl GameWorld {
     /// band's `label` (the signed-to name — the field L-ROSTER populates);
     /// `None` for an unsigned act, an ambient/filler chart row with no scene
     /// band behind it, or the player.
-    // Pending consumer: L-UI-2 (§H) surfaces this "rival act → label" readout on
-    // the charts modal (L-UI-1 shipped the discography + label-ledger views but
-    // not this). Kept ready so the field it reads doesn't go orphaned.
-    #[allow(dead_code)]
     pub fn rival_act_label(&self, band_name: &str) -> Option<&str> {
         self.bands
             .iter()

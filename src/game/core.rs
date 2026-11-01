@@ -242,10 +242,8 @@ pub struct BreakInProgress {
     pub weeks_done: u8,
 }
 
-/// The activity screen's read-only surface (§H). `allow(dead_code)`
-/// because S-UI wires it up in wave 3 and this task must not touch the UI
-/// files: every method here exists to answer one question the screen asks.
-#[allow(dead_code)]
+/// The activity screen's read-only surface (§H): every method here answers
+/// one question the screen (or the turn machinery) asks.
 impl OngoingActivity {
     /// Total weeks the commitment runs for.
     pub fn weeks_total(&self) -> u8 {
@@ -307,17 +305,6 @@ impl OngoingActivity {
     /// "week 2 of 4" — the progress line the activity screen needs (§H).
     pub fn progress(&self) -> String {
         format!("week {} of {}", self.week_number(), self.weeks_total())
-    }
-
-    /// The nights resolved so far, for a tour in progress; empty otherwise.
-    /// Lets the activity screen show the report as it is being written.
-    pub fn rows_so_far(&self) -> &[ShowReport] {
-        match self {
-            OngoingActivity::Tour(tour) => &tour.rows,
-            OngoingActivity::Recording(_)
-            | OngoingActivity::SupportTour(_)
-            | OngoingActivity::Break(_) => &[],
-        }
     }
 
     /// The action that started this, replayed for the turn machinery: fame
@@ -496,14 +483,6 @@ impl Game {
     /// reads it to refuse booking pickers while a commitment runs.
     pub fn ongoing_activity(&self) -> Option<&OngoingActivity> {
         self.ongoing_activity.as_ref()
-    }
-
-    /// Whether the band is committed this week (§F/§H). A busy band's turn
-    /// actions continue the commitment; only instant actions and "abandon"
-    /// do anything else.
-    #[allow(dead_code)]
-    pub fn is_busy(&self) -> bool {
-        self.ongoing_activity.is_some()
     }
 
     pub(super) fn log(&mut self, message: impl Into<String>) {
