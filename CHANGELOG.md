@@ -25,9 +25,10 @@ default song count.
   only Enter reports an error, and Esc leaves without booking.
 - **Activity screen** (§H). While a commitment runs, a strip above the menu
   names the activity, shows week *n* of *m* with a per-week progress bar and
-  how many weeks have settled. Any turn-consuming menu action plays the next
+  how many weeks have settled. A week-taking menu action plays the next
   week — which is what the turn already did — while the screen-opening rows
-  (Charts, Discography, Save, Load) do not, and `X` abandons it.
+  (Charts, Discography, Save, Load) and the instant rows do not, and `X`
+  abandons it.
 - **Discography split** (§H). `Tab` cycles all → singles → albums, with the
   active filter named in the modal title and a format-specific empty state.
 - The activity strip and picker carry their own render smoke test across the
@@ -60,6 +61,17 @@ default song count.
   and Go on Tour, which had the same shape, refuse the same way. All four rows
   grey out with `busy: <activity>` and the refusal names the activity and
   points at `X`; nothing about the refusal consumes a week.
+- **Instant actions are no longer swallowed mid-activity** (PR #37).
+  `process_turn` used to let only Abandon and Quit through a running
+  commitment, so releasing a master (signed or not), re-pressing, marketing,
+  moving house, and answering a deal or a support slot were swapped for the
+  activity's next week: the action vanished *and* the week it was meant not
+  to cost was spent. Every instant action now applies exactly once, takes no
+  week, and leaves the activity's progress untouched — one predicate,
+  `Game::is_instant_action`, decides both that and the week-tick exemption.
+  Accepting a support slot is the deliberate exception: it would start a
+  second commitment, so it is refused out loud (offer kept, nothing charged)
+  instead of being swallowed; the modal says why and declining still works.
 
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.
