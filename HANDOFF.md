@@ -202,7 +202,10 @@ needs in its handoff notes and the coordinator integrates.
     that is what the turn already did. The screen-opening rows do *not*:
     Charts, Discography, Save and Load set `Screen` directly and dispatch
     nothing, so they never advance an activity (nor should they). `X` abandons,
-    dispatched as `GameAction::AbandonActivity`.
+    dispatched as `GameAction::AbandonActivity`. *(Corrected 2026-11-01,
+    #41: `X` now asks first and only `Y` dispatches; the week-taking rows
+    say what they do instead (`keep touring` etc.). See the dated note at
+    the end.)*
   - **Discography split** (§H): `Tab` cycles all → singles → albums, and the
     title names the current filter. `discography_rows` now takes the filter;
     an empty filter says so rather than showing a blank list.
@@ -462,3 +465,88 @@ needs in its handoff notes and the coordinator integrates.
   - **Tests:** 332 passing (from 317), 9 ignored — all 9 ignored sim sweeps
     also pass with the instant-action change — clippy `-D warnings` clean,
     fmt clean, determinism trio unmodified.
+- 2026-11-01 **Activity screen honesty + dead-code sweep** (#41, #42; UI and
+  housekeeping only — `process_turn`'s §F semantics and
+  `Game::is_instant_action` are exactly as #37 left them, so no sim impact).
+  - **Continue rows (#41).** Mid-activity, every week-taking row (Laze,
+    Write, Practice, Break, Doctor) says it carries the activity on — `keep
+    touring` / `keep recording` / `keep opening` / `keep resting`
+    (`ui::app::continue_detail`) — and is never greyed out, since continuing
+    is always possible. `App::menu_entries` post-processes the
+    `MenuKind::Action` rows with the engine's own `is_instant_action` (now
+    `pub(crate)`), so a new action can't be labelled one way and resolved
+    another. The doctor's fee and money gate are gone from the row while
+    busy.
+  - **Decision: no doctor mid-activity.** The doctor stays a continue key.
+    §F's answer to a body giving out mid-run is the walk-out (and the
+    emergency paths force one), and a house call would be a sim change this
+    UI issue ruled out. The stats panel's critical-health warning now
+    follows suit: "see a doctor (9)" when free, "walk out (X)" on a tour,
+    session or support slot, "rest it out" on a break — two lines, because
+    the old one-liner was cut off at the panel's ~18 columns.
+  - **Decision: `X` is confirmed.** §F always said "one keypress,
+    confirmed"; it now is. `X` opens `Screen::ConfirmAbandon`
+    (`modals/activity.rs`), which names what is kept and forfeited from
+    `abandon_terms` — written against the four settle-as-abandoned paths, and
+    a test walks a real tour out to check the two agree. `Y` walks out
+    (instant, no week); `N`/`Esc` carry on (no week); every other key,
+    including a second `X`, is ignored, so two stray presses can't confirm.
+    The confirmation is a UI layer: bots and tests at the `Game` level still
+    dispatch `AbandonActivity` directly.
+  - **#42.** Stale `#[allow(dead_code)]` removed from `impl OngoingActivity`
+    and `rival_act_label`, with the "Pending consumer" comment.
+    `rows_so_far` (only a test read it) and `Game::is_busy` (no callers) are
+    deleted rather than given readers — the UI already asks
+    `ongoing_activity()` directly.
+  - **Tests:** 337 passing (from 332), 9 ignored; clippy `-D warnings` and
+    fmt clean. New: continue labelling of the five rows (broke, no `$` on the
+    doctor, and pressing it neither treats nor refuses), `x` alone only asks, stray
+    keys/Enter don't confirm or quit, `n`/`N`/`Esc` cancel with no week,
+    `x` then `y` walks out with no week, a stale confirmation closes itself,
+    an 80x24 render of the modal naming the forfeit, the terms matching a
+    real walk-out's report, and the strip/continue rows/health warning at 80
+    columns. #42 alone changes no test count.
+- 2026-11-01 **`q` asks to save first** (PR #52, added at Narayan's request on
+  top of #41/#42: "It should ask to save and quit or save without quit").
+  - **What it did.** `q` / Enter on Quit dispatched `GameAction::Quit`:
+    game over ("walked away on your own terms"), the final-stats screen, and
+    exit on the next key. Nothing saved — there is no autosave anywhere, the
+    only save path is the Save modal — and a running activity was abandoned
+    by the game-over path. One stray key ended the career.
+  - **What it does.** `Screen::ConfirmQuit { error }` (`modals/quit.rs`,
+    `handle_confirm_quit_key`). `S` saves and quits; `C` saves and continues;
+    `N`/`Esc` cancel. Everything else (a second `q`, Enter, `j`/`k`, `y`,
+    `x`) is ignored. `S`/`C` rather than `Y`/`N`-style keys because there
+    are two ways to say yes; `C` rather than `K` because `k` is menu-up.
+  - **Decisions.** Quitting is now leaving the app, not retiring: the UI no
+    longer dispatches `GameAction::Quit`, so the "walked away" ending is not
+    reachable from the menu (the engine keeps the action — it is still the
+    `Deserialize`d enum's variant and `is_instant_action` lists it). No
+    "quit without saving" option, per the brief's two choices; cancel stays
+    so a stray `q` forces nothing, and Ctrl-C remains the hard exit. Save
+    target is `App::save_path`: the last file saved to or loaded from via
+    the File modal, else `rocker.sav`; the prompt names it and says it
+    replaces any save there. A failed save keeps the prompt up with the reason (also
+    logged) and never quits. The exit receipt is printed by `main` after
+    the terminal is restored (`App::run` now returns it).
+  - **Atomic saves (CodeRabbit on ab3eb57, valid).** `Game::save_game` used
+    `File::create` + `write_all`, so a write failing part-way truncated the
+    file it was replacing — and the prompt writes, by default, over the
+    save the player loaded. `core::write_atomically` now writes a temp
+    file beside the target, `sync_all`s it, and renames it over the target;
+    a failure removes that temp file and leaves the old save byte-for-byte
+    intact. Second CodeRabbit pass (983268f, valid): the temp name was
+    `<path>.tmp`, which `File::create` would truncate if a player had a
+    career saved under that name — it is now `.<name>.<pid>-<n>.tmp`,
+    opened with `create_new` (never an existing file; a clash moves to the
+    next counter), and cleanup only ever removes the file this call made.
+    Tests in `game::tests::save_compat` (a write dying mid-way; a
+    `career.sav.tmp` neighbour surviving a save and nothing left behind)
+    and a UI test where the rename fails (target is a directory).
+  - **Tests:** 350 passing (from 340 at 06752f2), 9 ignored. The prompt
+    opening from `q` and from Enter, stray keys and cancels (no file, no
+    exit, no week), `C` writing a loadable save and staying, `S` exiting
+    with a receipt and the career intact, a failed save for both options,
+    mid-activity (the two prompts ignore each other's keys, the break is in
+    the save at the same week), the Save modal moving the target, and an
+    80x24 render at the prompt's fullest (activity line, long path, error).

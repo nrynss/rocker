@@ -1,7 +1,7 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 
 use crate::game::GameAction;
-use crate::ui::app::{App, MenuKind, Screen};
+use crate::ui::app::{App, LogKind, MenuKind, Screen};
 
 impl App {
     pub(crate) fn handle_main_key(&mut self, key: KeyEvent) {
@@ -22,11 +22,15 @@ impl App {
             }
             KeyCode::Char(c) => {
                 let c = c.to_ascii_lowercase();
-                // X abandons a running commitment (design §H, S-UI). It is not
-                // a menu row because it only exists while an activity runs, and
-                // the activity strip advertises it in place of a menu entry.
+                // X walks out of a running commitment (design §F/§H, S-UI). It
+                // is not a menu row because it only exists while an activity
+                // runs, and the activity strip advertises it in place of a menu
+                // entry. §F says "one keypress, confirmed" (#41): a stray `x`
+                // must not forfeit a session paid for in full, so this only
+                // opens the confirmation; `handle_confirm_abandon_key`
+                // dispatches.
                 if c == 'x' && self.game.ongoing_activity.is_some() {
-                    self.dispatch(GameAction::AbandonActivity);
+                    self.screen = Screen::ConfirmAbandon;
                     return;
                 }
                 if let Some(entry) = entries.iter().find(|e| e.hotkey == c) {
@@ -203,7 +207,74 @@ impl App {
                     self.screen = Screen::RePressPicker { selected: 0 };
                 }
             }
-            MenuKind::Quit => self.dispatch(GameAction::Quit),
+            // Never on one keypress: `q` used to dispatch `GameAction::Quit`,
+            // which ended the career (game over) with nothing saved. Now it
+            // asks to save first and only then leaves — and leaving is just
+            // closing the app, so the save resumes the career, mid-activity
+            // included (§F: a save mid-activity resumes).
+            MenuKind::Quit => self.screen = Screen::ConfirmQuit { error: None },
+        }
+    }
+
+    /// The "walk out?" confirmation (§F, #41). `Y` abandons; `N` or `Esc`
+    /// carries on and takes no week; anything else is ignored, so a second
+    /// stray key cannot confirm by accident.
+    pub(crate) fn handle_confirm_abandon_key(&mut self, key: KeyEvent) {
+        if self.game.ongoing_activity.is_none() {
+            // Nothing left to walk out of (it cannot settle under an open
+            // modal, but a stale screen must never dispatch).
+            self.screen = Screen::Main;
+            return;
+        }
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.screen = Screen::Main;
+                self.dispatch(GameAction::AbandonActivity);
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.screen = Screen::Main;
+            }
+            _ => {}
+        }
+    }
+
+    /// The save-first quit prompt. `S` saves and quits, `C` saves and
+    /// continues playing, `N`/`Esc` cancel. Any other key — a second `q`
+    /// above all, and Enter or the `j`/`k` menu-navigation keys a player's
+    /// fingers may still be on — is ignored, so a stray press can't save
+    /// over a file or exit.
+    pub(crate) fn handle_confirm_quit_key(&mut self, key: KeyEvent) {
+        let quit = match key.code {
+            KeyCode::Char('s') | KeyCode::Char('S') => true,
+            KeyCode::Char('c') | KeyCode::Char('C') => false,
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.screen = Screen::Main;
+                return;
+            }
+            _ => return,
+        };
+        let path = self.save_path.clone();
+        match self.game.save_game(&path) {
+            Ok(()) => {
+                if quit {
+                    self.exit_message = Some(format!(
+                        "💾 Saved to {path}. Load it from the menu (L) to pick up where you left off."
+                    ));
+                    self.should_exit = true;
+                } else {
+                    self.screen = Screen::Main;
+                    self.push_log(LogKind::Ui, format!("💾 Game saved to {path}."));
+                }
+            }
+            Err(e) => {
+                // Don't quit on a failed save: stay on the prompt with the
+                // reason, so nothing is lost and the player chooses again.
+                let message = format!("Save to {path} failed: {e}");
+                self.push_log(LogKind::Error, format!("❌ {message}"));
+                self.screen = Screen::ConfirmQuit {
+                    error: Some(message),
+                };
+            }
         }
     }
 
@@ -457,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn x_abandons_a_running_activity_but_is_inert_without_one() {
+    fn x_asks_before_abandoning_and_is_inert_without_an_activity() {
         let mut app = App::new(Game::new().expect("data files present"));
         app.game.initialize_player(
             "Ray",
@@ -470,18 +541,171 @@ mod tests {
         // hotkey error or start anything.
         app.handle_main_key(key(KeyCode::Char('x')));
         assert!(app.game.ongoing_activity.is_none());
+        assert!(
+            matches!(app.screen, Screen::Main),
+            "no confirmation without something to walk out of"
+        );
 
-        // Start a break, then abandon it with `x`.
+        // Start a break.
         app.dispatch(crate::game::GameAction::TakeBreak);
         assert!(
             app.game.ongoing_activity.is_some(),
             "a break should be a multi-week commitment"
         );
         app.screen = Screen::Main;
+        let week = app.game.week;
+        let weeks_done = |app: &App| match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected the break to still be running, got {other:?}"),
+        };
+        let done = weeks_done(&app);
+
+        // `x` alone only asks (§F "one keypress, confirmed", #41).
         app.handle_main_key(key(KeyCode::Char('x')));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        assert_eq!(weeks_done(&app), done, "asking must not abandon");
+        assert_eq!(app.game.week, week, "asking must not take a week");
+
+        // A stray key — even a second `x`, or `q` — neither confirms nor quits.
+        for stray in ['x', 'q', '1', ' '] {
+            app.handle_key(key(KeyCode::Char(stray)));
+            assert!(
+                matches!(app.screen, Screen::ConfirmAbandon),
+                "{stray:?} should leave the confirmation up"
+            );
+        }
+        app.handle_key(key(KeyCode::Enter));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        assert!(!app.should_exit);
+
+        // `n` and Esc both carry on: back to Main, nothing forfeited, no week.
+        for cancel in [KeyCode::Char('n'), KeyCode::Char('N'), KeyCode::Esc] {
+            app.handle_main_key(key(KeyCode::Char('x')));
+            assert!(matches!(app.screen, Screen::ConfirmAbandon));
+            app.handle_key(key(cancel));
+            assert!(
+                matches!(app.screen, Screen::Main),
+                "{cancel:?} should cancel"
+            );
+            assert_eq!(weeks_done(&app), done, "{cancel:?} must not abandon");
+            assert_eq!(app.game.week, week, "{cancel:?} must not take a week");
+        }
+
+        // `x` then `y` walks out — and, being instant (#37), takes no week.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('y')));
         assert!(
             app.game.ongoing_activity.is_none(),
-            "'x' on Main should abandon the running activity"
+            "'x' then 'y' should abandon the running activity"
+        );
+        assert!(matches!(app.screen, Screen::Main));
+        assert_eq!(app.game.week, week, "walking out takes no week");
+    }
+
+    /// #41: mid-activity, every week-taking row says what pressing it does —
+    /// plays the activity's next week — and nothing it won't do: no doctor's
+    /// fee, no greying-out on money (continuing is always possible). Out of
+    /// an activity the rows go back to their own details and gates.
+    #[test]
+    fn week_taking_rows_say_continue_while_an_activity_runs() {
+        use crate::game::GameAction;
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.dispatch(GameAction::TakeBreak);
+        assert!(app.game.ongoing_activity.is_some());
+        // Broke: the doctor row used to grey out on money it won't charge.
+        // Stressed: Write and Practice used to grey out as "too stressed".
+        app.game.player.money = 0;
+        app.game.player.stress = 95;
+
+        let entries = app.menu_entries();
+        let row = |hotkey: char| {
+            entries
+                .iter()
+                .find(|entry| entry.hotkey == hotkey)
+                .unwrap_or_else(|| panic!("menu has a {hotkey:?} row"))
+        };
+        for hotkey in ['1', '2', '3', '8', '9'] {
+            let entry = row(hotkey);
+            assert_eq!(
+                entry.detail, "keep resting",
+                "{} should say it continues the break",
+                entry.label
+            );
+            assert!(entry.enabled, "{} should stay pressable", entry.label);
+        }
+        assert!(
+            !row('9').detail.contains('$'),
+            "the doctor must not quote a fee it won't charge mid-activity"
+        );
+        // Instant and screen rows keep their own details (#37 lets the
+        // instant ones apply mid-activity, so their text is still true).
+        for hotkey in ['l', 'v', 'c', 'q'] {
+            assert!(
+                row(hotkey).detail != "keep resting",
+                "{hotkey:?} is not a continue key"
+            );
+        }
+
+        // A row labelled "keep resting" really does just play the week: the
+        // break advances, and the doctor neither treats nor refuses. Solvent
+        // and healthy for the press, so no bankruptcy or emergency can end
+        // the break under the test; read from the log rather than the money,
+        // which a week's random events may move.
+        app.game.player.money = 100_000;
+        app.game.player.health = 100;
+        app.game.player.stress = 0;
+        let done = |app: &App| match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected the break to still be running, got {other:?}"),
+        };
+        let before = done(&app);
+        app.log.clear();
+        app.handle_main_key(key(KeyCode::Char('9')));
+        assert_eq!(
+            done(&app),
+            before + 1,
+            "the doctor row played the break's next week"
+        );
+        assert!(
+            app.log
+                .iter()
+                .all(|line| !line.text.contains("doctor") && !line.text.contains('❌')),
+            "no visit and no refusal mid-break: {:?}",
+            app.log.iter().map(|line| &line.text).collect::<Vec<_>>()
+        );
+
+        // Free again: the doctor quotes its fee and gates on money.
+        app.game.ongoing_activity = None;
+        app.game.player.money = 0;
+        let entries = app.menu_entries();
+        let doctor = entries.iter().find(|entry| entry.hotkey == '9').unwrap();
+        assert!(doctor.detail.contains('$'));
+        assert!(!doctor.enabled, "a broke player can't afford the doctor");
+    }
+
+    /// If the activity ends some other way while the confirmation is up (it
+    /// can't today, but the screen must not dispatch into nothing), the
+    /// confirmation just closes.
+    #[test]
+    fn the_confirmation_closes_itself_when_nothing_is_running() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::ConfirmAbandon;
+        let week = app.game.week;
+        app.handle_key(key(KeyCode::Char('y')));
+        assert!(matches!(app.screen, Screen::Main));
+        assert_eq!(
+            app.game.week, week,
+            "nothing to abandon, nothing dispatched"
         );
     }
     /// Play a Gig and Go on Tour open booking pickers too, and a gig or a
@@ -534,8 +758,9 @@ mod tests {
         }
         assert_eq!(app.game.week, week, "refusing must not consume the week");
 
-        // Walk out, and both pickers open again.
+        // Walk out (`x`, confirmed with `y`), and both pickers open again.
         app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('y')));
         assert!(app.game.ongoing_activity.is_none());
         app.game.player.stress = 0;
         app.game.player.health = 100;
@@ -598,5 +823,259 @@ mod tests {
                 "opening a screen must not advance the activity"
             );
         }
+    }
+
+    /// A scratch save path unique to this test process and `name`, cleared
+    /// before use so a previous run can't make an unsaved file look saved.
+    fn scratch_save(name: &str) -> String {
+        let path = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-{name}.sav",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        path.to_string_lossy().into_owned()
+    }
+
+    fn app_ready_to_quit(name: &str) -> App {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::Main;
+        app.save_path = scratch_save(name);
+        app
+    }
+
+    /// `q` (and Enter on the Quit row) only opens the prompt; stray keys —
+    /// a second `q`, Enter, the menu's `j`/`k`, `y`, `x` — neither save nor
+    /// exit; `n`/`N`/Esc close it with nothing saved and no week spent.
+    #[test]
+    fn q_opens_the_save_first_prompt_and_stray_keys_do_nothing() {
+        let mut app = app_ready_to_quit("stray");
+        let week = app.game.week;
+
+        app.handle_main_key(key(KeyCode::Char('q')));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(!app.should_exit, "one keypress must not quit");
+        assert!(!app.game.is_game_over(), "nor end the career");
+
+        for stray in [
+            KeyCode::Char('q'),
+            KeyCode::Char('Q'),
+            KeyCode::Char('x'),
+            KeyCode::Char('y'),
+            KeyCode::Char('j'),
+            KeyCode::Char('k'),
+            KeyCode::Char('1'),
+            KeyCode::Enter,
+            KeyCode::Up,
+        ] {
+            app.handle_key(key(stray));
+            assert!(
+                matches!(app.screen, Screen::ConfirmQuit { error: None }),
+                "{stray:?} should leave the prompt up"
+            );
+            assert!(!app.should_exit, "{stray:?} must not quit");
+        }
+        assert!(
+            !std::path::Path::new(&app.save_path).exists(),
+            "stray keys must not save"
+        );
+
+        for cancel in [KeyCode::Char('n'), KeyCode::Char('N'), KeyCode::Esc] {
+            app.handle_main_key(key(KeyCode::Char('q')));
+            app.handle_key(key(cancel));
+            assert!(matches!(app.screen, Screen::Main), "{cancel:?} cancels");
+            assert!(!app.should_exit);
+            assert!(!std::path::Path::new(&app.save_path).exists());
+        }
+        assert_eq!(app.game.week, week, "the prompt never takes a week");
+
+        // The Quit row by Enter goes to the same prompt.
+        let quit_row = app
+            .menu_entries()
+            .iter()
+            .position(|entry| entry.hotkey == 'q')
+            .expect("menu has a Quit row");
+        app.menu_selected = quit_row;
+        app.handle_main_key(key(KeyCode::Enter));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(!app.should_exit);
+    }
+
+    /// `C` saves and keeps playing: the file is a loadable copy of this
+    /// career, the prompt closes, and the app stays up.
+    #[test]
+    fn c_saves_and_keeps_playing() {
+        let mut app = app_ready_to_quit("continue");
+        let week = app.game.week;
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('c')));
+        assert!(matches!(app.screen, Screen::Main));
+        assert!(!app.should_exit, "save and continue must not quit");
+        assert!(app.exit_message.is_none());
+        assert_eq!(app.game.week, week, "saving takes no week");
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        assert_eq!(saved.band.name, "The Rayguns");
+        assert_eq!(saved.week, week);
+        assert!(!saved.is_game_over());
+        assert!(app.log.iter().any(|line| line.text.contains("saved")));
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// `S` saves and quits — the app exits with a receipt naming the file,
+    /// and the career is *not* ended: the save resumes it.
+    #[test]
+    fn s_saves_and_quits_without_ending_the_career() {
+        let mut app = app_ready_to_quit("quit");
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('S')));
+        assert!(app.should_exit, "save and quit leaves the app");
+        assert!(
+            app.exit_message
+                .as_deref()
+                .is_some_and(|message| message.contains(&app.save_path)),
+            "the receipt names the file: {:?}",
+            app.exit_message
+        );
+        assert!(!app.game.is_game_over(), "quitting is not retiring");
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        assert!(!saved.is_game_over(), "the saved career carries on");
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// A failed save never quits: both options stay on the prompt with the
+    /// reason shown and logged, and Esc still backs out.
+    #[test]
+    fn a_failed_save_shows_the_error_and_does_not_quit() {
+        let mut app = app_ready_to_quit("unused");
+        let missing_dir = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-no-such-dir",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&missing_dir);
+        app.save_path = missing_dir
+            .join("career.sav")
+            .to_string_lossy()
+            .into_owned();
+
+        for option in ['s', 'c'] {
+            app.log.clear();
+            app.handle_main_key(key(KeyCode::Char('q')));
+            app.handle_key(key(KeyCode::Char(option)));
+            assert!(!app.should_exit, "{option:?}: a failed save must not quit");
+            assert!(app.exit_message.is_none());
+            match &app.screen {
+                Screen::ConfirmQuit { error: Some(error) } => {
+                    assert!(error.contains("failed"), "{error}")
+                }
+                _ => panic!("{option:?}: the prompt should stay up with the error"),
+            }
+            assert!(
+                app.log.iter().any(|line| line.text.contains("failed")),
+                "the failure is logged too"
+            );
+            app.handle_key(key(KeyCode::Esc));
+            assert!(matches!(app.screen, Screen::Main));
+        }
+    }
+
+    /// Mid-activity, `q` asks the same question, the walk-out box ignores
+    /// `q` (and this prompt ignores `x`), and save-and-quit keeps the
+    /// commitment — in memory and in the file — instead of abandoning it
+    /// the way the old one-keypress `GameAction::Quit` did.
+    #[test]
+    fn quitting_mid_activity_saves_the_activity_to_resume() {
+        let mut app = app_ready_to_quit("activity");
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        app.screen = Screen::Main;
+        let done = match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected a break, got {other:?}"),
+        };
+
+        // The two prompts don't leak into each other.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('q')));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        app.handle_key(key(KeyCode::Esc));
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('x')));
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: None }));
+        assert!(app.game.ongoing_activity().is_some(), "nothing walked out");
+
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(app.should_exit);
+        assert!(
+            app.game.ongoing_activity().is_some(),
+            "quitting no longer abandons the activity"
+        );
+        let saved = Game::load_game(&app.save_path).expect("the save loads");
+        match saved.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => {
+                assert_eq!(rest.weeks_done, done, "the break resumes where it was")
+            }
+            other => panic!("the save should hold the break, got {other:?}"),
+        }
+        let _ = std::fs::remove_file(&app.save_path);
+    }
+
+    /// The prompt writes where the player has been saving: a save through
+    /// the Save modal moves `save_path`, and `C` then writes there.
+    #[test]
+    fn the_prompt_saves_to_the_last_file_used() {
+        let mut app = app_ready_to_quit("default");
+        let chosen = scratch_save("chosen");
+        app.screen = Screen::File {
+            mode: crate::ui::app::FileMode::Save,
+            input: chosen.clone(),
+        };
+        app.handle_file_key(key(KeyCode::Enter));
+        assert_eq!(app.save_path, chosen);
+        std::fs::remove_file(&chosen).expect("the modal saved");
+
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('c')));
+        assert!(
+            std::path::Path::new(&chosen).exists(),
+            "C wrote to the chosen file"
+        );
+        let _ = std::fs::remove_file(&chosen);
+    }
+
+    /// CodeRabbit on #52: a save that fails at the last step (here the
+    /// target is a directory, so the rename over it fails) reports the error
+    /// on the prompt, quits nothing, leaves what was at the target alone,
+    /// and cleans up its temp file. (`game::tests::save_compat` covers a
+    /// write dying mid-way over an existing save.)
+    #[test]
+    fn a_failed_quit_save_leaves_the_target_and_no_temp_file() {
+        let dir = std::env::temp_dir().join(format!(
+            "rocker-quit-test-{}-rename-fails",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let target = dir.join("career.sav");
+        std::fs::create_dir_all(&target).expect("a directory squats on the target");
+        std::fs::write(target.join("keep.txt"), b"untouched").expect("seed");
+
+        let mut app = app_ready_to_quit("unused-rename");
+        app.save_path = target.to_string_lossy().into_owned();
+        app.handle_main_key(key(KeyCode::Char('q')));
+        app.handle_key(key(KeyCode::Char('s')));
+        assert!(!app.should_exit, "the failed save must not quit");
+        assert!(matches!(app.screen, Screen::ConfirmQuit { error: Some(_) }));
+        assert_eq!(
+            std::fs::read(target.join("keep.txt")).expect("still there"),
+            b"untouched"
+        );
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .expect("dir lists")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(leftovers.len(), 1, "only the target remains: {leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

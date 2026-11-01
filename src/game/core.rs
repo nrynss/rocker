@@ -242,10 +242,8 @@ pub struct BreakInProgress {
     pub weeks_done: u8,
 }
 
-/// The activity screen's read-only surface (§H). `allow(dead_code)`
-/// because S-UI wires it up in wave 3 and this task must not touch the UI
-/// files: every method here exists to answer one question the screen asks.
-#[allow(dead_code)]
+/// The activity screen's read-only surface (§H): every method here answers
+/// one question the screen (or the turn machinery) asks.
 impl OngoingActivity {
     /// Total weeks the commitment runs for.
     pub fn weeks_total(&self) -> u8 {
@@ -307,17 +305,6 @@ impl OngoingActivity {
     /// "week 2 of 4" — the progress line the activity screen needs (§H).
     pub fn progress(&self) -> String {
         format!("week {} of {}", self.week_number(), self.weeks_total())
-    }
-
-    /// The nights resolved so far, for a tour in progress; empty otherwise.
-    /// Lets the activity screen show the report as it is being written.
-    pub fn rows_so_far(&self) -> &[ShowReport] {
-        match self {
-            OngoingActivity::Tour(tour) => &tour.rows,
-            OngoingActivity::Recording(_)
-            | OngoingActivity::SupportTour(_)
-            | OngoingActivity::Break(_) => &[],
-        }
     }
 
     /// The action that started this, replayed for the turn machinery: fame
@@ -498,14 +485,6 @@ impl Game {
         self.ongoing_activity.as_ref()
     }
 
-    /// Whether the band is committed this week (§F/§H). A busy band's turn
-    /// actions continue the commitment; only instant actions and "abandon"
-    /// do anything else.
-    #[allow(dead_code)]
-    pub fn is_busy(&self) -> bool {
-        self.ongoing_activity.is_some()
-    }
-
     pub(super) fn log(&mut self, message: impl Into<String>) {
         self.turn_log.push(message.into());
     }
@@ -552,10 +531,16 @@ impl Game {
         ];
     }
 
+    /// Write the career to `file_path`, atomically (`write_atomically`): a
+    /// write that fails part-way (a full disk, a permissions change) leaves
+    /// any existing save at `file_path` intact — which matters now that
+    /// Quit's save-first prompt writes, unasked, to the file the player last
+    /// loaded (PR #52).
     pub fn save_game(&self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         let json_string = serde_json::to_string_pretty(self)?;
-        let mut file = File::create(file_path)?;
-        file.write_all(json_string.as_bytes())?;
+        write_atomically(std::path::Path::new(file_path), |file| {
+            file.write_all(json_string.as_bytes())
+        })?;
         Ok(())
     }
 
@@ -574,4 +559,60 @@ impl Game {
 
         Ok(loaded_game)
     }
+}
+
+/// Replace `target` with what `write` puts in a file, or leave it untouched.
+///
+/// `write` fills a temporary file created fresh (`create_new`, so it can never
+/// open — let alone truncate — a file that already exists, such as another
+/// career someone saved as `rocker.sav.tmp`) in `target`'s own directory,
+/// under a name unique to this process and call. The temp file is flushed to
+/// disk and renamed over `target`, which replaces it in one step on every
+/// platform std supports (MoveFileEx with REPLACE_EXISTING on Windows). On
+/// any failure only that temp file — the one this call created — is removed.
+pub(crate) fn write_atomically(
+    target: &std::path::Path,
+    write: impl FnOnce(&mut File) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicU32, Ordering};
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+
+    let dir = match target.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => std::path::Path::new("."),
+    };
+    let name = target
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "save".to_string());
+
+    // Find a name nobody has: a clash (a leftover from a crashed save, or a
+    // file someone happens to have) just moves on to the next counter.
+    let (tmp_path, mut file) = loop {
+        let candidate = dir.join(format!(
+            ".{name}.{}-{}.tmp",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => break (candidate, file),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
+
+    let result = write(&mut file)
+        .and_then(|()| file.sync_all())
+        .and_then(|()| {
+            drop(file);
+            std::fs::rename(&tmp_path, target)
+        });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp_path);
+    }
+    result
 }

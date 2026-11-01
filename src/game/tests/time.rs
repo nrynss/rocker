@@ -217,14 +217,10 @@ fn a_booked_tour_charges_the_quote_up_front_and_pays_out_weekly() {
 
     // After week one the whole cost is spent but only a quarter of the
     // nights have been played, so the balance is cost-minus-week-one.
-    let week_one_gross: u32 = game
-        .ongoing_activity
-        .as_ref()
-        .expect("still on the road")
-        .rows_so_far()
-        .iter()
-        .map(|row| row.take)
-        .sum();
+    let Some(OngoingActivity::Tour(tour)) = game.ongoing_activity.as_ref() else {
+        panic!("still on the road");
+    };
+    let week_one_gross: u32 = tour.rows.iter().map(|row| row.take).sum();
     assert_eq!(
         game.player.money,
         money_before - quote.cost + week_one_gross as i32,
@@ -656,7 +652,6 @@ fn saves_from_before_the_studio_cycle_load_with_an_empty_calendar() {
         game.ongoing_activity.is_none(),
         "nobody was mid-tour before §F existed"
     );
-    assert!(!game.is_busy());
 }
 
 // ---------------------------------------------------------------------------

@@ -140,6 +140,20 @@ pub enum Screen {
         release_id: u32,
         selected: usize,
     },
+    /// "Walk out?" (design §F: abandoning is "one keypress, confirmed").
+    /// `X` on the main screen opens this instead of abandoning outright; it
+    /// names what is kept and what is forfeited, `Y` dispatches
+    /// `GameAction::AbandonActivity`, and `N`/`Esc` carry on with nothing
+    /// spent. Stateless: it reads the running activity live.
+    ConfirmAbandon,
+    /// "Save before you go?" — what `q` opens (and Enter on the Quit row).
+    /// `S` saves to `App::save_path` and exits; `C` saves and continues;
+    /// `N`/`Esc` close it with nothing saved; every other key, `q` included,
+    /// is ignored. A failed save never quits: the error is held here (and
+    /// logged) until the player retries or cancels.
+    ConfirmQuit {
+        error: Option<String>,
+    },
 }
 
 /// What a main-menu row does when activated.
@@ -194,6 +208,28 @@ pub struct App {
     pub band_input: String,
     pub genre_selected: usize,
     pub(crate) should_exit: bool,
+    /// Where `q`'s save-first prompt writes: the last file saved to or loaded
+    /// from through the Save/Load modal, else `SAVE_FILE_DEFAULT`, so "save
+    /// and quit" lands where the player has been keeping this career.
+    pub(crate) save_path: String,
+    /// Printed to the normal terminal once the TUI has been torn down — the
+    /// save-and-quit receipt, so the player sees where the career went.
+    pub(crate) exit_message: Option<String>,
+}
+
+/// What a week-taking menu row does while `activity` runs (#41): carry it on
+/// for one more week. Phrased per activity rather than as
+/// `continue: <label>` because the detail column is 14 characters wide on an
+/// 80-column terminal, and "continue: support tour" would be cut off
+/// mid-word — on the one row text whose whole job is to be unambiguous.
+fn continue_detail(activity: &crate::game::OngoingActivity) -> &'static str {
+    use crate::game::OngoingActivity;
+    match activity {
+        OngoingActivity::Recording(_) => "keep recording",
+        OngoingActivity::Tour(_) => "keep touring",
+        OngoingActivity::SupportTour(_) => "keep opening",
+        OngoingActivity::Break(_) => "keep resting",
+    }
 }
 
 impl App {
@@ -209,10 +245,17 @@ impl App {
             band_input: String::new(),
             genre_selected: 0,
             should_exit: false,
+            save_path: SAVE_FILE_DEFAULT.to_string(),
+            exit_message: None,
         }
     }
 
-    pub fn run(mut self, terminal: &mut DefaultTerminal) -> Result<(), Box<dyn std::error::Error>> {
+    /// Run the TUI until the player leaves. Returns the message to print
+    /// once the terminal is restored (the save-and-quit receipt), if any.
+    pub fn run(
+        mut self,
+        terminal: &mut DefaultTerminal,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>> {
         while !self.should_exit {
             terminal.draw(|frame| render::draw(frame, &mut self))?;
             if let Event::Key(key) = event::read()?
@@ -221,7 +264,7 @@ impl App {
                 self.handle_key(key);
             }
         }
-        Ok(())
+        Ok(self.exit_message)
     }
 
     // --- Menu model ---
@@ -635,12 +678,33 @@ impl App {
             },
             MenuEntry {
                 hotkey: 'q',
-                label: "Quit",
-                detail: String::new(),
+                label: "Quit…",
+                detail: "save first".into(),
                 enabled: true,
                 kind: MenuKind::Quit,
             },
         ];
+
+        // §F/#41: while a commitment runs, a week-taking action row does one
+        // thing only — it plays the activity's next week (`process_turn`
+        // ignores the action itself). Say exactly that (`continue_detail`),
+        // and nothing else: no
+        // fee the doctor won't charge, no "1-3 new songs" that won't be
+        // written, and no greying-out on money or stress, because continuing
+        // is always possible. Which rows qualify is the engine's own
+        // `is_instant_action`, so the menu cannot disagree with the turn.
+        // The doctor stays a continue key on purpose: the design's answer to
+        // a health emergency mid-run is to walk out (`X`), not a house call.
+        if let Some(activity) = game.ongoing_activity() {
+            for entry in &mut entries {
+                if let MenuKind::Action(action) = &entry.kind
+                    && !Game::is_instant_action(action)
+                {
+                    entry.detail = continue_detail(activity).to_string();
+                    entry.enabled = true;
+                }
+            }
+        }
 
         // Turn-consuming actions come first; keep indices stable for hotkeys.
         entries.shrink_to_fit();
@@ -785,7 +849,7 @@ impl App {
 
     // --- Input handling ---
 
-    fn handle_key(&mut self, key: KeyEvent) {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.should_exit = true;
             return;
@@ -813,6 +877,8 @@ impl App {
             Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),
             Screen::RePressPicker { .. } => self.handle_repress_picker_key(key),
             Screen::RePressTierPicker { .. } => self.handle_repress_tier_picker_key(key),
+            Screen::ConfirmAbandon => self.handle_confirm_abandon_key(key),
+            Screen::ConfirmQuit { .. } => self.handle_confirm_quit_key(key),
         }
     }
 }

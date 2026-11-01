@@ -47,6 +47,8 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::RePressTierPicker { .. } => {
                     modals::draw_repress_tier_picker_modal(frame, app)
                 }
+                Screen::ConfirmAbandon => modals::draw_confirm_abandon_modal(frame, app),
+                Screen::ConfirmQuit { .. } => modals::draw_confirm_quit_modal(frame, app),
                 _ => {}
             }
         }
@@ -384,6 +386,297 @@ mod tests {
             .iter()
             .map(ratatui::buffer::Cell::symbol)
             .collect()
+    }
+
+    /// A band mid-way through a two-week van tour, booked through the real
+    /// turn (§F resolves the first week at booking).
+    fn app_on_tour() -> App {
+        use crate::game::GameAction;
+        use crate::game::TourRig;
+        let mut app = app_on_main();
+        app.game.band.fame = 35;
+        app.game.band.peak_fame = 35;
+        app.game.band.skill = 50;
+        app.game.player.money = 500_000;
+        let region = (0..app.game.get_sorted_regions().len())
+            .find(|&index| app.game.quote_tour(index, TourRig::Van, 2).is_ok())
+            .expect("a fame-35 band can tour somewhere");
+        app.dispatch(GameAction::GoOnTour(region, TourRig::Van, 2));
+        assert!(
+            matches!(
+                app.game.ongoing_activity(),
+                Some(crate::game::OngoingActivity::Tour(_))
+            ),
+            "the tour should still be running after its first week"
+        );
+        app.screen = Screen::Main;
+        app
+    }
+
+    /// #41: `x` opens a confirmation that names what walking out forfeits,
+    /// on an 80x24 terminal, before anything is dispatched.
+    #[test]
+    fn abandon_confirmation_names_the_forfeit() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_tour();
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "Walk out?",
+            "You keep",
+            "You forfeit",
+            "booking",
+            "[Y] walk out",
+            "[Esc]",
+        ] {
+            assert!(text.contains(needle), "confirmation should show {needle:?}");
+        }
+        assert!(
+            app.game.ongoing_activity().is_some(),
+            "drawing dispatches nothing"
+        );
+    }
+
+    /// The forfeit the confirmation names is the one the walk-out applies:
+    /// a tour keeps its played shows and their take, and forfeits the rest.
+    #[test]
+    fn abandon_terms_match_what_walking_out_does() {
+        use crate::game::OngoingActivity;
+        let mut app = app_on_tour();
+        let Some(OngoingActivity::Tour(tour)) = app.game.ongoing_activity() else {
+            unreachable!("app_on_tour checked this");
+        };
+        let shows = tour.rows.len();
+        let taken: u32 = tour.rows.iter().map(|row| row.take).sum();
+        let left = tour.weeks_total - tour.weeks_done;
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("on tour"));
+        assert!(keep.contains(&format!("{shows} show")), "{keep}");
+        assert!(
+            keep.contains(&crate::data::format_money(taken as i32)),
+            "{keep}"
+        );
+        assert!(forfeit.contains(&format!("last {left} week")), "{forfeit}");
+
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        app.handle_confirm_abandon_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('y'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(app.game.ongoing_activity().is_none());
+        let report = app
+            .game
+            .last_tour_report
+            .as_ref()
+            .expect("a walked-out tour still reports");
+        assert_eq!(report.rows.len(), shows, "the played shows are kept");
+        assert_eq!(report.total_gross, taken, "and so is their take");
+        assert_eq!(report.fame_gained, 0, "the tour's fame is forfeited");
+    }
+
+    /// Press `x` then `y` on the main screen: the confirmed walk-out.
+    fn walk_out(app: &mut App) {
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        app.handle_confirm_abandon_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('y'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(app.game.ongoing_activity().is_none(), "walked out");
+    }
+
+    /// A recording walk-out keeps nothing and forfeits the songs and the
+    /// session fee, exactly as `settle_recording(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_recording() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        use crate::game::studios::RecordingStudio;
+        let mut app = app_on_main();
+        app.game.player.money = 500_000;
+        for i in 0..10 {
+            app.game
+                .band
+                .unreleased_songs
+                .push(crate::game::music::Song {
+                    id: 6_000 + i,
+                    name: format!("Song {i}"),
+                    songwriting_quality: 60,
+                });
+        }
+        app.dispatch(GameAction::RecordAlbum {
+            songs: 8,
+            studio: RecordingStudio::DemoRoom,
+        });
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::Recording(session)) = app.game.ongoing_activity() else {
+            panic!("an album session outlasts its booking week");
+        };
+        let (songs, cost) = (session.songs.len(), session.cost);
+        let (keep, forfeit) =
+            modals::abandon_terms(app.game.ongoing_activity().expect("recording"));
+        assert!(keep.starts_with("nothing"), "{keep}");
+        assert!(forfeit.contains(&format!("{songs} song")), "{forfeit}");
+        assert!(
+            forfeit.contains(&crate::data::format_money(cost)),
+            "{forfeit}"
+        );
+
+        let money_before = app.game.player.money;
+        let unreleased_before = app.game.band.unreleased_songs.len();
+        walk_out(&mut app);
+        assert!(app.game.vault().is_empty(), "no master from a walk-out");
+        assert_eq!(app.game.player.money, money_before, "no refund");
+        assert_eq!(
+            app.game.band.unreleased_songs.len(),
+            unreleased_before,
+            "the session's songs are not handed back"
+        );
+    }
+
+    /// A support-slot walk-out keeps the banked guarantee and forfeits the
+    /// exposure, exactly as `settle_support_tour(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_support_tour() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        let mut app = app_on_main();
+        app.game.pending_support_offer = Some(crate::game::SupportTourOffer {
+            host_band: "The Headliners".to_string(),
+            host_fame: 80,
+            weeks: 3,
+            pay: 3_000,
+            fame_gain: 6,
+            expires_week: app.game.week + 4,
+        });
+        app.dispatch(GameAction::AcceptSupportTour);
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::SupportTour(support)) = app.game.ongoing_activity() else {
+            panic!("a three-week support run is still going after week one");
+        };
+        let (pay, fame_gain) = (support.pay, support.fame_gain);
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("support"));
+        assert!(
+            keep.contains(&crate::data::format_money(pay as i32)),
+            "{keep}"
+        );
+        assert!(forfeit.contains(&format!("fame +{fame_gain}")), "{forfeit}");
+
+        let money_before = app.game.player.money;
+        let fame_before = app.game.band.fame;
+        walk_out(&mut app);
+        assert_eq!(
+            app.game.player.money, money_before,
+            "the guarantee stays banked"
+        );
+        assert_eq!(app.game.band.fame, fame_before, "the exposure is forfeited");
+    }
+
+    /// A break walk-out keeps the weeks off and forfeits the recharge,
+    /// exactly as `settle_break(.., false)` does.
+    #[test]
+    fn abandon_terms_match_walking_out_of_a_break() {
+        use crate::game::GameAction;
+        use crate::game::OngoingActivity;
+        let mut app = app_on_main();
+        app.dispatch(GameAction::TakeBreak);
+        app.screen = Screen::Main;
+        let Some(OngoingActivity::Break(rest)) = app.game.ongoing_activity() else {
+            panic!("a break is still going after its first week");
+        };
+        let done = rest.weeks_done;
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("break"));
+        assert!(keep.contains(&format!("{done} week")), "{keep}");
+        assert!(forfeit.contains("recharge"), "{forfeit}");
+
+        app.game.player.stress = 40;
+        let happiness_before = app.game.player.happiness;
+        walk_out(&mut app);
+        assert_eq!(app.game.player.stress, 40, "no stress reset");
+        assert_eq!(
+            app.game.player.happiness, happiness_before,
+            "no happiness top-up"
+        );
+    }
+
+    /// #41: the activity strip — continue labels, the `X` hint — fits an
+    /// 80-column terminal, and the menu says `continue:` mid-tour.
+    #[test]
+    fn activity_strip_and_continue_rows_fit_80_columns() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_tour();
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        assert!(
+            text.contains("X abandons"),
+            "the strip's walk-out hint is on screen"
+        );
+        assert!(
+            text.contains("keep touring"),
+            "rows say they continue the tour"
+        );
+
+        // Critical health mid-tour: the advice is the walk-out, not the
+        // doctor (whose row only continues the tour now).
+        app.game.player.health = 1;
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        assert!(text.contains("CRITICAL health"));
+        assert!(text.contains("walk out (X)"));
+        assert!(!text.contains("see a doctor"));
+    }
+
+    /// The save-first quit prompt fits 80x24 with every key hint on screen —
+    /// at its fullest too: mid-activity, a long save path, and an error.
+    #[test]
+    fn quit_prompt_shows_every_option_at_80x24() {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).expect("test backend");
+        let mut app = app_on_main();
+        app.screen = Screen::ConfirmQuit { error: None };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "Quit?",
+            "rocker.sav",
+            "[S] save and quit",
+            "[C] save and continue playing",
+            "[N]/[Esc] cancel",
+        ] {
+            assert!(text.contains(needle), "prompt should show {needle:?}");
+        }
+
+        app.dispatch(crate::game::GameAction::TakeBreak);
+        app.save_path = "a-rather-long-save-file-name-for-test.sav".to_string();
+        app.screen = Screen::ConfirmQuit {
+            error: Some(
+                "Save to a-rather-long-save-file-name-for-test.sav failed: \
+                 Permission denied (os error 13)"
+                    .to_string(),
+            ),
+        };
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "resumes on load",
+            "[S] save and quit",
+            "[C] save and continue playing",
+            "[N]/[Esc] cancel",
+            "not quitting.",
+        ] {
+            assert!(text.contains(needle), "full prompt should show {needle:?}");
+        }
     }
 
     /// L-UI-1 headline: the discography browser must render each record's
