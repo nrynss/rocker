@@ -403,7 +403,9 @@ design.
 | **Label retains, before any royalty** | **$2.70** | £1.1343 → **$1.8716** |
 | **Label retains, after a 6% royalty (residual)** | **$2.52** | £0.9777 → **$1.6132** |
 
-The residual is the label's gross minus the cost lines above it, which is how
+The residual is the label's gross minus manufacturing, the mechanical, the
+distributor and the 6% royalty (the before-royalty row stops short of that last
+subtraction; the 12% row is shown only for the comparison below), which is how
 the proposal's own split table (`The dealer price, split`) already defines it — an
 earlier version of this table left the artist royalty out of the subtraction and
 so overstated the label's margin by exactly one royalty. The code's $2.70 is the

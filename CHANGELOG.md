@@ -25,8 +25,9 @@ default song count.
   only Enter reports an error, and Esc leaves without booking.
 - **Activity screen** (§H). While a commitment runs, a strip above the menu
   names the activity, shows week *n* of *m* with a per-week progress bar and
-  how many weeks have settled. Any menu action plays the next week — which is
-  what the turn already did — and `X` abandons it.
+  how many weeks have settled. Any turn-consuming menu action plays the next
+  week — which is what the turn already did — while the screen-opening rows
+  (Charts, Discography, Save, Load) do not, and `X` abandons it.
 - **Discography split** (§H). `Tab` cycles all → singles → albums, with the
   active filter named in the modal title and a format-specific empty state.
 - The activity strip and picker carry their own render smoke test across the
