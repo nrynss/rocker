@@ -411,9 +411,11 @@ earlier version of this table left the artist royalty out of the subtraction and
 so overstated the label's margin by exactly one royalty. The code's $2.70 is the
 **before-royalty** figure: `label_wholesale_margin` computes `$4.00 − $1.00 −
 $0.30` per copy and then subtracts the royalty *actually paid*
-(`src/game/economy.rs:429-433`), which is nothing while a deal is still recouping
-and the full royalty once it has recouped. So the table carries both states, and
-each comparison below pairs like with like.
+(`src/game/economy.rs:429-433`), which is nothing while a deal is still recouping,
+only the remainder in the batch that clears the balance (`apply_recoupment`,
+`src/game/economy.rs:263-274`), and the full royalty once it has recouped. So the
+table carries the two endpoint states, and each comparison below pairs like with
+like.
 
 Read off that table, the honest statements are:
 
