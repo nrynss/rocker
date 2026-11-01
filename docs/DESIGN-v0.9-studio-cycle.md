@@ -219,8 +219,8 @@ pub enum OngoingActivity {
 - **Instant actions still go through** *(decided 2026-11-01, PR #37)*.
   Answering a deal, declining a support slot, marketing, a lifestyle move,
   a re-press, releasing a master (signed or not), abandoning and quitting
-  take no week, so they apply exactly once mid-activity, leave the
-  activity's progress untouched and spend no week. They used to be
+  take no week, so mid-activity they apply exactly once and leave the
+  calendar and the activity's progress untouched. They used to be
   swallowed — swapped for the activity's next week, so the action vanished
   *and* the week it was meant not to cost was spent. One predicate
   (`Game::is_instant_action`) decides both "lets through a commitment" and
