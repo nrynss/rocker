@@ -95,7 +95,7 @@ guitars (£45 copy + £160 S/H Tele) + bass (£46) + S/H Rogers kit (£170)
 + two 100W amps (~£196) + PA (£71) ≈ **£688**, or **12.4 weeks** of
 average manual wages. Buying the same rig *entirely new but
 budget-grade* (Avon copies at £45 each, £46 bass, Shaftesbury-class kit
-~£123, new 100W amps, £71 PA) comes to ≈ **£512**, or **9.2 weeks** —
+~£123, new 100W amps, £71 PA) comes to ≈ **£526**, or **9.4 weeks** —
 **cheaper** than the mixed basket. The counter-intuitive result worth
 designing around: in 1975 new budget gear undercut used professional
 gear, so a poor band bought new copies while a band with gig money

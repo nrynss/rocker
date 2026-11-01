@@ -386,12 +386,16 @@ fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivit
             format!("  {done} settled"),
             Style::new().fg(Color::DarkGray),
         ),
-        Span::styled("   ", Style::new()),
         Span::styled(
             if final_week {
-                "last week"
+                "  last week"
             } else {
-                "X abandons"
+                // Names the *kind* of action, not "any action": Charts,
+                // Discography, Save and Load open a screen and dispatch nothing,
+                // so they never advance a commitment. "turns advance" rather
+                // than "turn actions advance" purely for width — at 80 columns
+                // the longer phrase is clipped mid-word in this box.
+                "  turns advance"
             },
             Style::new().fg(Color::DarkGray),
         ),
@@ -399,7 +403,7 @@ fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivit
 
     frame.render_widget(
         Paragraph::new(vec![header, week_line, bar_line])
-            .block(Block::bordered().title(" 🎬 Activity "))
+            .block(Block::bordered().title(" 🎬 Activity  —  X abandons "))
             .wrap(Wrap { trim: false }),
         area,
     );

@@ -156,4 +156,4 @@ fees.
   life-of-copyright assignment; era norms confirmed (50:50 split; life
   of copyright).
 - New strong finds: MU rate data (F08); Music Week price series + BPI
-  keys now primary-documented (F34, F37).
+  keys now primary-documented (F37, F38).

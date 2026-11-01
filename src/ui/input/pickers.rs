@@ -3,53 +3,43 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use crate::data::format_money;
 use crate::game::music::{DistributionChannel, ReleaseType};
 use crate::game::studios::{self, RecordingStudio};
-use crate::game::{Game, GameAction, PRESSING_TIERS, TourQuote, TourRig};
+use crate::game::{Game, GameAction, PRESSING_TIERS, STUDIO_STRESS_BLOCK, TourQuote, TourRig};
 use crate::ui::app::{App, LogKind, Screen};
 
-/// S-RECORD: the record action carries a song count and a studio (§A/§C).
+/// The song count the picker opens on: whatever the band's notebook suggests,
+/// or the format's own default when it has no opinion.
 ///
-/// S-UI (§H): the format → songs → studio picker lives in this file, below.
-/// `default_record_action` survives as the *fallback* for the one-click path —
-/// but the Record menu rows now open the picker, so a player who never opens it
-/// is no longer silently denied the choice.
-///
-/// S-MASTER (§D): this books a session and nothing more. Pressing and
-/// distribution have left it entirely — they are the vault's, below.
-fn default_record_action(game: &Game, release_type: ReleaseType) -> GameAction {
-    let songs = game
-        .band
-        .default_booking_songs(&release_type)
-        .unwrap_or_else(|| studios::default_song_count(&release_type));
-    let studio = RecordingStudio::default();
-    match release_type {
-        ReleaseType::Single => GameAction::RecordSingle { songs, studio },
-        ReleaseType::Album => GameAction::RecordAlbum { songs, studio },
-    }
+/// One helper rather than two copies — the picker and the (now removed) one-click
+/// path used to compute this identically, and a divergence between them would
+/// mean the picker opened on a different count than a quick booking used.
+fn default_songs(game: &Game, release_type: &ReleaseType) -> u8 {
+    game.band
+        .default_booking_songs(release_type)
+        .unwrap_or_else(|| studios::default_song_count(release_type))
 }
 
 impl App {
-    /// Open the record picker (§H) on a format — what the Record menu rows now
-    /// do. `book_recording` below is the no-choice path kept for callers that
-    /// want the default booking without a screen.
+    /// Open the record picker (§H) on a format — what the Record menu rows do.
+    ///
+    /// The stress guard belongs here, not only on the menu row. `MenuEntry`'s
+    /// `enabled` flag is a *rendering* hint — `handle_main_key` looks the entry
+    /// up by hotkey and activates it without consulting it — so a greyed-out
+    /// Record row is still reachable by Enter or its number. Without this check
+    /// the player walks into a picker whose every booking the engine then
+    /// refuses, and the only feedback is an error after the fact.
     pub(crate) fn open_record_picker(&mut self, release_type: ReleaseType) {
-        let songs = self
-            .game
-            .band
-            .default_booking_songs(&release_type)
-            .unwrap_or_else(|| studios::default_song_count(&release_type));
+        if self.game.player.stress >= STUDIO_STRESS_BLOCK {
+            self.push_log(
+                LogKind::Error,
+                "❌ You're too stressed to record quality music.".to_string(),
+            );
+            return;
+        }
         self.screen = Screen::RecordPicker {
             release_type,
-            songs,
+            songs: default_songs(&self.game, &release_type),
             studio: RecordingStudio::default(),
         };
-    }
-
-    /// Book a session straight away with the default song count and room.
-    /// Retained as the no-choice path; the picker is the player-facing route.
-    #[allow(dead_code)]
-    pub(crate) fn book_recording(&mut self, release_type: ReleaseType) {
-        let action = default_record_action(&self.game, release_type);
-        self.dispatch(action);
     }
 
     /// The vault (design §D/§H): the masters awaiting release, and where the

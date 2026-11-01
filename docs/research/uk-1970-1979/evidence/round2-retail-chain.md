@@ -63,11 +63,14 @@ Of the £2.61 the retailer pays:
   total                                          £2.61   [documented only as a total]
 ```
 
-The 40% is computed on the **VAT-inclusive** RRP, not on net-of-VAT
-revenue — that is why £2.61 × 1.15 = £3.00 and £5.00 − £3.00 = 40.0%
-exactly. This matters for the game: a "40% margin" in 1970s UK trade
-usage means *retailer keeps 40p of every £1 on the ticket*, and the
-state's VAT is inside that £1.
+*Assumption, not a source claim.* The 40% appears to be computed on the
+**VAT-inclusive** RRP rather than on net-of-VAT revenue — that is the only base
+on which the numbers close exactly (£2.61 × 1.15 = £3.00, and
+£5.00 − £3.00 = 40.0%). The source states the retail price, the dealer price and
+"40 per cent"; it does **not** state the base. So the arithmetic is derived, and
+the trade-usage gloss — a "40% margin" meaning *the retailer keeps 40p of every
+£1 on the ticket, VAT inside that £1* — is conditional on this reading rather
+than a documented convention.
 
 **Case B — the standard term, arithmetic derived (not a second
 source).** The "full 36⅔ per cent margin" of Apr 1979, applied to the

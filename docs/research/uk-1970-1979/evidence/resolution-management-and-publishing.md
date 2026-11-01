@@ -120,12 +120,15 @@ the exploitative minimum litigated in the courts.
   50/50 UK split matches the gov.uk streaming report norm already
   verified (mission context).
 
-**Reading for the game:** a novice publishing advance around the
-£50–£100 mark with life-of-copyright assignment and a 50:50 split is
-defensible period colour; anything much larger should be justified by
-established success, not signability. Confidence: high for norms, medium
-for using £50 as a "typical" advance (it is a litigated floor, not an
-average).
+**Reading for the game:** the structure is well evidenced — life-of-copyright
+assignment on a 50:50 split — but **no advance range was found**. The only
+figure available is the £50 in *Schroeder v Macaulay*, and that is a
+**litigated floor**: a contract so exploitative the House of Lords voided it,
+which is the worst case rather than a typical one. Earlier text here proposed
+"£50–£100" as a range and called £50 typical; that is not supported and is
+withdrawn. Use £50 as the game's illustrative worst-case deal, and treat the
+mid-range advance as still unresearched (see `unresolved-questions.md` #4).
+Confidence: high for the structural norms, **low** for any specific advance.
 
 ## Method notes
 - Searches run: (1) Peter Grant commission percentages; (2) producer

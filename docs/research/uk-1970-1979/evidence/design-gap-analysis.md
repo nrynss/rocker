@@ -35,7 +35,7 @@ moves a level must re-run that balance sweep; a fix that moves a ratio does not.
 | **WRONG** — evidence contradicts the code | **14** |
 | **UNSUPPORTED** — code invents it, or the layer is absent entirely | **14** |
 | **FINE** — evidence supports the current value | **8** |
-| **Total examined** | **36** |
+| **Total examined** | **37** |
 
 The 14 UNSUPPORTED split 1 in the mismatch table (row 14, dead JSON fields) and
 13 in the invented-numbers section below (manager, agent, dole, day jobs, lifestyle

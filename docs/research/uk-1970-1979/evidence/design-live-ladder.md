@@ -245,11 +245,16 @@ one.
 
 ### Proposed: the support slot
 
-F71 is unambiguous — a support slot was unpaid, "wouldn't be much money", and no
-1970s UK support fee, expenses rate or petrol money could be found. The current
-$3,000 pay (`turn.rs:158-161`) must go to near zero. But the slot should not
-become a dead option, because it is the cheapest way to reach another act's
-audience.
+**The evidence is a documented absence, not a documented rate.** Two research
+rounds found no 1970s UK support fee, expenses rate or petrol-money figure; all
+F71 records is a promoter-side remark that there "wouldn't be much money" in it.
+So `$0` is a **proposed abstraction**, not a historical conclusion — the honest
+statement is that support slots were unpaid *so far as the sources show*, and
+`report.md`'s E4 already classifies the same choice as design inference. The
+current $3,000 pay (`turn.rs:158-161`) is unsupported either way and should go,
+but it should go to a labelled design value rather than to an implied fact.
+The slot should not become a dead option, because it is the cheapest way to
+reach another act's audience.
 
 Redefine it as **a trade of cash for reach**, with a real cost:
 

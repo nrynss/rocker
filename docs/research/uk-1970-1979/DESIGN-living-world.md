@@ -164,18 +164,20 @@ so the player actually meets the bands they are competing with
 
 | # | Work | Why now | Size |
 |---|---|---|---|
-| ~~1~~ | ~~**S-UI** record picker~~ | **done 2026-10-31** — see `HANDOFF.md` | — |
+| ✅ | ~~**S-UI** record picker~~ | **done 2026-10-31** — see `HANDOFF.md` | — |
 | 1 | **S-SIM** re-validation + close 0.9 | balance unproven, red assertion open | M |
-| 3 | **Currency/unit decision** | blocks every number below | S (decision) |
-| 4 | **Gig gate + deduction chain** | the largest single realism win | L |
-| 5 | **Survival layer** | supplies the pressure the gate change removes | L |
-| 6 | **Manager + agent** | best-evidenced deferred feature | M |
-| 7 | **Scene lifecycle** | cheapest way to make the world inhabited | M |
-| 8 | **Publishing** | money currently destroyed; new second stream | L |
-| 9 | **Retail price layer** | unlocks value-based certification | M |
-| 10 | **M&A distress floor, certification retune** | small, self-contained | S |
+| 2 | **Currency/unit decision** | blocks every number below | S (decision) |
+| 3 | **Gig gate + deduction chain** | the largest single realism win | L |
+| 4 | **Survival layer** | supplies the pressure the gate change removes | L |
+| 5 | **Manager + agent** | best-evidenced deferred feature | M |
+| 6 | **Scene lifecycle** | cheapest way to make the world inhabited | M |
+| 7 | **Publishing** | money currently destroyed; new second stream | L |
+| 8 | **Retail price layer** | unlocks value-based certification | M |
+| 9 | **M&A distress floor, certification retune** | small, self-contained | S |
 
-Items 4 and 5 must ship together — 4 removes income, 5 supplies the
+The done row is marked ✅ rather than numbered, so the list has no gap.
+
+Items 3 and 4 must ship together — 3 removes income, 4 supplies the
 floor.
 
 ---

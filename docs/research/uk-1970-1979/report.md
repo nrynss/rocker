@@ -294,14 +294,26 @@ mechanically present, not decorative.
 
 ## Part 3 — What the data says about the game's current assumptions
 
-- **Advances.** The game's major-label advance range (~£150k–£2.25M)
-  matches only superstar tier (F22, punk outliers aside); new UK acts in
-  1977 signed for £6k (F16). Recommend a beginner tier of ~£3–10k with
-  hype-driven spikes (F22), and reserve seven-figure deals for late-game
-  fame.
-- **Royalties.** The game's 10–15% major band is in the documented range
-  (F17); the 25–50% small-label tier has no UK-major support in this
-  pass — keep it for indie/own-label deals only, flagged as design.
+- **Advances — mind which layer you are reading.** `data/record_labels.json`
+  carries hand-authored `advance_range` values ($75k–$2.25M for the majors),
+  but the **live offer path does not read them**: `priced_advance`
+  (`world/deals.rs:569-575`) derives the figure from the label's capital and
+  the act's fame. Those JSON ranges are inert data, so quoting them as "the
+  game's advances" describes nothing a player experiences. What the runtime
+  actually pays runs from a fame-derived floor upward, and the beginner anchor
+  (F16: the Jam, £6k in 1977) has no rung near it — the cheapest major offer
+  is around $120k, 12× that. Recommend a genuine beginner tier with
+  hype-driven spikes (F22) and seven-figure deals only at late-game fame.
+  **Currency:** the code is dollar-denominated throughout; the evidence is
+  pounds. The £6k comparison above is £6k ≈ $9.9k at the pass's 1.65 rate.
+- **Royalties.** The code's rate is per-deal, not banded: `priced_royalty`
+  derives it from label reach and fame (`world/deals.rs:580-583`), running from
+  ~10% at high reach to the `ROYALTY_HARD_CAP` of 35%. The documented period
+  norm is 5–15% (F17) with new acts at the bottom, so the top half of the
+  code's range has no support for any tier — narrow it rather than only
+  annotating it. The `royalty_rate` column in `data/record_labels.json`
+  (including the 25–50% indies) is likewise inert and should be deleted or
+  marked, not treated as the live model.
 - **Costs.** A single recording cost in the low hundreds of pounds is
   historically reasonable (F11–F13); a ~£3,000 album constant aligns
   with a low-end 1970s album budget, far below prog tier (F14) and above
@@ -328,9 +340,12 @@ the penny (F51): **£5.00 retail → £2.61 dealer ex-VAT → 40% dealer
 margin**, against a standard trade term of **36⅔%** (F52). Two
 consequences for M5:
 
-- Convert retail to dealer price at **~52% of RRP** (the shop buys at
-  ~63% of the ticket, with VAT inside it). Do not invent the split;
-  derive it.
+- Convert retail to dealer price at **52.20% of the VAT-inclusive
+  sticker** (= 60.03% of the ex-VAT retail; the shop pays £3.00 of the
+  £5.00 ticket, VAT inside it). State which base you mean — 52% and 60%
+  are the same number on two different denominators, and the margin
+  percentages only sum to 100% on the inclusive one. Do not invent the
+  split; derive it.
 - Treat **40% as a competitive weapon** a label can offer a retailer, and
   36⅔% as the baseline. That is a live lever in a promotion campaign.
 - The label/distributor split inside the dealer price remains

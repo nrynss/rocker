@@ -345,7 +345,11 @@ The dole is a **bridge between jobs**, which is what it was. It is not an income
 
 ### The ladder, from [F58]
 
-The counter-intuitive finding: in 1975 a **new-budget** full rig cost ~£512 while a **used-pro**
+*[F58] is finding F58 in `findings.csv`: the 1975 counter-intuitive result that a
+new-budget rig (~£526) undercut a used-professional one (~£688). Cited by ID here
+rather than restated; the row carries the source URL.*
+
+The counter-intuitive finding: in 1975 a **new-budget** full rig cost ~£526 while a **used-pro**
 rig cost ~£688. The poor band bought *new copies*; the band with gig money bought *old Fenders*.
 The ladder runs **new-cheap → used-pro**, and the upward move is **quality, not novelty**.
 
@@ -355,14 +359,14 @@ The ladder runs **new-cheap → used-pro**, and the upward move is **quality, no
 | 4-drum kit | £122.94 | £170 | [F56], [F57] |
 | Amp (100W) | ~£98 *(new equiv.)* | £61–88 | [F57] |
 | PA | £71.30 | — | [F56, 1971 price] |
-| **Full 4-piece rig** | **~£512** | **~£688** | [F58] |
+| **Full 4-piece rig** | **~£526** | **~£688** | [F58] |
 
 ### The wall
 
 ```
-£512 new-budget rig ÷ £66.97 manual wage  = 7.6 weeks of full-time work
-£512 ÷ £9.80 dole                          = 52 weeks on the dole
-£512 ÷ £15 band fee                        = 34 gigs, whole fee, nothing taken home
+£526 new-budget rig ÷ £66.97 manual wage  = 7.9 weeks of full-time work
+£526 ÷ £9.80 dole                          = 54 weeks on the dole
+£526 ÷ £15 band fee                        = 35 gigs, whole fee, nothing taken home
 ```
 
 **7.6 weeks of work buys the tools; 52 weeks of dole does not.** This is the strongest possible
@@ -379,8 +383,11 @@ independent jobs with three different decision shapes:
 Each slot has `condition: u8`. Every gig draws a breakdown roll:
 
 ```
-p_fail = (100 - condition)/500 + 0.06   for new-budget   → ≈ 12%/gig at condition 100
-p_fail = (100 - condition)/500 + 0.00   for used-pro     → ≈ 4%/gig at condition 100
+p_fail = (100 - condition)/500 + 0.12   for new-budget   → 12%/gig at condition 100
+p_fail = (100 - condition)/500 + 0.04   for used-pro     →  4%/gig at condition 100
+
+(the additive term *is* the condition-100 rate; an earlier draft wrote 0.06 and
+0.00, which produce 6% and 0% at full condition and contradicted the table)
 ```
 
 *[INVENTION — the rates; the mechanism is the point.]* On failure the night pays **half**, and a
@@ -403,7 +410,7 @@ close night, never a substitute for a hundred weeks of rehearsal.
 
 | Choice | New-budget | Used-pro |
 |---|---|---|
-| Cash now | £512 | £688 |
+| Cash now | £526 | £688 |
 | Failure tail | 12%/gig | 4%/gig |
 | Resale | ~30% | ~60% (it is already old) |
 | Right when | fee < £20/night | fee > £40/night |
@@ -538,7 +545,7 @@ one.** There is no early game; there is a switch.
 |---|---|---|
 | First £100 saved | week 8-12 | 2 gigs/wk at £2.50-5.00 each, minus £21/wk subsistence |
 | Van bought | week 25-35 | £240 = 3.6 weeks of wage, or 16 gigs |
-| Full rig (new-budget) | week 40-60 | £512 = 7.6 weeks of wage |
+| Full rig (new-budget) | week 40-60 | £526 = 7.9 weeks of wage |
 | First paid support / club headline | week 30-50 | requires fame ~10-15 and the PA gate |
 | **Full-time (no job, no dole)** | **week 60-90** | fee must reach £8.40/musician/night for 3 nights |
 
@@ -609,7 +616,7 @@ layer is a contract, not a wage.**
 | MPG | 20 | [INVENTION] |
 | Tank | 12 gal | [INVENTION] |
 | Van purchase | £240 | [DERIVED] F60 × F57 |
-| Rig new-budget / used-pro | £512 / £688 | [F58] |
+| Rig new-budget / used-pro | £526 / £688 | [F58] |
 | Guitar / kit / PA new | £40 / £122.94 / £71.30 | [F56] |
 | Guitar / kit / amp used-pro | £160 / £170 / £61-88 | [F57] |
 | Band fee, deflated to 1975 | £10-20 | [DERIVED-ESTIMATE] [F69] ÷ 2.2 |

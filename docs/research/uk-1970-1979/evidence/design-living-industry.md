@@ -255,7 +255,8 @@ on US income: a further 50/50 → writer keeps 25%       (F47)
 
 F48's per-work figures (1.73p, 1.85p, 0.943p, 0.925p) are exactly this division: £0.3125 ÷ 1.73p
 ≈ 18 works per copy. **The per-work rate is a function of track count, not a fixed penny figure** —
-so a 14-track album pays each writer 22% less than a 10-track one for the same sales. That is the
+so a 14-track album pays each writer **28.6% less** than a 10-track one for the same sales
+(10/14 = 71.4% of the per-work amount). That is the
 mechanical reason co-writing credit and track placement were litigated, and it is a free mechanic:
 the player's track-count choice now has a publishing consequence.
 

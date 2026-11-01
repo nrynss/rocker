@@ -68,12 +68,13 @@ cannot be closed without re-running them.
 
 ### The one thing to do first
 
-**Build S-UI.** The Studio Cycle was designed around a player choosing a
-format, choosing songs and choosing one of five studios, with a quote before
-booking — and the build does none of it: `pickers.rs:13-16` silently books the
-default room with the default song count every time. Until that picker
-exists, the studio ladder, the per-song cost, the weeks-per-song calendar and
-the quote-first flow are all dead code that the player never meets. Every
-other item on this list — balance, the cycle close, the evidence-backed
-features in ranks 4–8 — is worth less while the headline feature is
-unreachable.
+**Re-validate with S-SIM.** *(Rewritten 2026-11-01: this section originally said
+"build S-UI", which shipped on 2026-10-31 — the ranked table above was updated
+but this paragraph was not.)*
+
+The Studio Cycle's picker now exists, which changes what blocks the cycle: with
+the ladder reachable, the balance work is measurable for the first time. S-SIM
+is the only open task on the v0.9 board, it carries a known-red assertion, and
+it is the gate on closing the cycle as 0.9.0. Everything below it in the ranked
+list — the Manager, publishing, the retail chain, the scene lifecycle — is worth
+less while the cycle that introduced them cannot close.
