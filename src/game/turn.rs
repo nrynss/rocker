@@ -358,8 +358,10 @@ impl Game {
     /// commitment, and skips the week tick for them. Keeping both readings on
     /// one predicate is what stops an action being "instant" in one place and
     /// a turn in the other — which is exactly how instant actions used to be
-    /// swallowed mid-activity while the activity advanced a week.
-    fn is_instant_action(action: &GameAction) -> bool {
+    /// swallowed mid-activity while the activity advanced a week. The menu
+    /// reads it too (`App::menu_entries`), so a row that will only continue a
+    /// running activity is labelled as exactly that (#41).
+    pub(crate) fn is_instant_action(action: &GameAction) -> bool {
         matches!(
             action,
             GameAction::AcceptDeal(_)

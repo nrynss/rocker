@@ -202,7 +202,10 @@ needs in its handoff notes and the coordinator integrates.
     that is what the turn already did. The screen-opening rows do *not*:
     Charts, Discography, Save and Load set `Screen` directly and dispatch
     nothing, so they never advance an activity (nor should they). `X` abandons,
-    dispatched as `GameAction::AbandonActivity`.
+    dispatched as `GameAction::AbandonActivity`. *(Corrected 2026-11-01,
+    #41: `X` now asks first and only `Y` dispatches; the week-taking rows
+    say what they do instead (`keep touring` etc.). See the dated note at
+    the end.)*
   - **Discography split** (§H): `Tab` cycles all → singles → albums, and the
     title names the current filter. `discography_rows` now takes the filter;
     an empty filter says so rather than showing a blank list.
@@ -462,3 +465,43 @@ needs in its handoff notes and the coordinator integrates.
   - **Tests:** 332 passing (from 317), 9 ignored — all 9 ignored sim sweeps
     also pass with the instant-action change — clippy `-D warnings` clean,
     fmt clean, determinism trio unmodified.
+- 2026-11-01 **Activity screen honesty + dead-code sweep** (#41, #42; UI and
+  housekeeping only — `process_turn`'s §F semantics and
+  `Game::is_instant_action` are exactly as #37 left them, so no sim impact).
+  - **Continue rows (#41).** Mid-activity, every week-taking row (Laze,
+    Write, Practice, Break, Doctor) says it carries the activity on — `keep
+    touring` / `keep recording` / `keep opening` / `keep resting`
+    (`ui::app::continue_detail`) — and is never greyed out — continuing is always possible. `App::menu_entries`
+    post-processes the `MenuKind::Action` rows with the engine's own
+    `is_instant_action` (now `pub(crate)`), so a new action can't be labelled
+    one way and resolved another. The doctor's fee and money gate are gone
+    from the row while busy.
+  - **Decision: no doctor mid-activity.** The doctor stays a continue key.
+    §F's answer to a body giving out mid-run is the walk-out (and the
+    emergency paths force one), and a house call would be a sim change this
+    UI issue ruled out. The stats panel's critical-health warning now
+    follows suit: "see a doctor (9)" when free, "walk out (X)" on a tour,
+    session or support slot, "rest it out" on a break — two lines, because
+    the old one-liner was cut off at the panel's ~18 columns.
+  - **Decision: `X` is confirmed.** §F always said "one keypress,
+    confirmed"; it now is. `X` opens `Screen::ConfirmAbandon`
+    (`modals/activity.rs`), which names what is kept and forfeited from
+    `abandon_terms` — written against the four settle-as-abandoned paths, and
+    a test walks a real tour out to check the two agree. `Y` walks out
+    (instant, no week); `N`/`Esc` carry on (no week); every other key,
+    including a second `X`, is ignored, so two stray presses can't confirm.
+    The confirmation is a UI layer: bots and tests at the `Game` level still
+    dispatch `AbandonActivity` directly.
+  - **#42.** Stale `#[allow(dead_code)]` removed from `impl OngoingActivity`
+    and `rival_act_label`, with the "Pending consumer" comment.
+    `rows_so_far` (only a test read it) and `Game::is_busy` (no callers) are
+    deleted rather than given readers — the UI already asks
+    `ongoing_activity()` directly.
+  - **Tests:** 337 passing (from 332), 9 ignored; clippy `-D warnings` and
+    fmt clean. New: continue labelling of the five rows (broke, no `$` on the
+    doctor, and pressing it neither treats nor refuses), `x` alone only asks, stray
+    keys/Enter don't confirm or quit, `n`/`N`/`Esc` cancel with no week,
+    `x` then `y` walks out with no week, a stale confirmation closes itself,
+    an 80x24 render of the modal naming the forfeit, the terms matching a
+    real walk-out's report, and the strip/continue rows/health warning at 80
+    columns. #42 alone changes no test count.

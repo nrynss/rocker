@@ -47,6 +47,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
                 Screen::RePressTierPicker { .. } => {
                     modals::draw_repress_tier_picker_modal(frame, app)
                 }
+                Screen::ConfirmAbandon => modals::draw_confirm_abandon_modal(frame, app),
                 _ => {}
             }
         }
@@ -384,6 +385,128 @@ mod tests {
             .iter()
             .map(ratatui::buffer::Cell::symbol)
             .collect()
+    }
+
+    /// A band mid-way through a two-week van tour, booked through the real
+    /// turn (§F resolves the first week at booking).
+    fn app_on_tour() -> App {
+        use crate::game::GameAction;
+        use crate::game::TourRig;
+        let mut app = app_on_main();
+        app.game.band.fame = 35;
+        app.game.band.peak_fame = 35;
+        app.game.band.skill = 50;
+        app.game.player.money = 500_000;
+        let region = (0..app.game.get_sorted_regions().len())
+            .find(|&index| app.game.quote_tour(index, TourRig::Van, 2).is_ok())
+            .expect("a fame-35 band can tour somewhere");
+        app.dispatch(GameAction::GoOnTour(region, TourRig::Van, 2));
+        assert!(
+            matches!(
+                app.game.ongoing_activity(),
+                Some(crate::game::OngoingActivity::Tour(_))
+            ),
+            "the tour should still be running after its first week"
+        );
+        app.screen = Screen::Main;
+        app
+    }
+
+    /// #41: `x` opens a confirmation that names what walking out forfeits,
+    /// on an 80x24 terminal, before anything is dispatched.
+    #[test]
+    fn abandon_confirmation_names_the_forfeit() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_tour();
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        for needle in [
+            "Walk out?",
+            "You keep",
+            "You forfeit",
+            "booking",
+            "[Y] walk out",
+            "[Esc]",
+        ] {
+            assert!(text.contains(needle), "confirmation should show {needle:?}");
+        }
+        assert!(
+            app.game.ongoing_activity().is_some(),
+            "drawing dispatches nothing"
+        );
+    }
+
+    /// The forfeit the confirmation names is the one the walk-out applies:
+    /// a tour keeps its played shows and their take, and forfeits the rest.
+    #[test]
+    fn abandon_terms_match_what_walking_out_does() {
+        use crate::game::OngoingActivity;
+        let mut app = app_on_tour();
+        let Some(OngoingActivity::Tour(tour)) = app.game.ongoing_activity() else {
+            unreachable!("app_on_tour checked this");
+        };
+        let shows = tour.rows.len();
+        let taken: u32 = tour.rows.iter().map(|row| row.take).sum();
+        let left = tour.weeks_total - tour.weeks_done;
+        let (keep, forfeit) = modals::abandon_terms(app.game.ongoing_activity().expect("on tour"));
+        assert!(keep.contains(&format!("{shows} show")), "{keep}");
+        assert!(
+            keep.contains(&crate::data::format_money(taken as i32)),
+            "{keep}"
+        );
+        assert!(forfeit.contains(&format!("last {left} week")), "{forfeit}");
+
+        app.handle_main_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('x'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        app.handle_confirm_abandon_key(ratatui::crossterm::event::KeyEvent::new(
+            ratatui::crossterm::event::KeyCode::Char('y'),
+            ratatui::crossterm::event::KeyModifiers::empty(),
+        ));
+        assert!(app.game.ongoing_activity().is_none());
+        let report = app
+            .game
+            .last_tour_report
+            .as_ref()
+            .expect("a walked-out tour still reports");
+        assert_eq!(report.rows.len(), shows, "the played shows are kept");
+        assert_eq!(report.total_gross, taken, "and so is their take");
+        assert_eq!(report.fame_gained, 0, "the tour's fame is forfeited");
+    }
+
+    /// #41: the activity strip — continue labels, the `X` hint — fits an
+    /// 80-column terminal, and the menu says `continue:` mid-tour.
+    #[test]
+    fn activity_strip_and_continue_rows_fit_80_columns() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).expect("test backend");
+        let mut app = app_on_tour();
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        assert!(
+            text.contains("X abandons"),
+            "the strip's walk-out hint is on screen"
+        );
+        assert!(
+            text.contains("keep touring"),
+            "rows say they continue the tour"
+        );
+
+        // Critical health mid-tour: the advice is the walk-out, not the
+        // doctor (whose row only continues the tour now).
+        app.game.player.health = 1;
+        terminal.draw(|frame| draw(frame, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        assert!(text.contains("CRITICAL health"));
+        assert!(text.contains("walk out (X)"));
+        assert!(!text.contains("see a doctor"));
     }
 
     /// L-UI-1 headline: the discography browser must render each record's

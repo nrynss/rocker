@@ -22,11 +22,15 @@ impl App {
             }
             KeyCode::Char(c) => {
                 let c = c.to_ascii_lowercase();
-                // X abandons a running commitment (design §H, S-UI). It is not
-                // a menu row because it only exists while an activity runs, and
-                // the activity strip advertises it in place of a menu entry.
+                // X walks out of a running commitment (design §F/§H, S-UI). It
+                // is not a menu row because it only exists while an activity
+                // runs, and the activity strip advertises it in place of a menu
+                // entry. §F says "one keypress, confirmed" (#41): a stray `x`
+                // must not forfeit a session paid for in full, so this only
+                // opens the confirmation; `handle_confirm_abandon_key`
+                // dispatches.
                 if c == 'x' && self.game.ongoing_activity.is_some() {
-                    self.dispatch(GameAction::AbandonActivity);
+                    self.screen = Screen::ConfirmAbandon;
                     return;
                 }
                 if let Some(entry) = entries.iter().find(|e| e.hotkey == c) {
@@ -204,6 +208,28 @@ impl App {
                 }
             }
             MenuKind::Quit => self.dispatch(GameAction::Quit),
+        }
+    }
+
+    /// The "walk out?" confirmation (§F, #41). `Y` abandons; `N` or `Esc`
+    /// carries on and takes no week; anything else is ignored, so a second
+    /// stray key cannot confirm by accident.
+    pub(crate) fn handle_confirm_abandon_key(&mut self, key: KeyEvent) {
+        if self.game.ongoing_activity.is_none() {
+            // Nothing left to walk out of (it cannot settle under an open
+            // modal, but a stale screen must never dispatch).
+            self.screen = Screen::Main;
+            return;
+        }
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                self.screen = Screen::Main;
+                self.dispatch(GameAction::AbandonActivity);
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.screen = Screen::Main;
+            }
+            _ => {}
         }
     }
 
@@ -457,7 +483,7 @@ mod tests {
     }
 
     #[test]
-    fn x_abandons_a_running_activity_but_is_inert_without_one() {
+    fn x_asks_before_abandoning_and_is_inert_without_an_activity() {
         let mut app = App::new(Game::new().expect("data files present"));
         app.game.initialize_player(
             "Ray",
@@ -470,18 +496,171 @@ mod tests {
         // hotkey error or start anything.
         app.handle_main_key(key(KeyCode::Char('x')));
         assert!(app.game.ongoing_activity.is_none());
+        assert!(
+            matches!(app.screen, Screen::Main),
+            "no confirmation without something to walk out of"
+        );
 
-        // Start a break, then abandon it with `x`.
+        // Start a break.
         app.dispatch(crate::game::GameAction::TakeBreak);
         assert!(
             app.game.ongoing_activity.is_some(),
             "a break should be a multi-week commitment"
         );
         app.screen = Screen::Main;
+        let week = app.game.week;
+        let weeks_done = |app: &App| match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected the break to still be running, got {other:?}"),
+        };
+        let done = weeks_done(&app);
+
+        // `x` alone only asks (§F "one keypress, confirmed", #41).
         app.handle_main_key(key(KeyCode::Char('x')));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        assert_eq!(weeks_done(&app), done, "asking must not abandon");
+        assert_eq!(app.game.week, week, "asking must not take a week");
+
+        // A stray key — even a second `x`, or `q` — neither confirms nor quits.
+        for stray in ['x', 'q', '1', ' '] {
+            app.handle_key(key(KeyCode::Char(stray)));
+            assert!(
+                matches!(app.screen, Screen::ConfirmAbandon),
+                "{stray:?} should leave the confirmation up"
+            );
+        }
+        app.handle_key(key(KeyCode::Enter));
+        assert!(matches!(app.screen, Screen::ConfirmAbandon));
+        assert!(!app.should_exit);
+
+        // `n` and Esc both carry on: back to Main, nothing forfeited, no week.
+        for cancel in [KeyCode::Char('n'), KeyCode::Char('N'), KeyCode::Esc] {
+            app.handle_main_key(key(KeyCode::Char('x')));
+            assert!(matches!(app.screen, Screen::ConfirmAbandon));
+            app.handle_key(key(cancel));
+            assert!(
+                matches!(app.screen, Screen::Main),
+                "{cancel:?} should cancel"
+            );
+            assert_eq!(weeks_done(&app), done, "{cancel:?} must not abandon");
+            assert_eq!(app.game.week, week, "{cancel:?} must not take a week");
+        }
+
+        // `x` then `y` walks out — and, being instant (#37), takes no week.
+        app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('y')));
         assert!(
             app.game.ongoing_activity.is_none(),
-            "'x' on Main should abandon the running activity"
+            "'x' then 'y' should abandon the running activity"
+        );
+        assert!(matches!(app.screen, Screen::Main));
+        assert_eq!(app.game.week, week, "walking out takes no week");
+    }
+
+    /// #41: mid-activity, every week-taking row says what pressing it does —
+    /// plays the activity's next week — and nothing it won't do: no doctor's
+    /// fee, no greying-out on money (continuing is always possible). Out of
+    /// an activity the rows go back to their own details and gates.
+    #[test]
+    fn week_taking_rows_say_continue_while_an_activity_runs() {
+        use crate::game::GameAction;
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.dispatch(GameAction::TakeBreak);
+        assert!(app.game.ongoing_activity.is_some());
+        // Broke: the doctor row used to grey out on money it won't charge.
+        // Stressed: Write and Practice used to grey out as "too stressed".
+        app.game.player.money = 0;
+        app.game.player.stress = 95;
+
+        let entries = app.menu_entries();
+        let row = |hotkey: char| {
+            entries
+                .iter()
+                .find(|entry| entry.hotkey == hotkey)
+                .unwrap_or_else(|| panic!("menu has a {hotkey:?} row"))
+        };
+        for hotkey in ['1', '2', '3', '8', '9'] {
+            let entry = row(hotkey);
+            assert_eq!(
+                entry.detail, "keep resting",
+                "{} should say it continues the break",
+                entry.label
+            );
+            assert!(entry.enabled, "{} should stay pressable", entry.label);
+        }
+        assert!(
+            !row('9').detail.contains('$'),
+            "the doctor must not quote a fee it won't charge mid-activity"
+        );
+        // Instant and screen rows keep their own details (#37 lets the
+        // instant ones apply mid-activity, so their text is still true).
+        for hotkey in ['l', 'v', 'c', 'q'] {
+            assert!(
+                row(hotkey).detail != "keep resting",
+                "{hotkey:?} is not a continue key"
+            );
+        }
+
+        // A row labelled "keep resting" really does just play the week: the
+        // break advances, and the doctor neither treats nor refuses. Solvent
+        // and healthy for the press, so no bankruptcy or emergency can end
+        // the break under the test; read from the log rather than the money,
+        // which a week's random events may move.
+        app.game.player.money = 100_000;
+        app.game.player.health = 100;
+        app.game.player.stress = 0;
+        let done = |app: &App| match app.game.ongoing_activity() {
+            Some(crate::game::OngoingActivity::Break(rest)) => rest.weeks_done,
+            other => panic!("expected the break to still be running, got {other:?}"),
+        };
+        let before = done(&app);
+        app.log.clear();
+        app.handle_main_key(key(KeyCode::Char('9')));
+        assert_eq!(
+            done(&app),
+            before + 1,
+            "the doctor row played the break's next week"
+        );
+        assert!(
+            app.log
+                .iter()
+                .all(|line| !line.text.contains("doctor") && !line.text.contains('❌')),
+            "no visit and no refusal mid-break: {:?}",
+            app.log.iter().map(|line| &line.text).collect::<Vec<_>>()
+        );
+
+        // Free again: the doctor quotes its fee and gates on money.
+        app.game.ongoing_activity = None;
+        app.game.player.money = 0;
+        let entries = app.menu_entries();
+        let doctor = entries.iter().find(|entry| entry.hotkey == '9').unwrap();
+        assert!(doctor.detail.contains('$'));
+        assert!(!doctor.enabled, "a broke player can't afford the doctor");
+    }
+
+    /// If the activity ends some other way while the confirmation is up (it
+    /// can't today, but the screen must not dispatch into nothing), the
+    /// confirmation just closes.
+    #[test]
+    fn the_confirmation_closes_itself_when_nothing_is_running() {
+        let mut app = App::new(Game::new().expect("data files present"));
+        app.game.initialize_player(
+            "Ray",
+            "The Rayguns",
+            crate::game::genre::MusicGenre::ALL[0].clone(),
+        );
+        app.screen = Screen::ConfirmAbandon;
+        let week = app.game.week;
+        app.handle_key(key(KeyCode::Char('y')));
+        assert!(matches!(app.screen, Screen::Main));
+        assert_eq!(
+            app.game.week, week,
+            "nothing to abandon, nothing dispatched"
         );
     }
     /// Play a Gig and Go on Tour open booking pickers too, and a gig or a
@@ -534,8 +713,9 @@ mod tests {
         }
         assert_eq!(app.game.week, week, "refusing must not consume the week");
 
-        // Walk out, and both pickers open again.
+        // Walk out (`x`, confirmed with `y`), and both pickers open again.
         app.handle_main_key(key(KeyCode::Char('x')));
+        app.handle_key(key(KeyCode::Char('y')));
         assert!(app.game.ongoing_activity.is_none());
         app.game.player.stress = 0;
         app.game.player.health = 100;

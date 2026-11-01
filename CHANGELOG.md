@@ -28,7 +28,7 @@ default song count.
   how many weeks have settled. A week-taking menu action plays the next
   week — which is what the turn already did — while the screen-opening rows
   (Charts, Discography, Save, Load) and the instant rows do not, and `X`
-  abandons it.
+  abandons it — after a confirmation (#41, below).
 - **Discography split** (§H). `Tab` cycles all → singles → albums, with the
   active filter named in the modal title and a format-specific empty state.
 - The activity strip and picker carry their own render smoke test across the
@@ -36,14 +36,19 @@ default song count.
   broke), plus behavioural tests: the menu row opens the picker without
   booking, navigation wraps at both ends, the quote equals the bill, a
   short-notebook refusal stays on the picker, Esc books nothing, the
-  discography cycle resets scroll, and `X` abandons an activity while being
-  inert when nothing is running.
+  discography cycle resets scroll, and `X` (confirmed with `Y`) abandons an
+  activity while being inert when nothing is running.
 
 ### Changed
 
 - `RecordingStudio::ALL` and `RecordingQuote` lose their `#[allow(dead_code)]`
   holding patterns — they were annotated precisely until this caller arrived,
   and every quote field is now read.
+- **Stale `#[allow(dead_code)]` holding patterns removed** (#42): on
+  `impl OngoingActivity` and `rival_act_label`, whose consumers landed, and
+  with them the "Pending consumer" comment. `OngoingActivity::rows_so_far`
+  (a test-only reader) and `Game::is_busy` (no callers) are deleted; the tour
+  test reads the rows directly. No behaviour change.
 
 ### Fixed
 
@@ -73,6 +78,25 @@ default song count.
   Accepting a support slot is the deliberate exception: it would start a
   second commitment, so it is refused out loud (offer kept, nothing charged)
   instead of being swallowed; the modal says why and declining still works.
+- **The activity screen's rows said what they would not do** (#41). Mid
+  activity, Visit Doctor quoted its $ fee and greyed out when broke, and Laze,
+  Write, Practice and Take a Break promised their own effects — yet each of
+  them only plays the activity's next week. Those five rows now read
+  what they will do — `keep touring`, `keep recording`, `keep opening`,
+  `keep resting` (sized for the 14-column detail at 80 columns, where
+  `continue: support tour` would be cut off) — and stay pressable, money and
+  stress notwithstanding; which rows qualify is the
+  engine's own `Game::is_instant_action`, so the menu cannot drift from the
+  turn. The doctor stays a continue key (no house calls mid-tour); the
+  critical-health warning, which said "see a doctor" even then, now says
+  "walk out (X)" on a tour or session and "rest it out" on a break, on two
+  lines that fit the 80-column stats panel instead of one cut off mid-word.
+- **`X` walked out of a tour with no confirmation** (#41). One stray keypress
+  forfeited the rest of a tour, a session's songs and fee, a support slot's
+  exposure or a break's recharge. `X` now opens §F's "one keypress,
+  confirmed" modal naming what you keep and what you forfeit; `Y` walks out,
+  `N` or `Esc` carries on without taking a week, and every other key is
+  ignored. Bots dispatch `AbandonActivity` directly, so the sim is untouched.
 
 **The tour-economics pass** — clearing the touring follow-up left open at the
 close of the Label Cycle, plus the length bug found underneath it.

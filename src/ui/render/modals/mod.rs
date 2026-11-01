@@ -1,5 +1,6 @@
 //! Overlay modals and pickers drawn on top of the main layout.
 
+mod activity;
 mod charts;
 mod deals;
 mod discography;
@@ -11,6 +12,9 @@ mod pickers;
 mod tour;
 mod vault;
 
+#[cfg(test)]
+pub(super) use activity::abandon_terms;
+pub(super) use activity::draw_confirm_abandon_modal;
 pub(super) use charts::draw_charts_modal;
 pub(super) use deals::{draw_deals_modal, draw_support_modal};
 pub(super) use discography::draw_discography_modal;

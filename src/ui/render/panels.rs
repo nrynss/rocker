@@ -118,10 +118,20 @@ pub(super) fn draw_player_panel(frame: &mut Frame, game: &Game, area: Rect) {
 
     let mut warnings: Vec<Line> = Vec::new();
     if game.player.health <= constants::CRITICAL_HEALTH_THRESHOLD {
-        warnings.push(Line::styled(
-            "⚠ CRITICAL — see a doctor!",
-            Style::new().fg(Color::Red).bold(),
-        ));
+        // Mid-activity the doctor is not an option — the Visit Doctor row
+        // only continues the commitment (§F, #41) — so the advice has to be
+        // what actually helps: walk out of a tour or a session, or let a
+        // break run out, since its recovery lands on the last week. Two
+        // short lines, because this panel is ~18 columns wide on an 80-column
+        // terminal and the old one-liner was cut off mid-advice.
+        let advice = match game.ongoing_activity() {
+            None => "  see a doctor (9)",
+            Some(crate::game::OngoingActivity::Break(_)) => "  rest it out",
+            Some(_) => "  walk out (X)",
+        };
+        let critical = Style::new().fg(Color::Red).bold();
+        warnings.push(Line::styled("⚠ CRITICAL health", critical));
+        warnings.push(Line::styled(advice, critical));
     }
     if game.player.is_addicted() {
         warnings.push(Line::styled(
@@ -348,9 +358,16 @@ pub(super) fn draw_menu(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 /// The activity screen (design §H, S-UI): while a commitment runs, say what it
-/// is, which week of how many, and what the last settled week did. "Continue"
-/// is any menu action (the turn resolves one more week); "abandon" is the `x`
-/// hotkey, dispatched by `handle_main_key` as `GameAction::AbandonActivity`.
+/// is, which week of how many, and what the last settled week did.
+///
+/// "Continue" is any *week-taking* menu row — its own action is ignored and
+/// the turn resolves one more week of the activity, which is what those rows
+/// now say (`keep touring` and the like — `App`'s `continue_detail`, #41). Instant rows (Vault, Re-press,
+/// Marketing, Lifestyle, Deals, the support slot's decline) apply and take
+/// no week (#37); screen rows (Charts, Discography, Save, Load) dispatch
+/// nothing; booking rows refuse. "Abandon" is the `x` hotkey, which opens the
+/// §F confirmation (`Screen::ConfirmAbandon`); only its `Y` dispatches
+/// `GameAction::AbandonActivity`.
 fn draw_activity_strip(frame: &mut Frame, activity: &crate::game::OngoingActivity, area: Rect) {
     let total = activity.weeks_total();
     let current = activity.week_number();

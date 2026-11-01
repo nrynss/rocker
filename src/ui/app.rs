@@ -140,6 +140,12 @@ pub enum Screen {
         release_id: u32,
         selected: usize,
     },
+    /// "Walk out?" (design §F: abandoning is "one keypress, confirmed").
+    /// `X` on the main screen opens this instead of abandoning outright; it
+    /// names what is kept and what is forfeited, `Y` dispatches
+    /// `GameAction::AbandonActivity`, and `N`/`Esc` carry on with nothing
+    /// spent. Stateless: it reads the running activity live.
+    ConfirmAbandon,
 }
 
 /// What a main-menu row does when activated.
@@ -194,6 +200,21 @@ pub struct App {
     pub band_input: String,
     pub genre_selected: usize,
     pub(crate) should_exit: bool,
+}
+
+/// What a week-taking menu row does while `activity` runs (#41): carry it on
+/// for one more week. Phrased per activity rather than as
+/// `continue: <label>` because the detail column is 14 characters wide on an
+/// 80-column terminal, and "continue: support tour" would be cut off
+/// mid-word — on the one row text whose whole job is to be unambiguous.
+fn continue_detail(activity: &crate::game::OngoingActivity) -> &'static str {
+    use crate::game::OngoingActivity;
+    match activity {
+        OngoingActivity::Recording(_) => "keep recording",
+        OngoingActivity::Tour(_) => "keep touring",
+        OngoingActivity::SupportTour(_) => "keep opening",
+        OngoingActivity::Break(_) => "keep resting",
+    }
 }
 
 impl App {
@@ -642,6 +663,27 @@ impl App {
             },
         ];
 
+        // §F/#41: while a commitment runs, a week-taking action row does one
+        // thing only — it plays the activity's next week (`process_turn`
+        // ignores the action itself). Say exactly that (`continue_detail`),
+        // and nothing else: no
+        // fee the doctor won't charge, no "1-3 new songs" that won't be
+        // written, and no greying-out on money or stress, because continuing
+        // is always possible. Which rows qualify is the engine's own
+        // `is_instant_action`, so the menu cannot disagree with the turn.
+        // The doctor stays a continue key on purpose: the design's answer to
+        // a health emergency mid-run is to walk out (`X`), not a house call.
+        if let Some(activity) = game.ongoing_activity() {
+            for entry in &mut entries {
+                if let MenuKind::Action(action) = &entry.kind
+                    && !Game::is_instant_action(action)
+                {
+                    entry.detail = continue_detail(activity).to_string();
+                    entry.enabled = true;
+                }
+            }
+        }
+
         // Turn-consuming actions come first; keep indices stable for hotkeys.
         entries.shrink_to_fit();
         entries
@@ -785,7 +827,7 @@ impl App {
 
     // --- Input handling ---
 
-    fn handle_key(&mut self, key: KeyEvent) {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) {
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.should_exit = true;
             return;
@@ -813,6 +855,7 @@ impl App {
             Screen::LifestylePicker { .. } => self.handle_lifestyle_picker_key(key),
             Screen::RePressPicker { .. } => self.handle_repress_picker_key(key),
             Screen::RePressTierPicker { .. } => self.handle_repress_tier_picker_key(key),
+            Screen::ConfirmAbandon => self.handle_confirm_abandon_key(key),
         }
     }
 }

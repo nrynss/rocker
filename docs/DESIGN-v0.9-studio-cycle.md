@@ -247,7 +247,11 @@ pub enum OngoingActivity {
 **Abandoning.** A tour or a session can be walked out of (one keypress,
 confirmed): you keep what resolved, you forfeit the rest and the money.
 Health/stress emergencies (`process_turn`'s existing death/burnout paths)
-force it.
+force it. *(Built 2026-11-01, #41: `X` opens a confirmation naming what is
+kept and what is forfeited; `Y` walks out, `N` or `Esc` carries on, and no
+other key confirms. Short of an emergency, a failing body's way out of a tour
+or a session is the walk-out — the doctor is not available mid-activity; its
+row only plays the activity's next week, like every week-taking row.)*
 
 ---
 
@@ -296,6 +300,11 @@ resolving week by week, activities get their own event taps:
   plays the next week, the instant rows (Vault, Re-press, Marketing,
   Lifestyle, Deals, Support Slot's decline) apply without spending one, the
   booking rows refuse, and `X` abandons via `GameAction::AbandonActivity`.
+  *(Corrected 2026-11-01, #41: the week-taking rows — Laze, Write,
+  Practice, Break, Doctor — now say `keep touring` (`keep recording`,
+  `keep opening`, `keep resting`) instead of their
+  own effects and fees, and are never greyed out, since continuing is always
+  possible. `X` asks first (see "Abandoning" in §F) and only `Y` dispatches.)*
 - **Charts modal**: singles/albums toggle. *(Already built by S-CHARTS.)*
 - **Discography**: split into singles and albums. **Built** as a `Tab`
   cycle (all → singles → albums), with the current filter named in the title.
