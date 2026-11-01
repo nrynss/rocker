@@ -421,7 +421,8 @@ needs in its handoff notes and the coordinator integrates.
     documented as taking no week. `turn.rs` now has one predicate,
     `Game::is_instant_action`, read twice: `overrides_ongoing_activity` lets
     instant actions through, and the week tick skips them. Each applies
-    exactly once, spends no week, and leaves `weeks_done` alone.
+    exactly once, spends no week, and leaves `weeks_done` alone — except
+    Abandon and Quit, which take no week but end the activity, as before.
     - **Accepting a support slot stays blocked** — it starts a second
       commitment. It is let through `overrides_ongoing_activity` only so
       `action_accept_support_tour`'s own guard refuses it with an error
@@ -443,7 +444,10 @@ needs in its handoff notes and the coordinator integrates.
       11 → 22 of 60, label-loyalist median certs 58 → 59; balanced-indie and
       indie-lifer reach fame 100 a little later (y2 87 → 81/80) but finish
       the same. All 9 ignored sweeps pass. These are the bug's numbers
-      coming out of the sim, not a retune — worth a look in S-SIM.
+      coming out of the sim, not a retune. **S-SIM stays ⬜ open** on the
+      task board: its remaining scope (bots for the new action shape, the
+      singles-vs-albums balance pass, the §F economic-neutrality check) is
+      untouched here, and it should re-baseline against these numbers.
     - Tests: `game/tests/instant_actions.rs` (one per action mid-tour, plus a
       release mid-*session*, the signed release path, the support-accept
       refusal, and the week-taking control) and

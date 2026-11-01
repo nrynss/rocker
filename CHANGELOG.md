@@ -66,8 +66,9 @@ default song count.
   commitment, so releasing a master (signed or not), re-pressing, marketing,
   moving house, and answering a deal or a support slot were swapped for the
   activity's next week: the action vanished *and* the week it was meant not
-  to cost was spent. Every instant action now applies exactly once, takes no
-  week, and leaves the activity's progress untouched — one predicate,
+  to cost was spent. Each of those now applies exactly once, takes no week,
+  and leaves the activity's progress untouched (Abandon and Quit still end
+  the activity, as before) — one predicate,
   `Game::is_instant_action`, decides both that and the week-tick exemption.
   Accepting a support slot is the deliberate exception: it would start a
   second commitment, so it is refused out loud (offer kept, nothing charged)

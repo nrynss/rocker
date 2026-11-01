@@ -212,15 +212,19 @@ pub enum OngoingActivity {
 ```
 
 - Starting one charges its up-front cost and resolves **its first week**.
-- While `ongoing_activity` is `Some`, `process_turn` ignores any
-  submitted action that takes a week and resolves **one more week** of the
-  activity instead, then runs the normal weekly tick. The player sees the
+- While `ongoing_activity` is `Some`, `process_turn` ignores any other
+  submitted action that takes a week (accepting a support slot is the one
+  exception, refused below) and resolves **one more week** of the activity
+  instead, then runs the normal weekly tick. The player sees the
   week pass with a progress line.
 - **Instant actions still go through** *(decided 2026-11-01, PR #37)*.
   Answering a deal, declining a support slot, marketing, a lifestyle move,
-  a re-press, releasing a master (signed or not), abandoning and quitting
-  take no week, so mid-activity they apply exactly once and leave the
-  calendar and the activity's progress untouched. They used to be
+  a re-press and releasing a master (signed or not) take no week, so
+  mid-activity they apply exactly once and leave the calendar and the
+  activity's progress untouched. Abandoning and quitting take no week
+  either, but they are *about* the activity: `AbandonActivity` settles it as
+  walked-out-of and clears it, and `Quit` reaches game over, whose emergency
+  path abandons it the same way. They used to be
   swallowed — swapped for the activity's next week, so the action vanished
   *and* the week it was meant not to cost was spent. One predicate
   (`Game::is_instant_action`) decides both "lets through a commitment" and
