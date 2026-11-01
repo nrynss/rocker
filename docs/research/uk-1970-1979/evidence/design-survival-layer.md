@@ -143,11 +143,25 @@ exactly why [F71] records support slots as unpaid and why the sector ran on loca
 
 ### Could a band survive on gigs alone?
 
-Marginal case: three local nights a week at the **top** of the range, £33.60/band/night
-(= £8.40 each), gives £25.20 against £21.00 → **+£4.20**. That is subsistence with zero margin for
-gear failure, illness, van repairs or a single away date — and two away dates put it under water
-(£25.20 − 2 × £8.56 of fuel = +£8.08 for the band, i.e. £2.02 each — still underwater once
-anything else breaks). So: **not reliably.**
+Marginal case, **worked in band totals** — an earlier draft subtracted a band-level
+fuel charge from a per-musician share, which flattered the result:
+
+```
+3 local nights at £33.60/band/night   = £100.80 band gross
+band subsistence (4 × £21)            =  £84.00
+                                        → +£16.80 band surplus, £4.20 each
+
+two of those nights away (-2 × £8.56 fuel) = £83.68 band
+                                        → -£0.32 band, i.e. UNDER water
+```
+
+So three nights at the very top of the fee band clears subsistence **only while
+every date is local**. Two away dates put the band 32p below the line before
+anything breaks — a single failed amp or a lost night turns the week negative.
+That is a sharper result than the draft's "still underwater once anything else
+breaks", and it says the same thing more precisely: **the margin is zero, and
+travel alone is enough to erase it.**
+
 Only at the ceiling of the fee band, only locally, only while nothing breaks.
 
 ---
@@ -391,9 +405,24 @@ p_fail = (100 - condition)/500 + 0.04   for used-pro     →  4%/gig at conditio
 ```
 
 *[INVENTION — the rates; the mechanism is the point.]* On failure the night pays **half**, and a
-repair bill of **15% of the item's price** is charged. Cheap gear is not worse *on average* — it is
-worse *in the tail*, and at pub tier the tail is survivable. That is exactly why a broke band
-bought the copy. Used-pro only earns its premium once a lost night costs more than the repair.
+repair bill of **15% of the item's price** is charged.
+
+**Cheap gear is worse on average too, and that is fine — the reason a broke band
+bought it is liquidity, not expected value.** Worked at a £20 fee:
+new-budget pays `20 − 0.12 × (10 + 0.15×526) = £9.33`; used-pro pays
+`20 − 0.04 × (10 + 0.15×688) = £15.47`. Used-pro wins at *every* fee from £5 to
+£100, because its lower failure rate outweighs the dearer repair on a more
+expensive item. An earlier draft claimed cheap gear was "not worse on average,
+only in the tail" — the arithmetic does not support that, and no repair
+percentage in a plausible range rescues it.
+
+So the mechanic is not a variance trade the player optimises into; it is a
+**capital constraint**. A band with £526 cannot buy the £688 rig, so the
+new-budget copy is the only move available, and it costs them ~£6 a gig in
+expected income plus a real chance of a dead night. The progression is: buy what
+you can afford, and upgrade the moment the rig stops being the binding
+constraint. That is a better mechanic than a dominated-by-variance story,
+because it makes the *cash* position the decision rather than a spreadsheet.
 
 **2. Ceiling — a gate on the fee ladder.**
 The top venue tiers require a PA grade the pub rig cannot supply. Rule: venue prestige ≥ 70
@@ -432,7 +461,9 @@ that no 1970s used-van price was found after four search rounds. Derive rather t
                                                             → £240 [DERIVED-ESTIMATE]
 ```
 
-£240 is **3.6 weeks of full-time work** *(arith)* or **16 gigs** at a £15 band fee. It is cheaper
+£240 is **4.1 weeks of full-time work** at this document's £58.26 full-time wage
+*(arith: 240 / 58.26 = 4.12; an earlier draft's 3.6 divided by the £66.97 average
+manual wage instead, mixing two denominators)*, or **16 gigs** at a £15 band fee. It is cheaper
 than the rig, which is correct and makes it the natural *first* purchase.
 
 ### What the van gates
@@ -462,13 +493,18 @@ series and lands automatically because the table is dated — no event needed.
 ### Breakdown risk
 
 ```
-p_breakdown = (100 - van_condition)/400 + mileage/100_000
+p_breakdown = (100 - van_condition)/400 + mileage_thousands/1_000
 ```
 
 *[INVENTION.]* On failure: the date is lost (fee 0), repair bill = £30 + 5% of van value, and
-`van_condition` drops 20. Condition recovers +2/week with a service costing £8. A 1975 van at
-condition 60 with 60k miles breaks down **16%/trip** — often enough to be felt, rare enough to
-gamble on.
+`van_condition` drops 20. Condition recovers +2/week with a service costing £8.
+
+The worked example has to agree with the formula above it. At `van_condition = 60` and
+60,000 miles (`mileage_thousands = 60`), `(100 - 60)/400 + 60/1_000` = **0.10 + 0.06 =
+16%/trip**. An earlier draft wrote the denominator as 100,000 while the example silently
+used 1,000, so the printed formula yielded **70%**, not the 16% the prose claimed.
+The formula above now names the field `mileage_thousands` so the two cannot drift again,
+and at 100,000 miles a van in good condition still fails 10% of the time.
 
 ### The capacity limit — a fuel budget, not a range stat
 
@@ -543,8 +579,8 @@ one.** There is no early game; there is a switch.
 
 | Milestone | Target | Why |
 |---|---|---|
-| First £100 saved | week 8-12 | 2 gigs/wk at £2.50-5.00 each, minus £21/wk subsistence |
-| Van bought | week 25-35 | £240 = 3.6 weeks of wage, or 16 gigs |
+| First £100 saved | week 2-3 **(day job only)** / never on gigs alone | £58.26 full-time + 2 gigs at £5 = £47.26/wk surplus; 2 gigs + dole at best (£10 + £9.80 − £21) is **−£1.20/wk**, so the dole path cannot reach £100 at all |
+| Van bought | week 25-35 | £240 = 4.1 weeks of wage at £58.26, or 16 gigs |
 | Full rig (new-budget) | week 40-60 | £526 = 7.9 weeks of wage |
 | First paid support / club headline | week 30-50 | requires fame ~10-15 and the PA gate |
 | **Full-time (no job, no dole)** | **week 60-90** | fee must reach £8.40/musician/night for 3 nights |

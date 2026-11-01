@@ -78,10 +78,15 @@ Resolution passes (resolution-*.md) merged below where flagged.
 - B2. Sniffin' Glue first issue: 50 copies print run vs "sold about 300"
   (Christie's lot) — UNRESOLVED (print vs sales possible but unproven).
 - B3. BPI thresholds: value-based (£1m platinum) vs unit-based (200k
-  gold/100k silver) at 1973; alleged switch to units (300k/100k/60k) Jan
-  1978 vs value quoted until 1981 — CONTESTED; resolve pass pending.
+  gold/100k silver) at 1973; alleged switch to units (300k/100k/60k).
+  **RESOLVED (section E):** trade keys show value-based albums 1973–78 and
+  unit thresholds "as of Jan '79" — the 1978 date is contradicted. Basis of
+  the £ values (retail vs manufacturer revenue) remains open.
 - B4. UK album price trajectory: £2.50 (1974) → £2.99 (1977) vs £2.50-3
-  (1970) → £4.99 (1979) recollections — CONTESTED; resolve pass pending.
+  (1970) → £4.99 (1979) recollections. **RESOLVED (section E):** contemporary
+  Music Week prices settle it — the recollections were mixing list price with
+  budget/mail-order tiers; £2.42–£2.89 (1973–75) → £3.49 (1977) → £4.99 (1980).
+  Remaining gaps: 1971–72, 1976, 1978–79 singles.
 - B5. Spiral Scratch total cost: ~£750 vs ~£500 accounts — UNRESOLVED
   (different accountings).
 - B6. Pistols A&M payout: "at least £75,000" vs "nearer £125,000 incl

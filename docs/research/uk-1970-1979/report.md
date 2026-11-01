@@ -347,7 +347,12 @@ consequences for M5:
   percentages only sum to 100% on the inclusive one. Do not invent the
   split; derive it.
 - Treat **40% as a competitive weapon** a label can offer a retailer, and
-  36⅔% as the baseline. That is a live lever in a promotion campaign.
+  36⅔% as the baseline. That is a live lever in a promotion campaign —
+  but keep the two worked examples apart, because they are different
+  releases. On a £5.00 sticker, Island's 40% gives a £2.61 dealer price
+  (the F51 case, all three numbers documented). The *standard* 36⅔% term
+  gives £2.7536 ex-VAT on the same sticker — derived, not a second source —
+  and 40% costs the label £0.1436 more per copy than that baseline.
 - The label/distributor split inside the dealer price remains
   undivided (F53) — a tunable, not a fact.
 

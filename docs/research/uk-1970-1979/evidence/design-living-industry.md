@@ -82,7 +82,7 @@ label/distributor split as a tunable").
 | Retail (ex-VAT) | sticker / 1.15 | £4.3478 | F51 arithmetic |
 | Dealer price | 52.20% of the VAT-inclusive sticker; £2.61 is 60.03% of the ex-VAT retail | £2.61 | F51 |
 | Retailer margin | 40.0% of VAT-inclusive RRP (the dealer price is 60.0% of it) | £2.0000 | F51 |
-| Standard retailer margin | 36.67% of RRP, sale-or-return | dealer £2.7536 | F52 |
+| Standard retailer margin | 36.67% of the **VAT-inclusive** RRP, sale-or-return (same base as the 40% above; on the ex-VAT base it would be 42.2%) | dealer £2.7536 ex-VAT | F52 |
 
 **Check (as F51 states it):** £2.61 × 1.15 = £3.0015 ≈ £3.00; (£5.00 − £3.00)/£5.00 = 40.0%. ✓
 The three shares of the **VAT-inclusive sticker** sum to exactly 100.00%:
@@ -120,8 +120,11 @@ Two rules are load-bearing here and both are documented:
   "percentage of price to dealer". F16's 6% for The Jam is only meaningful with its denominator.
   **Design decision: royalties are a percentage of dealer price (PPD)** — the artist-hostile,
   label-friendly convention, which gives the negotiation table something real to fight about. A
-  "percentage of retail" clause is then a **concession worth 52.2% more money** to the artist for
-  the same headline number. That single chooser is the most era-true lever in the game.
+  "percentage of retail" clause is then a **concession worth 91.6% more money** to the artist for
+  the same headline number: 6% of the £5.00 sticker is £0.30 against 6% of the £2.61 dealer price
+  at £0.1566, and £0.30/£0.1566 = 1.916. *(An earlier draft said 52.2%, which is a different
+  quantity — 52.20% is the dealer price's *share* of the sticker, £2.61/£5.00, not the uplift
+  between the two royalty bases.)* That single chooser is the most era-true lever in the game.
 
 ### The calibration test that proves the chain
 
@@ -310,7 +313,7 @@ multipliers, so a `HitFactory` in 1977 is a different animal from a `HitFactory`
 | 1976 | **Punk signing spree** — offers detach from sales history | advance multiplier for hype-driven acts ~16× spread; `drop_weeks` short | F22 |
 | 1976–78 | **Indie infrastructure arrives** | unlock `DistributionChannel` tier: DIY → indie national reach | F30 |
 | 1977 | Mechanicals and track-placement fights; option ladders standard | F48/F49 publishing pressure; `DEAL_EXTENSION_*` live | F16, F48, F49 |
-| 1978 | Cartel-era indie distribution matures | indie releases gain national shop reach; indie chart eligibility | F30 |
+| 1978 | Cartel-era indie distribution matures | indie releases gain national shop reach. **Not indie chart eligibility** — the official indie chart begins 19 Jan 1980 (F31), so a 1978 indie release still has to crack the main chart | F30, F31 |
 | 1979 | **Discounting war and the 99p ceiling**; five named indie distributors | singles price floor event; distributor choice becomes real | F53, F54 |
 
 Two of these deserve to be *fast* and *cruel*, because the evidence is:
@@ -370,8 +373,9 @@ exactly what it earns today). `RecordDeal` gains `royalty_basis: RoyaltyBasis` w
 variant so `#[serde(default)]` compiles. `PotentialDealOffer` gains the same levers as `Option`
 fields so a pending pre-change offer still deserializes. Extend `src/game/tests/save_compat.rs`.
 
-**Sim harness.** `LABEL_INCOME_PER_COPY` is the *only* per-copy income constant and it is currently
-worth $3 — already at era scale after L-SCALE retired `SALES_INCOME_DIVISOR` to 1
+**Sim harness.** `LABEL_INCOME_PER_COPY` is one of **two** per-copy income constants — `INDIE_INCOME_PER_COPY: u32 = 2`
+(`constants.rs:57`) is the unsigned path, and any retune must move both or an indie career keeps its
+old income while a signed one is re-denominated. `LABEL_INCOME_PER_COPY` is currently worth $3 — already at era scale after L-SCALE retired `SALES_INCOME_DIVISOR` to 1
 (`src/game/constants.rs:40-56`).
 
 **Convert both sides into one currency before comparing them.** The code is
